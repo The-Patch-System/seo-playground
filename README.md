@@ -31,6 +31,7 @@ https://github.com/user-attachments/assets/fb506723-0996-4704-a6a5-b12b1115b805
 *A quick tour of the dashboard and its 40+ tools (click to play the video)*
 
 ![Geo-grid monitoring](public/readme/geo-grid.gif)
+
 *Geo-grid: see where a business ranks block by block, then switch to any competitor's grid*
 
 ![Google Reviews — rating goal](public/readme/google-reviews.gif)
@@ -38,15 +39,6 @@ https://github.com/user-attachments/assets/fb506723-0996-4704-a6a5-b12b1115b805
 
 ![Web Mentions](public/readme/web-mentions.gif)
 *Web Mentions: sentiment, emotions, top domains and countries, plus every mention found across the web*
-
-![Local Finder — Grid Search](public/screenshot-local-finder.png)
-*Local Finder: grid search showing local rankings across a geographic area*
-
-![Rank Tracker](public/screenshot-rank-tracker.png)
-*Rank Tracker: monitor keyword positions over time for any domain*
-
-![Google Reviews Analysis](public/review-analysis-screenshot.png)
-*Google Reviews: rating distribution, monthly review chart, and rating goal calculator*
 
 ## Features
 
