@@ -77,6 +77,16 @@ export default async function SettingsPage() {
             {/* API Credentials */}
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">API Credentials</p>
+              {!creds && (
+                <aside className="mb-6 border-l-2 border-blue-500 bg-blue-50/70 px-4 py-3.5 dark:border-blue-400 dark:bg-blue-950/25">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100">New to DataForSEO?</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                    <a href="https://try.dataforseo.com/nrjev32kinaz" target="_blank" rel="noreferrer" className="font-bold text-blue-700 underline decoration-blue-300 underline-offset-2 transition-colors hover:text-blue-900 dark:text-blue-300 dark:decoration-blue-700 dark:hover:text-blue-100">Create an account through this link ↗</a>
+                    {' '}to support the continued development of SEO Playground, at no extra cost to you.
+                  </p>
+                  <p className="mt-1.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">Affiliate link — I may earn a commission if you become a customer.</p>
+                </aside>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">API Username</label>
