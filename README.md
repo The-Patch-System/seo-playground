@@ -81,7 +81,7 @@ https://github.com/user-attachments/assets/fb506723-0996-4704-a6a5-b12b1115b805
 
 - Node.js 18+
 - Or Docker with Docker Compose
-- A [DataForSEO](https://dataforseo.com/) account (API key)
+- A DataForSEO account (API key). Don't have one yet? [Sign up through my affiliate link](https://try.dataforseo.com/nrjev32kinaz): it supports SEO Playground at no extra cost to you (I may earn a commission).
 
 ## Getting Started
 
