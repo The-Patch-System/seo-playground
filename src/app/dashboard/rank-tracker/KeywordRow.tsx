@@ -244,11 +244,12 @@ interface Props {
   latest: RankCheck | null;
   previous: RankCheck | null;
   hasCreds: boolean;
+  pending: boolean;
   checkAction: (fd: FormData) => Promise<void>;
   removeAction: (fd: FormData) => Promise<void>;
 }
 
-export default function KeywordRow({ kw, history, latest, previous, hasCreds, checkAction, removeAction }: Props) {
+export default function KeywordRow({ kw, history, latest, previous, hasCreds, pending, checkAction, removeAction }: Props) {
   const [expanded, setExpanded] = useState(false);
   const currPos = latest?.position ?? null;
   const prevPos = previous?.position ?? null;
@@ -272,7 +273,7 @@ export default function KeywordRow({ kw, history, latest, previous, hasCreds, ch
           <div className="text-[10px] text-slate-400 pl-4">{kw.location} · {kw.language}</div>
         </td>
         <td className="px-3 py-3.5 text-center">
-          <PositionBadge pos={currPos} />
+          {pending ? <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Queued</span> : <PositionBadge pos={currPos} />}
         </td>
         <td className="px-3 py-3.5 text-center">
           <TrendBadge current={currPos} previous={prevPos} />
@@ -296,10 +297,11 @@ export default function KeywordRow({ kw, history, latest, previous, hasCreds, ch
                 <input type="hidden" name="language" value={kw.language} />
                 <PendingButton
                   type="submit"
+                  disabled={pending}
                   className="px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all"
                   pendingClassName="px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg bg-blue-100 text-blue-300 cursor-not-allowed"
                 >
-                  ↻
+                  {pending ? '…' : '↻'}
                 </PendingButton>
               </form>
             )}

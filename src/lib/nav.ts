@@ -130,5 +130,5 @@ export const NAV_SECTIONS: NavSection[] = [
 // Pinned at the bottom of the sidebar, outside the filter
 export const NAV_FOOTER: NavItem[] = [
   { name: 'Spending', href: '/dashboard/spending', icon: Wallet, desc: 'What your DataForSEO calls cost, by tool' },
-  { name: 'Settings', href: '/dashboard/settings', icon: Settings, desc: 'Credentials and search defaults' },
+  { name: 'Settings', href: '/dashboard/settings', icon: Settings, desc: 'Credentials and report identity' },
 ];

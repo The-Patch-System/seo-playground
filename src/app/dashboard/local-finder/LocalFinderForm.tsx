@@ -99,7 +99,7 @@ export default function LocalFinderForm({ defaults }: Props) {
       {/* Keyword */}
       <div>
         <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-1.5">
-          Keyword <span className="text-red-400">*</span>
+          Keyword to monitor <span className="text-red-400">*</span>
         </label>
         <input
           type="text"
@@ -129,7 +129,7 @@ export default function LocalFinderForm({ defaults }: Props) {
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <label className="block text-xs font-black uppercase tracking-widest text-slate-400">
-            {isGrid ? 'Grid center (map)' : 'Location (map)'} <span className="text-red-400">*</span>
+            {isGrid ? 'Location to monitor (map)' : 'Location (map)'} <span className="text-red-400">*</span>
           </label>
           {coordinate && (
             <button
@@ -173,7 +173,7 @@ export default function LocalFinderForm({ defaults }: Props) {
           {/* Target business */}
           <div>
             <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-1.5">
-              Target business <span className="text-red-400">*</span>
+              Target domain or business <span className="text-red-400">*</span>
             </label>
             <input
               type="text"
@@ -183,7 +183,7 @@ export default function LocalFinderForm({ defaults }: Props) {
               required
               className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all dark:bg-slate-800"
             />
-            <p className="text-[11px] text-slate-400 mt-1">Name or domain — partial match, case-insensitive.</p>
+            <p className="text-[11px] text-slate-400 mt-1">Use the project domain or a business name — matching is partial and case-insensitive.</p>
           </div>
 
           {/* Grid size + spacing */}
@@ -354,7 +354,7 @@ export default function LocalFinderForm({ defaults }: Props) {
             </svg>
             {isGrid ? 'Running grid…' : 'Searching…'}
           </span>
-        ) : (isGrid ? 'Run geo-grid' : 'Search')}
+        ) : (isGrid ? 'Create monitor & run' : 'Search')}
       </button>
     </form>
   );

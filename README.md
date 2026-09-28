@@ -1,6 +1,17 @@
 # SEO Playground — SEO and Local SEO Dashboard
 
-> **New:** New Query Fan-Out page (surfaces the hidden sub-queries AI models generate when answering prompts, with their AI search volume). New AI Visibility page (see how often a domain/brand is mentioned by LLMs, and who dominates a topic). Nearly every results table across the app is now sortable and has a "Copy as Markdown" button. See the [changelog](#changelog) below.
+## ✨ Fresh from the workshop
+
+SEO Playground is actively evolving. Here are the latest substantial additions:
+
+- 🗂️ **Multi-project workspace** — switch between clients or sites in one click. Each project has its own defaults, search history, results, and Rank Tracker depth.
+- 📍 **Geo-grid monitoring, not just one-off maps** — save keyword/location monitors, browse a timeline of snapshots, compare movement point by point, inspect visibility trends, and schedule daily or weekly checks.
+- ⏰ **Background tracking that keeps working** — scheduled Geo-grid and Rank Tracker runs continue without an open browser tab; a task center keeps their progress visible while you work elsewhere.
+- 📄 **Client-ready exports** — generate branded PDF reports and Excel exports for Site Audit, Google Reviews, AI Visibility, and Geo-grid results.
+- 🧠 **Richer AI visibility analysis** — explore LLM mentions by platform, location, language, source domain, and brand entity; export target, topic-leaderboard, and historical views.
+- 🚀 **Safer self-hosted releases** — deploy immutable, multi-architecture Docker images with version-aware update notices and a production Compose setup.
+
+See the full [changelog](#changelog) for every improvement, fix, and release note.
 
 > **Work in progress** — new DataForSEO endpoints are being added progressively.
 
@@ -46,7 +57,7 @@ If you find this useful, consider supporting the project:
 - **Backlinks Domain Intersection** — Domains linking to you and a competitor
 - **Bulk Backlinks / Bulk Referring Domains** — Aggregated backlink metrics for a domain list
 - **Local Finder** — Google local pack results for any keyword and location, with map-based coordinate picker
-- **Geo-Grid Ranking** — Local visibility heatmap across a configurable grid of points (3×3 to 11×11). Choose between three API modes: Live (~6 s, instant results), Priority (~1 min, 40% cheaper) or Standard (background queue, 70% cheaper). Results are color-coded by rank position and saved locally for later review. Includes a competitive landscape panel (top competitors by grid presence, with a one-click "view on grid" toggle) and a visibility-by-distance breakdown.
+- **Geo-Grid Ranking** — Local visibility heatmap across a configurable grid of points (3×3 to 11×11), with a timeline of snapshots and point-by-point movement against the previous run. Choose between three API modes: Live (~6 s, instant results), Priority (~1 min, 40% cheaper) or Standard (background queue, 70% cheaper). A grid can be scheduled daily or weekly.
 - **On-Page Site Audit** — Full site crawl with pages, links, resources, duplicate tags and non-indexable pages
 - **On-Page Instant Pages** — Instant single-page audit without crawling
 - **Microdata Analysis** — Structured data inspection for any crawled URL
@@ -55,44 +66,90 @@ If you find this useful, consider supporting the project:
 - **AI Optimization** — Visibility in AI-generated answers
 - **AI Visibility** — Target overview (mentions, AI search volume, source/platform breakdown) or topic leaderboard (top mentioned domains and brands) via DataForSEO LLM Mentions
 - **Top Searches** — Local search trends
-- **Settings** — Store your DataForSEO credentials and defaults locally
+- **Settings** — Store your DataForSEO credentials and report identity locally
 
 ## Requirements
 
 - Node.js 18+
+- Or Docker with Docker Compose
 - A [DataForSEO](https://dataforseo.com/) account (API key)
 
 ## Getting Started
 
-### Option 1 — Docker (recommended)
+### Option 1 — Docker from source
 
-The easiest and fastest way to run the app. Docker builds a production image so the app is fully optimized.
+The easiest way to run the production app. One command builds the image (when needed), starts the dashboard, and starts the Geo-grid worker.
 
 ```bash
-# Build and start (first run)
-docker compose up --build
-
-# Subsequent runs
-docker compose up
+docker compose up -d --build
 ```
 
-The database is persisted in `./data/seo-playground.db` on your machine.
+Open [http://localhost:3000](http://localhost:3000), then enter your DataForSEO credentials in **Settings**. The database and the worker secret are persisted locally in `./data/`.
+
+Useful commands:
+
+```bash
+# Follow the dashboard and worker logs
+docker compose logs -f
+
+# Stop the services without deleting the database
+docker compose down
+```
 
 **Linux:** the container runs as uid/gid `1000` by default so it can write to `./data`. If your user has a different uid (check with `id -u`), start it with:
 
 ```bash
-HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up --build
+HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up -d --build
 ```
+
+### Production release installation
+
+Use the published image for Coolify, Yunohost packaging, or any long-running self-hosted deployment. Copy `.env.example` to `.env`, keep `SEO_PLAYGROUND_VERSION` pinned to an exact version, then start the production Compose file:
+
+```bash
+docker compose -f docker-compose.production.yml up -d
+```
+
+The app checks GitHub Releases twice daily and shows a notice when a newer stable release is available. It never updates itself. Read the release notes, update `SEO_PLAYGROUND_VERSION` in `.env`, then run the commands below. Your named `seo-playground-data` volume is preserved.
+
+```bash
+docker compose -f docker-compose.production.yml pull
+docker compose -f docker-compose.production.yml up -d
+```
+
+Back up the entire `seo-playground-data` volume before an update that includes database changes. Do not use the floating `latest` image tag for a production installation.
+
+### Updating a release installation
+
+1. Read the release notes shown in the dashboard and make a backup of `seo-playground-data`.
+2. Change `SEO_PLAYGROUND_VERSION` in `.env` to the exact announced version, for example `0.4.1`.
+3. Run `docker compose -f docker-compose.production.yml pull`, then `docker compose -f docker-compose.production.yml up -d`.
+4. Confirm the dashboard loads and the Geo-grid worker is healthy with `docker compose -f docker-compose.production.yml logs -f`.
+
+Coolify users can use the same image name and exact tag, then redeploy from its interface. The image is built for both `amd64` and `arm64` hosts.
+
+## Publishing a stable release
+
+Stable releases are published from versioned tags, not from `main`. Update `package.json` and `CHANGELOG.md`, verify the application locally, then create and push a matching tag:
+
+```bash
+RELEASE_TAG=vX.Y.Z npm run check:release
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+The `Publish stable release` workflow verifies that the tag matches `package.json`, runs lint/tests/build, publishes the `amd64` and `arm64` images to GHCR, generates a provenance attestation, then creates the GitHub Release with generated notes. Mark the GHCR package public once in GitHub package settings so self-hosted users can pull it anonymously.
 
 ### Option 2 — Node.js (production mode)
 
-Faster than dev mode — build once, then run.
+For a local server without Docker. This single command compiles the application, then starts the dashboard and worker together.
 
 ```bash
 npm install
-npm run build
-npm start
+npm run launch
 ```
+
+After a code update, run `npm run launch` again. If the app is already built, `npm start` starts both processes without rebuilding.
 
 ### Option 3 — Node.js (dev mode)
 
@@ -115,7 +172,40 @@ Runs the Vitest suite (dedupe/cache helpers). No DataForSEO credentials or netwo
 
 ## Configuration
 
-All settings (API credentials, default location, language, coordinates, domain) are stored locally in `seo-playground.db` (SQLite). No `.env` file is needed — configure everything from the Settings page.
+API credentials and report identity are stored locally in `seo-playground.db` (SQLite). Search defaults are configured per project. No `.env` file is needed — configure credentials from the Settings page.
+
+### Scheduled Geo-grid checks
+
+Schedules are configured from a Geo-grid timeline. The application always runs two lightweight processes:
+
+- the **web app**, which serves the dashboard;
+- the **Geo-grid worker**, which starts due snapshots and retrieves completed DataForSEO queue tasks.
+
+This means scheduled checks work with no browser tab open and no external cron configuration. The worker makes one internal request per minute by default; it has negligible CPU usage between checks.
+
+```bash
+# Node.js — build, then start both processes
+npm run launch
+
+# Docker — build and start both services
+docker compose up -d
+```
+
+`npm run dev` also starts both processes for development. In Node mode, the launcher creates a private in-memory worker secret. In Docker mode, Compose creates a private secret file in `data/` on first launch. You do not need to configure either secret yourself.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GEO_GRID_WORKER_INTERVAL_MS` | `60000` | Worker check interval in milliseconds (minimum: 10 seconds). |
+| `PORT` | `3000` | Dashboard port in Node mode. The launcher passes the same port to the worker. |
+| `CRON_SECRET` | generated automatically | Optional override for the internal worker authentication secret. |
+
+For example, to check every two minutes in Docker:
+
+```bash
+GEO_GRID_WORKER_INTERVAL_MS=120000 docker compose up -d
+```
+
+The schedule uses the browser timezone that created it, including daylight-saving changes.
 
 ## Data Storage
 

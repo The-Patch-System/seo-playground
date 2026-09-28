@@ -2,17 +2,19 @@ export const dynamic = 'force-dynamic';
 
 import {
   getCredentials, getTrackedKeywords, getRankHistory, getLatestRankCheck,
-  getSetting, getTargetDomains,
+  getSetting, getTargetDomains, getPendingRankTasks, getRankTrackerSchedule,
 } from '@/lib/db';
 import { LANGUAGES } from '@/lib/geo-options';
 import {
   addKeywordAction, removeKeywordAction, checkOneAction, checkAllAction,
-  saveDepthAction, addDomainAction, removeDomainAction, checkDomainAction,
+  saveDepthAction, addDomainAction, removeDomainAction, checkDomainAction, saveRankScheduleAction,
 } from './actions';
 import RankTrackerTable from './RankTrackerTable';
 import PendingButton from '@/components/PendingButton';
 import LocationPicker from '@/components/LocationPicker';
 import CopyMarkdownButton from '@/components/CopyMarkdownButton';
+import RankTrackerQueueStatus from './RankTrackerQueueStatus';
+import RankTrackerScheduleControl from './RankTrackerScheduleControl';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,11 +30,14 @@ export default async function RankTrackerPage({ searchParams }: { searchParams: 
   const creds = getCredentials();
   const defaultLocation = getSetting('default_location') ?? 'France';
   const defaultLanguage = getSetting('default_language') ?? 'French';
-  const rankDepth = getSetting('rank_tracker_depth') ?? '100';
+  const rankDepth = getSetting('rank_tracker_depth') ?? '20';
 
   // Merge target_domains table with unique domains from tracked keywords
   const savedDomains = getTargetDomains();
   const allKeywords = getTrackedKeywords();
+  const pendingRankTasks = getPendingRankTasks();
+  const rankSchedule = getRankTrackerSchedule();
+  const pendingKeywordIds = pendingRankTasks.map((task) => task.keywordId);
   const kwDomains = [...new Set(allKeywords.map((k) => k.domain))];
   const domains = [...new Set([...savedDomains, ...kwDomains])];
 
@@ -81,6 +86,7 @@ export default async function RankTrackerPage({ searchParams }: { searchParams: 
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          <RankTrackerQueueStatus count={pendingRankTasks.length} />
           <form action={saveDepthAction} className="flex items-center gap-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Top</label>
             <select
@@ -104,14 +110,16 @@ export default async function RankTrackerPage({ searchParams }: { searchParams: 
                 type="submit"
                 className="px-5 py-3 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-700 transition-all shadow-xl shadow-slate-200 dark:shadow-none"
                 pendingClassName="px-5 py-3 bg-slate-400 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-xl shadow-slate-200 dark:shadow-none cursor-not-allowed"
-                pendingChildren={`Checking ${allKeywords.length}…`}
+                pendingChildren={`Queuing ${allKeywords.length}…`}
               >
-                Check All ({allKeywords.length})
+                Queue All ({allKeywords.length})
               </PendingButton>
             </form>
           )}
         </div>
       </div>
+
+      <RankTrackerScheduleControl schedule={rankSchedule} saveAction={saveRankScheduleAction} />
 
       {!creds && (
         <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-400 rounded-2xl px-6 py-4 text-sm font-medium">
@@ -210,9 +218,9 @@ export default async function RankTrackerPage({ searchParams }: { searchParams: 
                           type="submit"
                           className="px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-700 transition-all shadow-md shadow-blue-100"
                           pendingClassName="px-3 py-1.5 bg-blue-300 text-white text-[9px] font-black uppercase tracking-widest rounded-lg cursor-not-allowed"
-                          pendingChildren={`Checking ${rows.length}…`}
+                          pendingChildren={`Queuing ${rows.length}…`}
                         >
-                          Check {rows.length}
+                          Queue {rows.length}
                         </PendingButton>
                       </form>
                     )}
@@ -221,6 +229,7 @@ export default async function RankTrackerPage({ searchParams }: { searchParams: 
                 <RankTrackerTable
                   rows={rows}
                   hasCreds={!!creds}
+                  pendingKeywordIds={pendingKeywordIds}
                   checkAction={checkOneAction}
                   removeAction={removeKeywordAction}
                 />

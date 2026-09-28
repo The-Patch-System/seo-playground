@@ -1,19 +1,230 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import { randomUUID } from 'crypto';
 
-let _db: Database.Database | null = null;
+const dataDbs = new Map<string, Database.Database>();
+let controlDb: Database.Database | null = null;
+
+export interface Project {
+  id: string;
+  name: string;
+  domain: string;
+  defaultLocation: string;
+  defaultLanguage: string;
+  defaultCoordinates: string;
+  rankTrackerDepth: string;
+  createdAt: number;
+}
+
+type ProjectRow = {
+  id: string;
+  name: string;
+  domain: string;
+  default_location: string;
+  default_language: string;
+  default_coordinates: string;
+  rank_tracker_depth: string;
+  created_at: number;
+};
+
+const PROJECT_SETTING_COLUMNS = {
+  default_domain: 'domain',
+  default_location: 'default_location',
+  default_language: 'default_language',
+  default_coordinates: 'default_coordinates',
+  rank_tracker_depth: 'rank_tracker_depth',
+} as const;
+
+function baseDbPath(): string {
+  return process.env.DB_PATH ?? path.join(process.cwd(), 'seo-playground.db');
+}
+
+function controlDbPath(): string {
+  return `${baseDbPath()}.projects`;
+}
+
+function dataDbPath(projectId: string): string {
+  const base = baseDbPath();
+  if (projectId === 'default') return base;
+  const parsed = path.parse(base);
+  return path.join(parsed.dir, `${parsed.name}.project-${projectId}${parsed.ext}`);
+}
+
+function normalizeDomain(domain: string): string {
+  return domain.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
+}
+
+function projectFromRow(row: ProjectRow): Project {
+  return {
+    id: row.id,
+    name: row.name,
+    domain: row.domain,
+    defaultLocation: row.default_location,
+    defaultLanguage: row.default_language,
+    defaultCoordinates: row.default_coordinates,
+    rankTrackerDepth: row.rank_tracker_depth,
+    createdAt: row.created_at,
+  };
+}
+
+function legacySettings(): Record<string, string> {
+  const legacyPath = baseDbPath();
+  if (!fs.existsSync(legacyPath)) return {};
+  const db = new Database(legacyPath, { readonly: true });
+  try {
+    const table = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get();
+    if (!table) return {};
+    const rows = db.prepare('SELECT key, value FROM settings').all() as Array<{ key: string; value: string }>;
+    return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  } finally {
+    db.close();
+  }
+}
+
+function getControlDb(): Database.Database {
+  if (controlDb) return controlDb;
+
+  const db = new Database(controlDbPath());
+  db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 5000');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      domain TEXT NOT NULL UNIQUE,
+      default_location TEXT NOT NULL DEFAULT '',
+      default_language TEXT NOT NULL DEFAULT '',
+      default_coordinates TEXT NOT NULL DEFAULT '',
+      rank_tracker_depth TEXT NOT NULL DEFAULT '100',
+      created_at INTEGER NOT NULL
+    );
+  `);
+
+  const count = db.prepare('SELECT COUNT(*) AS count FROM projects').get() as { count: number };
+  if (count.count === 0) {
+    // The former single database is the data store for the initial project, so no
+    // search history needs copying during the migration.
+    const legacy = legacySettings();
+    const domain = normalizeDomain(legacy.default_domain || '') || 'default.local';
+    const now = Date.now();
+    db.prepare(`INSERT INTO projects
+      (id, name, domain, default_location, default_language, default_coordinates, rank_tracker_depth, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run('default', 'Default Project', domain, legacy.default_location ?? '', legacy.default_language ?? '', legacy.default_coordinates ?? '', legacy.rank_tracker_depth ?? '100', now);
+    db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run('active_project_id', 'default');
+    for (const key of ['dfs-login', 'dfs-pass']) {
+      if (legacy[key]) db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run(key, legacy[key]);
+    }
+  }
+
+  controlDb = db;
+  return db;
+}
+
+export function getProjects(): Project[] {
+  const rows = getControlDb().prepare('SELECT * FROM projects ORDER BY created_at ASC').all() as ProjectRow[];
+  return rows.map(projectFromRow);
+}
+
+export function getActiveProject(): Project {
+  const db = getControlDb();
+  const activeId = (db.prepare('SELECT value FROM app_settings WHERE key = ?').get('active_project_id') as { value: string } | undefined)?.value;
+  const row = db.prepare('SELECT * FROM projects WHERE id = ?').get(activeId) as ProjectRow | undefined;
+  if (row) return projectFromRow(row);
+
+  const fallback = db.prepare('SELECT * FROM projects ORDER BY created_at ASC LIMIT 1').get() as ProjectRow;
+  db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run('active_project_id', fallback.id);
+  return projectFromRow(fallback);
+}
+
+export function createProject(input: Pick<Project, 'name' | 'domain' | 'defaultLocation' | 'defaultLanguage' | 'defaultCoordinates' | 'rankTrackerDepth'>): Project {
+  const name = input.name.trim();
+  const domain = normalizeDomain(input.domain);
+  if (!name) throw new Error('A project name is required.');
+  if (!domain) throw new Error('A domain is required.');
+  const id = randomUUID();
+  try {
+    getControlDb().prepare(`INSERT INTO projects
+      (id, name, domain, default_location, default_language, default_coordinates, rank_tracker_depth, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, name, domain, input.defaultLocation.trim(), input.defaultLanguage.trim(), input.defaultCoordinates.trim(), input.rankTrackerDepth || '100', Date.now());
+  } catch (error) {
+    if (error instanceof Error && /UNIQUE constraint failed: projects\.domain/.test(error.message)) {
+      throw new Error('A project already exists for this domain.');
+    }
+    throw error;
+  }
+  return getProjects().find((project) => project.id === id)!;
+}
+
+export function updateProject(id: string, input: Pick<Project, 'name' | 'domain' | 'defaultLocation' | 'defaultLanguage' | 'defaultCoordinates' | 'rankTrackerDepth'>): void {
+  const name = input.name.trim();
+  const domain = normalizeDomain(input.domain);
+  if (!name) throw new Error('A project name is required.');
+  if (!domain) throw new Error('A domain is required.');
+  try {
+    const result = getControlDb().prepare(`UPDATE projects SET
+      name = ?, domain = ?, default_location = ?, default_language = ?, default_coordinates = ?, rank_tracker_depth = ?
+      WHERE id = ?`)
+      .run(name, domain, input.defaultLocation.trim(), input.defaultLanguage.trim(), input.defaultCoordinates.trim(), input.rankTrackerDepth || '100', id);
+    if (result.changes === 0) throw new Error('Project not found.');
+  } catch (error) {
+    if (error instanceof Error && /UNIQUE constraint failed: projects\.domain/.test(error.message)) {
+      throw new Error('A project already exists for this domain.');
+    }
+    throw error;
+  }
+}
+
+export function setActiveProject(id: string): void {
+  const exists = getControlDb().prepare('SELECT 1 FROM projects WHERE id = ?').get(id);
+  if (!exists) throw new Error('Project not found.');
+  getControlDb().prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run('active_project_id', id);
+}
+
+export function deleteProject(id: string): void {
+  const db = getControlDb();
+  const projects = getProjects();
+  if (projects.length === 1) throw new Error('You need at least one project.');
+  const project = projects.find((item) => item.id === id);
+  if (!project) throw new Error('Project not found.');
+  const active = getActiveProject();
+  if (active.id === id) db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run('active_project_id', projects.find((item) => item.id !== id)!.id);
+  db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+
+  const dataDb = dataDbs.get(id);
+  if (dataDb) {
+    dataDb.close();
+    dataDbs.delete(id);
+  }
+  const projectPath = dataDbPath(id);
+  if (fs.existsSync(projectPath)) fs.unlinkSync(projectPath);
+  for (const suffix of ['-wal', '-shm']) {
+    const auxiliaryPath = `${projectPath}${suffix}`;
+    if (fs.existsSync(auxiliaryPath)) fs.unlinkSync(auxiliaryPath);
+  }
+}
+
+function getDbForProject(projectId: string): Database.Database {
+  const existing = dataDbs.get(projectId);
+  if (existing) return existing;
+  const db = new Database(dataDbPath(projectId));
+  db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 5000');
+  initSchema(db);
+  seedLocations(db);
+  seedCategories(db);
+  dataDbs.set(projectId, db);
+  return db;
+}
 
 function getDb(): Database.Database {
-  if (!_db) {
-    _db = new Database(process.env.DB_PATH ?? path.join(process.cwd(), 'seo-playground.db'));
-    _db.pragma('journal_mode = WAL');
-    _db.pragma('busy_timeout = 5000');
-    initSchema(_db);
-    seedLocations(_db);
-    seedCategories(_db);
-  }
-  return _db;
+  return getDbForProject(getActiveProject().id);
 }
 
 function initSchema(db: Database.Database) {
@@ -144,6 +355,25 @@ function initSchema(db: Database.Database) {
       cost REAL
     );
 
+    CREATE TABLE IF NOT EXISTS rank_tasks (
+      task_id TEXT PRIMARY KEY,
+      keyword_id INTEGER NOT NULL REFERENCES tracked_keywords(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      cost REAL,
+      created_at INTEGER NOT NULL,
+      completed_at INTEGER,
+      error_message TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS rank_tracker_schedules (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      time_of_day TEXT NOT NULL,
+      time_zone TEXT NOT NULL,
+      next_run_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS ref_domains_searches (
       id TEXT PRIMARY KEY,
       ts INTEGER NOT NULL,
@@ -168,6 +398,8 @@ function initSchema(db: Database.Database) {
       target TEXT NOT NULL,
       location TEXT NOT NULL,
       language TEXT NOT NULL,
+      date_from TEXT NOT NULL DEFAULT '',
+      date_to TEXT NOT NULL DEFAULT '',
       cost REAL,
       items TEXT NOT NULL
     );
@@ -211,6 +443,7 @@ function initSchema(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS grid_searches (
       id TEXT PRIMARY KEY,
       ts INTEGER NOT NULL,
+      series_id TEXT NOT NULL DEFAULT '',
       keyword TEXT NOT NULL,
       target TEXT NOT NULL,
       center TEXT NOT NULL,
@@ -219,6 +452,24 @@ function initSchema(db: Database.Database) {
       language TEXT NOT NULL,
       cost REAL,
       results TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS grid_schedules (
+      series_id TEXT PRIMARY KEY,
+      keyword TEXT NOT NULL,
+      target TEXT NOT NULL,
+      center TEXT NOT NULL,
+      grid_size INTEGER NOT NULL,
+      spacing_km REAL NOT NULL,
+      language TEXT NOT NULL,
+      queue_mode TEXT NOT NULL DEFAULT 'standard',
+      frequency TEXT NOT NULL,
+      weekday INTEGER,
+      time_of_day TEXT NOT NULL DEFAULT '08:00',
+      time_zone TEXT NOT NULL DEFAULT 'UTC',
+      next_run_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS instant_page_searches (
@@ -505,6 +756,7 @@ function initSchema(db: Database.Database) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_dfs_locations_name ON dfs_locations(location_name)`);
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_rank_checks_kw ON rank_checks(keyword_id, checked_at DESC)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_rank_tasks_status ON rank_tasks(status, created_at ASC)`);
 
   // Migrations — add columns that may not exist in older DBs. Only the expected
   // "column already exists" error is swallowed; anything else (a real syntax error, a
@@ -516,9 +768,12 @@ function initSchema(db: Database.Database) {
   addColumnIfMissing(db, 'grid_searches', `ADD COLUMN status TEXT NOT NULL DEFAULT 'done'`);
   addColumnIfMissing(db, 'grid_searches', 'ADD COLUMN task_ids TEXT');
   addColumnIfMissing(db, 'grid_searches', `ADD COLUMN queue_mode TEXT NOT NULL DEFAULT 'live'`);
+  addColumnIfMissing(db, 'grid_searches', `ADD COLUMN series_id TEXT NOT NULL DEFAULT ''`);
   addColumnIfMissing(db, 'reviews_tasks', 'ADD COLUMN meta TEXT');
   addColumnIfMissing(db, 'domain_find_searches', 'ADD COLUMN keyword TEXT');
   addColumnIfMissing(db, 'domain_find_searches', 'ADD COLUMN technology TEXT');
+  addColumnIfMissing(db, 'hist_rank_searches', `ADD COLUMN date_from TEXT NOT NULL DEFAULT ''`);
+  addColumnIfMissing(db, 'hist_rank_searches', `ADD COLUMN date_to TEXT NOT NULL DEFAULT ''`);
 }
 
 function addColumnIfMissing(db: Database.Database, table: string, alterClause: string): void {
@@ -655,16 +910,38 @@ export function searchLocations(query: string, limit = 20): LocationOption[] {
 // --- Settings ---
 
 export function getSetting(key: string): string | null {
-  const row = getDb().prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+  if (key in PROJECT_SETTING_COLUMNS) {
+    const project = getActiveProject();
+    const column = PROJECT_SETTING_COLUMNS[key as keyof typeof PROJECT_SETTING_COLUMNS];
+    return projectFromRow(getControlDb().prepare('SELECT * FROM projects WHERE id = ?').get(project.id) as ProjectRow)[column === 'default_location' ? 'defaultLocation' : column === 'default_language' ? 'defaultLanguage' : column === 'default_coordinates' ? 'defaultCoordinates' : column === 'rank_tracker_depth' ? 'rankTrackerDepth' : 'domain'];
+  }
+  const row = getControlDb().prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? null;
 }
 
 export function setSetting(key: string, value: string): void {
-  getDb().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
+  if (key in PROJECT_SETTING_COLUMNS) {
+    const project = getActiveProject();
+    const current = project;
+    updateProject(project.id, {
+      name: current.name,
+      domain: key === 'default_domain' ? value : current.domain,
+      defaultLocation: key === 'default_location' ? value : current.defaultLocation,
+      defaultLanguage: key === 'default_language' ? value : current.defaultLanguage,
+      defaultCoordinates: key === 'default_coordinates' ? value : current.defaultCoordinates,
+      rankTrackerDepth: key === 'rank_tracker_depth' ? value : current.rankTrackerDepth,
+    });
+    return;
+  }
+  getControlDb().prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run(key, value);
 }
 
 export function deleteSetting(key: string): void {
-  getDb().prepare('DELETE FROM settings WHERE key = ?').run(key);
+  if (key in PROJECT_SETTING_COLUMNS) {
+    setSetting(key, '');
+    return;
+  }
+  getControlDb().prepare('DELETE FROM app_settings WHERE key = ?').run(key);
 }
 
 // --- Credentials ---
@@ -690,7 +967,8 @@ export function clearCredentials(): void {
 
 export function getTargetDomains(): string[] {
   const rows = getDb().prepare('SELECT domain FROM target_domains ORDER BY created_at DESC').all() as { domain: string }[];
-  return rows.map((r) => r.domain);
+  const projectDomain = getActiveProject().domain;
+  return [...new Set([projectDomain, ...rows.map((r) => r.domain)])];
 }
 
 export function addTargetDomain(domain: string): void {
@@ -1017,10 +1295,18 @@ export interface RankCheck {
 }
 
 export function getTrackedKeywords(): TrackedKeyword[] {
-  const rows = getDb().prepare('SELECT id, keyword, domain, location, language, created_at FROM tracked_keywords ORDER BY created_at DESC').all() as Array<{
+  return trackedKeywordsFromDb(getDb());
+}
+
+function trackedKeywordsFromDb(db: Database.Database): TrackedKeyword[] {
+  const rows = db.prepare('SELECT id, keyword, domain, location, language, created_at FROM tracked_keywords ORDER BY created_at DESC').all() as Array<{
     id: number; keyword: string; domain: string; location: string; language: string; created_at: number;
   }>;
   return rows.map((r) => ({ id: r.id, keyword: r.keyword, domain: r.domain, location: r.location, language: r.language, createdAt: r.created_at }));
+}
+
+export function getTrackedKeywordsForProject(projectId: string): TrackedKeyword[] {
+  return trackedKeywordsFromDb(getDbForProject(projectId));
 }
 
 export function addTrackedKeyword(keyword: string, domain: string, location: string, language: string): number {
@@ -1035,6 +1321,7 @@ export function addTrackedKeyword(keyword: string, domain: string, location: str
 }
 
 export function removeTrackedKeyword(id: number): void {
+  getDb().prepare('DELETE FROM rank_tasks WHERE keyword_id = ?').run(id);
   getDb().prepare('DELETE FROM tracked_keywords WHERE id = ?').run(id);
 }
 
@@ -1050,6 +1337,132 @@ export function saveRankCheck(keywordId: number, position: number | null, url: s
     getDb().prepare('INSERT INTO rank_checks (keyword_id, checked_at, date, position, url, title, cost) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(keywordId, now, date, position, url, title, cost);
   }
+}
+
+export interface PendingRankTask {
+  taskId: string;
+  keywordId: number;
+  domain: string;
+  cost: number | null;
+}
+
+function pendingRankTasksFromDb(db: Database.Database): PendingRankTask[] {
+  const rows = db.prepare(`SELECT rank_tasks.task_id, rank_tasks.keyword_id, tracked_keywords.domain, rank_tasks.cost
+    FROM rank_tasks JOIN tracked_keywords ON tracked_keywords.id = rank_tasks.keyword_id
+    WHERE rank_tasks.status = 'pending' ORDER BY rank_tasks.created_at ASC LIMIT 500`).all() as Array<{
+      task_id: string; keyword_id: number; domain: string; cost: number | null;
+    }>;
+  return rows.map((row) => ({ taskId: row.task_id, keywordId: row.keyword_id, domain: row.domain, cost: row.cost }));
+}
+
+/** Stores the task_post cost once; task_get only echoes it and must not be counted again. */
+export function savePendingRankTask(keywordId: number, taskId: string, cost: number | null): void {
+  savePendingRankTaskToDb(getDb(), keywordId, taskId, cost);
+}
+
+function savePendingRankTaskToDb(db: Database.Database, keywordId: number, taskId: string, cost: number | null): void {
+  db.prepare(`INSERT OR REPLACE INTO rank_tasks
+    (task_id, keyword_id, status, cost, created_at, completed_at, error_message)
+    VALUES (?, ?, 'pending', ?, ?, NULL, NULL)`).run(taskId, keywordId, cost, Date.now());
+}
+
+export function savePendingRankTaskForProject(projectId: string, keywordId: number, taskId: string, cost: number | null): void {
+  savePendingRankTaskToDb(getDbForProject(projectId), keywordId, taskId, cost);
+}
+
+export function getPendingRankTasks(): PendingRankTask[] {
+  return pendingRankTasksFromDb(getDb());
+}
+
+export function getPendingRankTasksForProject(projectId: string): PendingRankTask[] {
+  return pendingRankTasksFromDb(getDbForProject(projectId));
+}
+
+export function completeRankTaskForProject(
+  projectId: string, taskId: string, position: number | null, url: string | null, title: string | null,
+): void {
+  const db = getDbForProject(projectId);
+  const task = db.prepare('SELECT keyword_id FROM rank_tasks WHERE task_id = ?').get(taskId) as { keyword_id: number } | undefined;
+  if (!task) return;
+  const now = Date.now();
+  const date = new Date(now).toISOString().split('T')[0];
+  const existing = db.prepare('SELECT id FROM rank_checks WHERE keyword_id = ? AND date = ?').get(task.keyword_id, date) as { id: number } | undefined;
+  if (existing) {
+    db.prepare('UPDATE rank_checks SET checked_at = ?, position = ?, url = ?, title = ? WHERE id = ?')
+      .run(now, position, url, title, existing.id);
+  } else {
+    const cost = db.prepare('SELECT cost FROM rank_tasks WHERE task_id = ?').get(taskId) as { cost: number | null };
+    db.prepare('INSERT INTO rank_checks (keyword_id, checked_at, date, position, url, title, cost) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(task.keyword_id, now, date, position, url, title, cost.cost);
+  }
+  db.prepare(`UPDATE rank_tasks SET status = 'done', completed_at = ?, error_message = NULL WHERE task_id = ?`).run(now, taskId);
+}
+
+export function failRankTaskForProject(projectId: string, taskId: string, errorMessage: string): void {
+  getDbForProject(projectId).prepare(`UPDATE rank_tasks
+    SET status = 'failed', completed_at = ?, error_message = ? WHERE task_id = ?`)
+    .run(Date.now(), errorMessage.slice(0, 500), taskId);
+}
+
+export interface RankTrackerSchedule {
+  timeOfDay: string;
+  timeZone: string;
+  nextRunAt: number;
+}
+
+export interface DueRankTrackerSchedule extends RankTrackerSchedule {
+  projectId: string;
+  depth: string;
+}
+
+function rankScheduleFromRow(row: { time_of_day: string; time_zone: string; next_run_at: number }): RankTrackerSchedule {
+  return { timeOfDay: row.time_of_day, timeZone: row.time_zone, nextRunAt: row.next_run_at };
+}
+
+export function getRankTrackerSchedule(): RankTrackerSchedule | null {
+  const row = getDb().prepare('SELECT time_of_day, time_zone, next_run_at FROM rank_tracker_schedules WHERE id = 1')
+    .get() as { time_of_day: string; time_zone: string; next_run_at: number } | undefined;
+  return row ? rankScheduleFromRow(row) : null;
+}
+
+export function saveRankTrackerSchedule(input: { timeOfDay: string; timeZone: string }): RankTrackerSchedule {
+  const now = Date.now();
+  const timeOfDay = validTimeOfDay(input.timeOfDay);
+  const timeZone = validTimeZone(input.timeZone);
+  const nextRunAt = nextDailyRun(timeOfDay, timeZone, now);
+  getDb().prepare(`INSERT INTO rank_tracker_schedules (id, time_of_day, time_zone, next_run_at, created_at, updated_at)
+    VALUES (1, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET time_of_day = excluded.time_of_day, time_zone = excluded.time_zone,
+      next_run_at = excluded.next_run_at, updated_at = excluded.updated_at`)
+    .run(timeOfDay, timeZone, nextRunAt, now, now);
+  return { timeOfDay, timeZone, nextRunAt };
+}
+
+export function deleteRankTrackerSchedule(): void {
+  getDb().prepare('DELETE FROM rank_tracker_schedules WHERE id = 1').run();
+}
+
+/** Claims due daily rank runs across projects so overlapping worker requests cannot duplicate a batch. */
+export function claimDueRankTrackerSchedules(now = Date.now()): DueRankTrackerSchedule[] {
+  const due: DueRankTrackerSchedule[] = [];
+  for (const project of getProjects()) {
+    const db = getDbForProject(project.id);
+    const row = db.prepare('SELECT time_of_day, time_zone, next_run_at FROM rank_tracker_schedules WHERE id = 1 AND next_run_at <= ?')
+      .get(now) as { time_of_day: string; time_zone: string; next_run_at: number } | undefined;
+    if (!row) continue;
+    const schedule = rankScheduleFromRow(row);
+    const nextRunAt = nextDailyRun(schedule.timeOfDay, schedule.timeZone, now);
+    const claimed = db.prepare('UPDATE rank_tracker_schedules SET next_run_at = ?, updated_at = ? WHERE id = 1 AND next_run_at = ?')
+      .run(nextRunAt, now, schedule.nextRunAt);
+    if (claimed.changes === 1) due.push({ ...schedule, nextRunAt, projectId: project.id, depth: project.rankTrackerDepth });
+  }
+  return due;
+}
+
+/** Reopens a claimed daily run after an upstream posting failure. */
+export function retryClaimedRankTrackerSchedule(projectId: string, claimedNextRunAt: number, now = Date.now()): void {
+  getDbForProject(projectId).prepare(`UPDATE rank_tracker_schedules SET next_run_at = ?, updated_at = ?
+    WHERE id = 1 AND next_run_at = ?`).run(now + 5 * 60_000, now, claimedNextRunAt);
 }
 
 export function getRankHistory(keywordId: number, days = 30): RankCheck[] {
@@ -1131,19 +1544,21 @@ export interface HistRankSearchEntry {
   target: string;
   location: string;
   language: string;
+  dateFrom?: string;
+  dateTo?: string;
   cost?: number;
 }
 
 export function getHistRankHistory(): HistRankSearchEntry[] {
-  const rows = getDb().prepare('SELECT id, ts, target, location, language, cost FROM hist_rank_searches ORDER BY ts DESC LIMIT 30').all() as Array<{
-    id: string; ts: number; target: string; location: string; language: string; cost: number | null;
+  const rows = getDb().prepare('SELECT id, ts, target, location, language, date_from, date_to, cost FROM hist_rank_searches ORDER BY ts DESC LIMIT 30').all() as Array<{
+    id: string; ts: number; target: string; location: string; language: string; date_from: string; date_to: string; cost: number | null;
   }>;
-  return rows.map((r) => ({ id: r.id, ts: r.ts, target: r.target, location: r.location, language: r.language, cost: r.cost ?? undefined }));
+  return rows.map((r) => ({ id: r.id, ts: r.ts, target: r.target, location: r.location, language: r.language, dateFrom: r.date_from || undefined, dateTo: r.date_to || undefined, cost: r.cost ?? undefined }));
 }
 
 export function saveHistRankSearch<T>(entry: HistRankSearchEntry, items: T[]): void {
-  getDb().prepare('INSERT OR REPLACE INTO hist_rank_searches (id, ts, target, location, language, cost, items) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(entry.id, entry.ts, entry.target, entry.location, entry.language, entry.cost ?? null, JSON.stringify(items));
+  getDb().prepare('INSERT OR REPLACE INTO hist_rank_searches (id, ts, target, location, language, date_from, date_to, cost, items) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(entry.id, entry.ts, entry.target, entry.location, entry.language, entry.dateFrom ?? '', entry.dateTo ?? '', entry.cost ?? null, JSON.stringify(items));
 }
 
 export function getHistRankResults<T>(id: string): T[] | null {
@@ -1268,6 +1683,8 @@ export interface GridHistorySummary {
 
 export interface GridSearchEntry {
   id: string;
+  /** Stable identity for a monitored query. Multiple runs belong to one series. */
+  series_id: string;
   ts: number;
   keyword: string;
   target: string;
@@ -1279,6 +1696,28 @@ export interface GridSearchEntry {
   status: GridStatus;
   queue_mode: GridQueueMode;
   summary?: GridHistorySummary;
+}
+
+export type GridScheduleFrequency = 'daily' | 'weekly';
+
+export interface GridSchedule {
+  series_id: string;
+  keyword: string;
+  target: string;
+  center: string;
+  grid_size: number;
+  spacing_km: number;
+  language: string;
+  queue_mode: GridQueueMode;
+  frequency: GridScheduleFrequency;
+  weekday: number | null;
+  time_of_day: string;
+  time_zone: string;
+  next_run_at: number;
+}
+
+export interface DueGridSchedule extends GridSchedule {
+  projectId: string;
 }
 
 export interface GridTaskPoint {
@@ -1309,6 +1748,38 @@ export interface GridPoint {
   items?: GridLocalItem[];
 }
 
+/**
+ * A deterministic query fingerprint. Queue mode is deliberately excluded: changing
+ * the API delivery mode does not make this a different location/ranking monitor.
+ */
+export function gridSeriesId(
+  keyword: string, center: string, gridSize: number, spacingKm: number, target: string, language: string,
+): string {
+  const key = [keyword.trim().toLowerCase(), center.trim(), gridSize, spacingKm, target.trim().toLowerCase(), language.trim().toLowerCase()].join('|');
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `grid-${hash.toString(16).padStart(8, '0')}`;
+}
+
+function entryFromGridRow(row: {
+  id: string; ts: number; series_id: string; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string;
+  cost: number | null; status: string; queue_mode: string; results?: string | null; task_ids?: string | null;
+}): GridSearchEntry & { task_ids?: GridTaskPoint[] } {
+  return {
+    id: row.id,
+    series_id: row.series_id || gridSeriesId(row.keyword, row.center, row.grid_size, row.spacing_km, row.target, row.language),
+    ts: row.ts, keyword: row.keyword, target: row.target, center: row.center,
+    grid_size: row.grid_size, spacing_km: row.spacing_km, language: row.language, cost: row.cost ?? undefined,
+    status: (row.status ?? 'done') as GridStatus,
+    queue_mode: (row.queue_mode ?? 'live') as GridQueueMode,
+    summary: row.status === 'pending' ? undefined : summarizeGridResults(row.results ?? null),
+    task_ids: row.task_ids ? JSON.parse(row.task_ids) as GridTaskPoint[] : undefined,
+  };
+}
+
 /** Mirrors the ATO/avg-rank formula in grid-insights.ts's computeGridSummary — duplicated (not imported) so lib/ doesn't depend on app/ code. */
 function summarizeGridResults(resultsJson: string | null): GridHistorySummary | undefined {
   if (!resultsJson) return undefined;
@@ -1331,45 +1802,49 @@ function summarizeGridResults(resultsJson: string | null): GridHistorySummary | 
 
 export function getGridHistory(): GridSearchEntry[] {
   const rows = getDb()
-    .prepare('SELECT id, ts, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode, results FROM grid_searches ORDER BY ts DESC LIMIT 20')
-    .all() as Array<{ id: string; ts: number; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string; cost: number | null; status: string; queue_mode: string; results: string | null }>;
-  return rows.map((r) => ({
-    id: r.id, ts: r.ts, keyword: r.keyword, target: r.target, center: r.center,
-    grid_size: r.grid_size, spacing_km: r.spacing_km, language: r.language, cost: r.cost ?? undefined,
-    status: (r.status ?? 'done') as GridStatus,
-    queue_mode: (r.queue_mode ?? 'live') as GridQueueMode,
-    summary: r.status === 'pending' ? undefined : summarizeGridResults(r.results),
-  }));
+    .prepare('SELECT id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode, results FROM grid_searches ORDER BY ts DESC LIMIT 100')
+    .all() as Array<{ id: string; ts: number; series_id: string; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string; cost: number | null; status: string; queue_mode: string; results: string | null }>;
+  return rows.map(entryFromGridRow);
+}
+
+export function getGridSeriesHistory(seriesId: string): GridSearchEntry[] {
+  return getGridHistory().filter((entry) => entry.series_id === seriesId);
 }
 
 export function getGridEntry(id: string): (GridSearchEntry & { task_ids?: GridTaskPoint[] }) | null {
   const row = getDb()
-    .prepare('SELECT id, ts, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode, task_ids FROM grid_searches WHERE id = ?')
-    .get(id) as { id: string; ts: number; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string; cost: number | null; status: string; queue_mode: string; task_ids: string | null } | undefined;
+    .prepare('SELECT id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode, task_ids FROM grid_searches WHERE id = ?')
+    .get(id) as { id: string; ts: number; series_id: string; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string; cost: number | null; status: string; queue_mode: string; task_ids: string | null } | undefined;
   if (!row) return null;
-  return {
-    id: row.id, ts: row.ts, keyword: row.keyword, target: row.target, center: row.center,
-    grid_size: row.grid_size, spacing_km: row.spacing_km, language: row.language, cost: row.cost ?? undefined,
-    status: (row.status ?? 'done') as GridStatus,
-    queue_mode: (row.queue_mode ?? 'live') as GridQueueMode,
-    task_ids: row.task_ids ? JSON.parse(row.task_ids) as GridTaskPoint[] : undefined,
-  };
+  return entryFromGridRow(row);
 }
 
 export function saveGridSearch(entry: GridSearchEntry, results: GridPoint[]): void {
   getDb()
-    .prepare('INSERT OR REPLACE INTO grid_searches (id, ts, keyword, target, center, grid_size, spacing_km, language, cost, results, status, queue_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(entry.id, entry.ts, entry.keyword, entry.target, entry.center, entry.grid_size, entry.spacing_km, entry.language, entry.cost ?? null, JSON.stringify(results), entry.status, entry.queue_mode);
+    .prepare('INSERT OR REPLACE INTO grid_searches (id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, results, status, queue_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(entry.id, entry.ts, entry.series_id, entry.keyword, entry.target, entry.center, entry.grid_size, entry.spacing_km, entry.language, entry.cost ?? null, JSON.stringify(results), entry.status, entry.queue_mode);
 }
 
 export function saveGridSearchPending(entry: GridSearchEntry, taskPoints: GridTaskPoint[]): void {
-  getDb()
-    .prepare('INSERT OR REPLACE INTO grid_searches (id, ts, keyword, target, center, grid_size, spacing_km, language, cost, results, status, queue_mode, task_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(entry.id, entry.ts, entry.keyword, entry.target, entry.center, entry.grid_size, entry.spacing_km, entry.language, entry.cost ?? null, '[]', 'pending', entry.queue_mode, JSON.stringify(taskPoints));
+  saveGridSearchPendingToDb(getDb(), entry, taskPoints);
+}
+
+function saveGridSearchPendingToDb(db: Database.Database, entry: GridSearchEntry, taskPoints: GridTaskPoint[]): void {
+  db
+    .prepare('INSERT OR REPLACE INTO grid_searches (id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, results, status, queue_mode, task_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(entry.id, entry.ts, entry.series_id, entry.keyword, entry.target, entry.center, entry.grid_size, entry.spacing_km, entry.language, entry.cost ?? null, '[]', 'pending', entry.queue_mode, JSON.stringify(taskPoints));
+}
+
+export function saveGridSearchPendingForProject(projectId: string, entry: GridSearchEntry, taskPoints: GridTaskPoint[]): void {
+  saveGridSearchPendingToDb(getDbForProject(projectId), entry, taskPoints);
 }
 
 export function getGridProgress(id: string): { results: GridPoint[]; pendingTasks: GridTaskPoint[] } | null {
-  const row = getDb()
+  return getGridProgressFromDb(getDb(), id);
+}
+
+function getGridProgressFromDb(db: Database.Database, id: string): { results: GridPoint[]; pendingTasks: GridTaskPoint[] } | null {
+  const row = db
     .prepare('SELECT results, task_ids FROM grid_searches WHERE id = ?')
     .get(id) as { results: string; task_ids: string | null } | undefined;
   if (!row) return null;
@@ -1377,6 +1852,10 @@ export function getGridProgress(id: string): { results: GridPoint[]; pendingTask
     results: row.results ? JSON.parse(row.results) as GridPoint[] : [],
     pendingTasks: row.task_ids ? JSON.parse(row.task_ids) as GridTaskPoint[] : [],
   };
+}
+
+export function getGridProgressForProject(projectId: string, id: string): { results: GridPoint[]; pendingTasks: GridTaskPoint[] } | null {
+  return getGridProgressFromDb(getDbForProject(projectId), id);
 }
 
 /**
@@ -1388,10 +1867,26 @@ export function getGridProgress(id: string): { results: GridPoint[]; pendingTask
  * summing it here would double-count spend already captured at posting time.
  */
 export function updateGridProgress(id: string, accumulatedResults: GridPoint[], stillPendingTasks: GridTaskPoint[]): void {
+  updateGridProgressInDb(getDb(), id, accumulatedResults, stillPendingTasks);
+}
+
+function updateGridProgressInDb(db: Database.Database, id: string, accumulatedResults: GridPoint[], stillPendingTasks: GridTaskPoint[]): void {
   const done = stillPendingTasks.length === 0;
-  getDb()
+  db
     .prepare('UPDATE grid_searches SET results = ?, status = ?, task_ids = ? WHERE id = ?')
     .run(JSON.stringify(accumulatedResults), done ? 'done' : 'pending', done ? null : JSON.stringify(stillPendingTasks), id);
+}
+
+export function updateGridProgressForProject(projectId: string, id: string, accumulatedResults: GridPoint[], stillPendingTasks: GridTaskPoint[]): void {
+  updateGridProgressInDb(getDbForProject(projectId), id, accumulatedResults, stillPendingTasks);
+}
+
+export function getPendingGridEntriesForProject(projectId: string): Array<GridSearchEntry & { task_ids?: GridTaskPoint[] }> {
+  const rows = getDbForProject(projectId)
+    .prepare(`SELECT id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode, task_ids
+      FROM grid_searches WHERE status = 'pending' ORDER BY ts ASC LIMIT 100`)
+    .all() as Array<{ id: string; ts: number; series_id: string; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string; cost: number | null; status: string; queue_mode: string; task_ids: string | null }>;
+  return rows.map(entryFromGridRow);
 }
 
 export function getGridResults(id: string): GridPoint[] | null {
@@ -1401,6 +1896,130 @@ export function getGridResults(id: string): GridPoint[] | null {
     const parsed = JSON.parse(row.results) as GridPoint[];
     return parsed.length > 0 ? parsed : null;
   } catch { return null; }
+}
+
+function parseScheduleRow(row: {
+  series_id: string; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string;
+  queue_mode: string; frequency: string; weekday: number | null; time_of_day: string; time_zone: string; next_run_at: number;
+}): GridSchedule {
+  return {
+    series_id: row.series_id, keyword: row.keyword, target: row.target, center: row.center,
+    grid_size: row.grid_size, spacing_km: row.spacing_km, language: row.language,
+    queue_mode: (row.queue_mode ?? 'standard') as GridQueueMode,
+    frequency: row.frequency as GridScheduleFrequency,
+    weekday: row.weekday, time_of_day: row.time_of_day, time_zone: row.time_zone, next_run_at: row.next_run_at,
+  };
+}
+
+function validTimeOfDay(value: string): string {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : '08:00';
+}
+
+function validTimeZone(value: string): string {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+    return value;
+  } catch {
+    return 'UTC';
+  }
+}
+
+function zonedParts(timestamp: number, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', hourCycle: 'h23',
+  }).formatToParts(new Date(timestamp));
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return { year: value('year'), month: value('month'), day: value('day'), hour: value('hour'), minute: value('minute') };
+}
+
+function timeZoneOffset(timestamp: number, timeZone: string): number {
+  const parts = zonedParts(timestamp, timeZone);
+  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute) - timestamp;
+}
+
+function localTimeToTimestamp(year: number, month: number, day: number, hour: number, minute: number, timeZone: string): number {
+  const localUtc = Date.UTC(year, month - 1, day, hour, minute);
+  let timestamp = localUtc - timeZoneOffset(localUtc, timeZone);
+  // Re-evaluate once so DST offset changes on the target date are applied.
+  timestamp = localUtc - timeZoneOffset(timestamp, timeZone);
+  return timestamp;
+}
+
+function nextDailyRun(timeOfDay: string, timeZone: string, after: number): number {
+  const [hour, minute] = validTimeOfDay(timeOfDay).split(':').map(Number);
+  const local = zonedParts(after, validTimeZone(timeZone));
+  for (let offset = 0; offset <= 1; offset += 1) {
+    const day = new Date(Date.UTC(local.year, local.month - 1, local.day + offset));
+    const candidate = localTimeToTimestamp(
+      day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate(), hour, minute, validTimeZone(timeZone),
+    );
+    if (candidate > after + 5_000) return candidate;
+  }
+  return after + 86_400_000;
+}
+
+function nextGridScheduleRun(schedule: Pick<GridSchedule, 'frequency' | 'weekday' | 'time_of_day' | 'time_zone'>, after: number): number {
+  const timeZone = validTimeZone(schedule.time_zone);
+  const [hour, minute] = validTimeOfDay(schedule.time_of_day).split(':').map(Number);
+  const local = zonedParts(after, timeZone);
+  const firstDay = new Date(Date.UTC(local.year, local.month - 1, local.day));
+  for (let offset = 0; offset <= 8; offset += 1) {
+    const candidateDay = new Date(firstDay.getTime() + offset * 86_400_000);
+    if (schedule.frequency === 'weekly' && candidateDay.getUTCDay() !== (schedule.weekday ?? 1)) continue;
+    const candidate = localTimeToTimestamp(
+      candidateDay.getUTCFullYear(), candidateDay.getUTCMonth() + 1, candidateDay.getUTCDate(), hour, minute, timeZone,
+    );
+    if (candidate > after + 5_000) return candidate;
+  }
+  // Only reachable with malformed input; preserve a predictable future retry.
+  return after + 86_400_000;
+}
+
+export function getGridSchedule(seriesId: string): GridSchedule | null {
+  const row = getDb().prepare(`SELECT series_id, keyword, target, center, grid_size, spacing_km, language,
+    queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at FROM grid_schedules WHERE series_id = ?`).get(seriesId) as Parameters<typeof parseScheduleRow>[0] | undefined;
+  return row ? parseScheduleRow(row) : null;
+}
+
+export function saveGridSchedule(input: Omit<GridSchedule, 'next_run_at'>): GridSchedule {
+  const now = Date.now();
+  const frequency = input.frequency === 'weekly' ? 'weekly' : 'daily';
+  const time_of_day = validTimeOfDay(input.time_of_day);
+  const time_zone = validTimeZone(input.time_zone);
+  const weekday = frequency === 'weekly' && input.weekday != null && input.weekday >= 0 && input.weekday <= 6 ? input.weekday : null;
+  const next_run_at = nextGridScheduleRun({ frequency, weekday, time_of_day, time_zone }, now);
+  getDb().prepare(`INSERT INTO grid_schedules
+    (series_id, keyword, target, center, grid_size, spacing_km, language, queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(series_id) DO UPDATE SET
+      queue_mode = excluded.queue_mode, frequency = excluded.frequency, weekday = excluded.weekday,
+      time_of_day = excluded.time_of_day, time_zone = excluded.time_zone, next_run_at = excluded.next_run_at, updated_at = excluded.updated_at`)
+    .run(input.series_id, input.keyword, input.target, input.center, input.grid_size, input.spacing_km, input.language,
+      input.queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at, now, now);
+  return { ...input, frequency, weekday, time_of_day, time_zone, next_run_at };
+}
+
+export function deleteGridSchedule(seriesId: string): void {
+  getDb().prepare('DELETE FROM grid_schedules WHERE series_id = ?').run(seriesId);
+}
+
+/** Claims due schedules across every project so one cron run cannot enqueue duplicates. */
+export function claimDueGridSchedules(now = Date.now()): DueGridSchedule[] {
+  const due: DueGridSchedule[] = [];
+  for (const project of getProjects()) {
+    const db = getDbForProject(project.id);
+    const rows = db.prepare(`SELECT series_id, keyword, target, center, grid_size, spacing_km, language,
+      queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at FROM grid_schedules WHERE next_run_at <= ?`).all(now) as Parameters<typeof parseScheduleRow>[0][];
+    const claim = db.prepare('UPDATE grid_schedules SET next_run_at = ?, updated_at = ? WHERE series_id = ? AND next_run_at = ?');
+    for (const row of rows) {
+      const schedule = parseScheduleRow(row);
+      const next = nextGridScheduleRun(schedule, now);
+      if (claim.run(next, now, schedule.series_id, schedule.next_run_at).changes === 1) {
+        due.push({ ...schedule, next_run_at: next, projectId: project.id });
+      }
+    }
+  }
+  return due;
 }
 
 // --- Instant Pages ---

@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic';
 
 import { getCredentials, getSetting } from '@/lib/db';
 import { updateSettings, deleteCredentials } from './actions';
-import LocationPicker from '@/components/LocationPicker';
 
 interface DFUserResponse {
   tasks?: Array<{
@@ -16,10 +15,8 @@ const inputCls = 'w-full px-5 py-4 bg-white dark:bg-slate-800 border border-slat
 
 export default async function SettingsPage() {
   const creds = getCredentials();
-  const defaultLocation = getSetting('default_location') ?? '';
-  const defaultCoordinates = getSetting('default_coordinates') ?? '';
-  const defaultLanguage = getSetting('default_language') ?? '';
-  const defaultDomain = getSetting('default_domain') ?? '';
+  const brandName = getSetting('brand_name') ?? '';
+  const brandLogoUrl = getSetting('brand_logo_url') ?? '';
 
   let balance = 0;
   let status = 'NOT CONNECTED';
@@ -88,34 +85,26 @@ export default async function SettingsPage() {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">API Password</label>
                   <input name="password" type="password" className={inputCls} />
+                  {creds && <p className="text-[10px] text-emerald-600 dark:text-emerald-400 ml-1">Password saved. Leave blank to keep it unchanged.</p>}
                 </div>
               </div>
             </div>
 
             <div className="border-t border-slate-200 dark:border-slate-700" />
 
-            {/* Search Defaults */}
+            {/* Report identity */}
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Search Defaults</p>
-              <p className="text-xs text-slate-400 mb-4">Pre-filled values across all search forms.</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Report identity</p>
+              <p className="text-xs text-slate-400 mb-4">Used for PDF reports. Leave the name blank to use SEO Playground.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Default Location</label>
-                  <LocationPicker name="default_location" defaultValue={defaultLocation} placeholder="e.g. France, Paris" className={inputCls} />
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Brand name</label>
+                  <input name="brand_name" type="text" defaultValue={brandName} placeholder="e.g. Acme SEO" className={inputCls} />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Default Language</label>
-                  <input name="default_language" type="text" defaultValue={defaultLanguage} placeholder="e.g. French" className={inputCls} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Default Coordinates</label>
-                  <input name="default_coordinates" type="text" defaultValue={defaultCoordinates} placeholder="e.g. 45.7640,4.8357" className={inputCls} />
-                  <p className="text-[10px] text-slate-400 ml-1">lat,lng — used for Maps &amp; Local Finder</p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Default Domain</label>
-                  <input name="default_domain" type="text" defaultValue={defaultDomain} placeholder="e.g. example.com" className={inputCls} />
-                  <p className="text-[10px] text-slate-400 ml-1">Used in Rank Tracker &amp; domain-based tools</p>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Logo URL</label>
+                  <input name="brand_logo_url" type="url" defaultValue={brandLogoUrl} placeholder="https://example.com/logo.png" className={inputCls} />
+                  <p className="text-[10px] text-slate-400 ml-1">PNG, JPG, or WebP. If available, it replaces the name in PDF reports.</p>
                 </div>
               </div>
             </div>

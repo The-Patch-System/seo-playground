@@ -1,11 +1,13 @@
 import {
-  getCredentials, getSiteAuditHistory, getSiteAuditTask, upsertSiteAuditTask,
+  getCredentials, getSetting, getSiteAuditHistory, getSiteAuditTask, upsertSiteAuditTask,
   saveSiteAuditResult, getSiteAuditSummary, getSiteAuditPages,
   type SiteAuditEntry,
 } from '@/lib/db';
 import { redirect } from 'next/navigation';
 import SearchForm from '@/components/SearchForm';
 import ExportCSVButton from '@/components/ExportCSVButton';
+import ExportExcelButton from '@/components/ExportExcelButton';
+import ReportPdfExportButton from '@/components/ReportPdfExportButton';
 import CopyMarkdownButton from '@/components/CopyMarkdownButton';
 import SiteAuditPagesTable from './SiteAuditPagesTable';
 import KeywordDensityTable from './KeywordDensityTable';
@@ -348,6 +350,8 @@ function IssueRow({ label, count, sev }: { label: string; count: number; sev: Se
 export default async function SiteAuditPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const creds = getCredentials();
   const params = await searchParams;
+  const brandName = getSetting('brand_name')?.trim() || 'SEO Playground';
+  const brandLogoUrl = getSetting('brand_logo_url')?.trim() || undefined;
   const view = params.view ?? 'overview';
   const kwLen = parseInt(params.kw_len ?? '1', 10) || 1;
 
@@ -492,6 +496,20 @@ export default async function SiteAuditPage({ searchParams }: { searchParams: Pr
       word_count: p.content?.plain_text_word_count ?? '',
     };
   });
+  const pageExportColumns = [
+    { key: 'url', label: 'URL' }, { key: 'status_code', label: 'Status' }, { key: 'onpage_score', label: 'Score' },
+    { key: 'title', label: 'Title' }, { key: 'title_length', label: 'Title Length' }, { key: 'description', label: 'Description' },
+    { key: 'errors', label: 'Errors' }, { key: 'warnings', label: 'Warnings' }, { key: 'load_time_ms', label: 'Load Time (ms)' }, { key: 'word_count', label: 'Word Count' },
+  ];
+  const auditFileStem = activeTask?.target.replace(/[^a-z0-9]+/gi, '-').replace(/(^-|-$)/g, '').toLowerCase() || 'site-audit';
+  const auditOverviewRows = summary ? [
+    { metric: 'On-page score', value: score?.toFixed(1) ?? '' },
+    { metric: 'Pages crawled', value: String(summary.crawl_status.pages_crawled) },
+    { metric: 'Broken links', value: String(summary.page_metrics?.broken_links ?? '') },
+    { metric: 'Non-indexable pages', value: String(summary.page_metrics?.non_indexable ?? '') },
+    { metric: 'Duplicate titles', value: String(summary.page_metrics?.duplicate_title ?? '') },
+    { metric: 'Duplicate descriptions', value: String(summary.page_metrics?.duplicate_description ?? '') },
+  ] : [];
 
   return (
     <div className="space-y-6">
@@ -606,6 +624,30 @@ export default async function SiteAuditPage({ searchParams }: { searchParams: Pr
               {/* ── Overview tab ── */}
               {view === 'overview' && summary && (
                 <div className="p-6 space-y-6">
+                  <div className="flex items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Export audit report</p>
+                    <div className="flex items-center gap-3">
+                      <ReportPdfExportButton brandName={brandName} brandLogoUrl={brandLogoUrl} filename={`${auditFileStem}-site-audit-report.pdf`}
+                        title="Site audit report" subject={activeTask!.target} generatedAt={activeTask!.ts}
+                        metrics={[
+                          { label: 'On-page score', value: score?.toFixed(1) ?? '—', detail: 'out of 100' },
+                          { label: 'Pages crawled', value: fmt(summary.crawl_status.pages_crawled), detail: `${fmt(summary.crawl_status.max_crawl_pages)} maximum` },
+                          { label: 'Critical errors', value: String(errors.reduce((total, issue) => total + issue.count, 0)), detail: `${errors.length} issue types` },
+                          { label: 'Warnings', value: String(warnings.reduce((total, issue) => total + issue.count, 0)), detail: `${warnings.length} issue types` },
+                        ]}
+                        sections={[
+                          { title: 'Critical issues', rows: errors.slice(0, 15).map((issue) => [issue.label, `${issue.count} pages`]) },
+                          { title: 'Warnings', rows: warnings.slice(0, 15).map((issue) => [issue.label, `${issue.count} pages`]) },
+                          { title: 'Domain health', rows: [[ 'CMS', summary.domain_info?.cms ?? '—' ], [ 'Server', summary.domain_info?.server ?? '—' ], [ 'SSL certificate', summary.domain_info?.ssl_info?.valid_certificate ? 'Valid' : 'Not verified' ]].filter((row) => row[1] !== '—') as Array<[string, string]> },
+                        ]} />
+                      <ExportExcelButton filename={`${auditFileStem}-site-audit.xls`} sheets={[
+                        { name: 'Overview', columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Value' }], data: auditOverviewRows },
+                        { name: 'Issues', columns: [{ key: 'severity', label: 'Severity' }, { key: 'issue', label: 'Issue' }, { key: 'pages', label: 'Affected pages' }], data: issuesList.map((issue) => ({ severity: issue.sev, issue: issue.label, pages: issue.count })) },
+                        { name: 'Pages', columns: pageExportColumns, data: csvData },
+                      ]} />
+                      <ExportCSVButton data={csvData} columns={pageExportColumns} filename={`${auditFileStem}-site-audit-pages.csv`} />
+                    </div>
+                  </div>
                   {/* Score + crawl stats */}
                   <div className="flex gap-4 items-start flex-wrap">
                     {score !== undefined && (
@@ -757,34 +799,12 @@ export default async function SiteAuditPage({ searchParams }: { searchParams: Pr
                       <div className="flex items-center gap-2">
                         <CopyMarkdownButton
                           data={csvData}
-                          columns={[
-                            { key: 'url', label: 'URL' },
-                            { key: 'status_code', label: 'Status' },
-                            { key: 'onpage_score', label: 'Score' },
-                            { key: 'title', label: 'Title' },
-                            { key: 'title_length', label: 'Title Length' },
-                            { key: 'description', label: 'Description' },
-                            { key: 'errors', label: 'Errors' },
-                            { key: 'warnings', label: 'Warnings' },
-                            { key: 'load_time_ms', label: 'Load Time (ms)' },
-                            { key: 'word_count', label: 'Word Count' },
-                          ]}
+                          columns={pageExportColumns}
                         />
                         <ExportCSVButton
                           data={csvData}
                           filename={`site-audit-${activeTask!.target}.csv`}
-                          columns={[
-                            { key: 'url', label: 'URL' },
-                            { key: 'status_code', label: 'Status' },
-                            { key: 'onpage_score', label: 'Score' },
-                            { key: 'title', label: 'Title' },
-                            { key: 'title_length', label: 'Title Length' },
-                            { key: 'description', label: 'Description' },
-                            { key: 'errors', label: 'Errors' },
-                            { key: 'warnings', label: 'Warnings' },
-                            { key: 'load_time_ms', label: 'Load Time (ms)' },
-                            { key: 'word_count', label: 'Word Count' },
-                          ]}
+                          columns={pageExportColumns}
                         />
                       </div>
                     )}

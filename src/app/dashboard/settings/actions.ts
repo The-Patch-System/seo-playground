@@ -9,15 +9,11 @@ export async function updateSettings(formData: FormData) {
   const pass = formData.get('password') as string;
   if (user && pass) saveCredentials(user, pass);
 
-  const defaultLocation = (formData.get('default_location') as string)?.trim();
-  const defaultCoordinates = (formData.get('default_coordinates') as string)?.trim();
-  const defaultLanguage = (formData.get('default_language') as string)?.trim();
-  const defaultDomain = (formData.get('default_domain') as string)?.trim();
+  const brandName = (formData.get('brand_name') as string)?.trim();
+  const brandLogoUrl = (formData.get('brand_logo_url') as string)?.trim();
 
-  if (defaultLocation !== undefined) setSetting('default_location', defaultLocation);
-  if (defaultCoordinates !== undefined) setSetting('default_coordinates', defaultCoordinates);
-  if (defaultLanguage !== undefined) setSetting('default_language', defaultLanguage);
-  if (defaultDomain !== undefined) setSetting('default_domain', defaultDomain);
+  if (brandName !== undefined) setSetting('brand_name', brandName);
+  if (brandLogoUrl !== undefined) setSetting('brand_logo_url', brandLogoUrl);
 
   revalidatePath('/dashboard/settings');
 }

@@ -12,10 +12,14 @@ process.env.DB_PATH = path.join(tmpDir, 'test.db');
 import {
   getSetting, setSetting, deleteSetting,
   getCredentials, saveCredentials, clearCredentials,
+  getActiveProject, getProjects, createProject, deleteProject, setActiveProject,
   getAiOptimizationHistory, saveAiOptimizationSearch, getAiOptimizationResults, type AiOptimizationEntry,
   getWebMentionsHistory, saveWebMentionsSearch, getWebMentionsItems, getWebMentionsSummary, type WebMentionsEntry,
   getSerpHistory, saveSerpSearch,
   getSpendByTool, getSpendByDay, getFirstSpendTs,
+  gridSeriesId, getGridSeriesHistory, getGridSchedule, saveGridSchedule, saveGridSearch, deleteGridSchedule, type GridSearchEntry,
+  getRankTrackerSchedule, saveRankTrackerSchedule, deleteRankTrackerSchedule,
+  getHistRankHistory, saveHistRankSearch,
 } from './db';
 
 afterAll(() => {
@@ -156,5 +160,72 @@ describe('spending aggregates', () => {
 
   it('finds the oldest recorded call', () => {
     expect(getFirstSpendTs()).not.toBeNull();
+  });
+});
+
+describe('projects', () => {
+  it('keeps each project history in a separate data store', () => {
+    const defaultProject = getActiveProject();
+    const secondProject = createProject({
+      name: 'Second Project', domain: 'second-project.example', defaultLocation: 'France',
+      defaultLanguage: 'French', defaultCoordinates: '', rankTrackerDepth: '100',
+    });
+
+    setActiveProject(secondProject.id);
+    saveSerpSearch({
+      id: 'second-project-only', ts: Date.now(), keyword: 'isolated', location: 'France', language: 'French', device: 'desktop', depth: 10, count: 1,
+    }, []);
+    expect(getSerpHistory().some((entry) => entry.id === 'second-project-only')).toBe(true);
+
+    setActiveProject(defaultProject.id);
+    expect(getSerpHistory().some((entry) => entry.id === 'second-project-only')).toBe(false);
+
+    deleteProject(secondProject.id);
+    expect(getProjects().some((project) => project.id === secondProject.id)).toBe(false);
+  });
+});
+
+describe('Geo-grid monitoring', () => {
+  const seriesId = gridSeriesId('plombier paris', '48.8566,2.3522', 3, 1, 'Example Plumbing', 'French');
+  const base: Omit<GridSearchEntry, 'id' | 'ts'> = {
+    series_id: seriesId, keyword: 'plombier paris', target: 'Example Plumbing', center: '48.8566,2.3522',
+    grid_size: 3, spacing_km: 1, language: 'French', status: 'done', queue_mode: 'live',
+  };
+
+  it('groups separate snapshots under one stable series', () => {
+    saveGridSearch({ ...base, id: 'grid-monitor-one', ts: 1 }, [{ row: 0, col: 0, rank: 4 }]);
+    saveGridSearch({ ...base, id: 'grid-monitor-two', ts: 2 }, [{ row: 0, col: 0, rank: 2 }]);
+    expect(getGridSeriesHistory(seriesId).filter((run) => run.id.startsWith('grid-monitor-')).map((run) => run.id))
+      .toEqual(['grid-monitor-two', 'grid-monitor-one']);
+  });
+
+  it('persists and removes a daily schedule', () => {
+    const saved = saveGridSchedule({ ...base, frequency: 'daily', weekday: null, time_of_day: '08:30', time_zone: 'Europe/Paris' });
+    expect(saved.next_run_at).toBeGreaterThan(Date.now());
+    expect(getGridSchedule(seriesId)).toMatchObject({ frequency: 'daily', time_of_day: '08:30', time_zone: 'Europe/Paris' });
+    deleteGridSchedule(seriesId);
+    expect(getGridSchedule(seriesId)).toBeNull();
+  });
+});
+
+describe('Rank Tracker monitoring', () => {
+  it('persists and removes a daily Standard schedule', () => {
+    const saved = saveRankTrackerSchedule({ timeOfDay: '07:45', timeZone: 'Europe/Paris' });
+    expect(saved.nextRunAt).toBeGreaterThan(Date.now());
+    expect(getRankTrackerSchedule()).toMatchObject({ timeOfDay: '07:45', timeZone: 'Europe/Paris' });
+    deleteRankTrackerSchedule();
+    expect(getRankTrackerSchedule()).toBeNull();
+  });
+});
+
+describe('Historical Rank search cache', () => {
+  it('keeps the requested historical range with the saved result', () => {
+    saveHistRankSearch({
+      id: 'historical-rank-range', ts: Date.now(), target: 'example.com', location: 'France', language: 'French',
+      dateFrom: '2020-10-01', dateTo: '2026-09-27', cost: 0.01,
+    }, []);
+    expect(getHistRankHistory().find((entry) => entry.id === 'historical-rank-range')).toMatchObject({
+      dateFrom: '2020-10-01', dateTo: '2026-09-27',
+    });
   });
 });
