@@ -15,8 +15,9 @@ services:
     # Linux, where uids aren't remapped. Defaults to 1000, the first user on most distros; override
     # with HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up. No effect on Docker Desktop.
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    # Loopback only by default: the dashboard has no login and spends DataForSEO credit.
     ports:
-      - "3000:3000"
+      - "${SEO_PLAYGROUND_BIND:-127.0.0.1}:3000:3000"
     volumes:
       # SQLite database — persisted in ./data/ next to this file
       - ./data:/data

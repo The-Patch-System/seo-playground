@@ -29,6 +29,10 @@ function isAuthorized(request: NextRequest) {
   return token === secret;
 }
 
+// One pass at a time per process. A pass walks every project sequentially and can
+// outlast the worker interval; overlapping passes would only queue duplicate polling.
+let passInProgress = false;
+
 /**
  * Invoke this endpoint every 5–15 minutes from the platform scheduler. It claims
  * all due schedules before posting them to DataForSEO, so overlapping cron calls
@@ -42,6 +46,17 @@ export async function GET(request: NextRequest) {
 
   const credentials = getCredentials();
   if (!credentials) return NextResponse.json({ error: 'DataForSEO credentials are not configured.' }, { status: 503 });
+
+  if (passInProgress) return NextResponse.json({ busy: true });
+  passInProgress = true;
+  try {
+    return NextResponse.json(await runPass(credentials));
+  } finally {
+    passInProgress = false;
+  }
+}
+
+async function runPass(credentials: { login: string; pass: string }) {
 
   const due = claimDueGridSchedules();
   const dueRankSchedules = claimDueRankTrackerSchedules();
@@ -126,8 +141,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({
+  return {
     due: due.length, started, failed, pendingChecked, completed,
     rankSchedulesDue: dueRankSchedules.length, rankScheduled, rankScheduleRetries, rankPendingChecked, rankCompleted, rankFailed,
-  });
+  };
 }

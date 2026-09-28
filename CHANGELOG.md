@@ -7,7 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] — 2026-09-28
+
 ### Added
+- **Multi-project workspace** — create one project per client or site and switch between them from the top bar (with the site's favicon). Each project has its own domain, default location/language/coordinates, Rank Tracker depth, search history, results and schedules, stored in its own SQLite file. DataForSEO credentials stay global. A new Projects page creates, edits and deletes projects.
+- **Scheduled Geo-grid and Rank Tracker checks** — Geo-grid monitors can run daily or weekly, and Rank Tracker can re-check every keyword daily, at a chosen time in the browser's timezone (DST-aware). A lightweight background worker (`scripts/geo-grid-worker.mjs`) starts due runs and collects finished DataForSEO queue tasks with no browser tab open. `npm run dev`, `npm start`, `npm run launch` and both Compose files start it alongside the web app, with an automatically generated internal secret. Due schedules are claimed atomically, so overlapping checks can't start a run twice.
+- **Rank Tracker Standard queue** — scheduled checks post up to 100 keywords per request to the cheaper Standard queue, with a status panel for queued checks. "Check now" still uses the Live endpoint.
+- **Geo-grid monitoring** — a timeline of snapshots per keyword/location monitor, a point-by-point comparison map between two snapshots, an average-position trend, and a grid analysis panel.
+- **Task center** — queued Geo-grid runs stay visible, with their progress, from anywhere in the dashboard; the top bar keeps collecting them after you leave the Geo-grid page.
+- **PDF and Excel exports** — branded PDF reports for Site Audit, Google Reviews, AI Visibility and Geo-grid, and Excel exports of their tables.
+- **AI Visibility targeting** — "My domain/brand" and "Topic leaderboard" now accept a location and language (Google AI only; ChatGPT stays United States/English), and numeric DataForSEO location codes in the results are shown as country names.
+- **Historical Rank: position distribution chart** — month-by-month split of ranking keywords by position bucket (#1, 2–3, 4–10, …).
 - **Versioned release distribution** — production builds now carry an explicit application version instead of a Git commit SHA. GitHub Actions validates each change, then validates, builds, attests and publishes stable GitHub Releases as multi-architecture (`amd64`/`arm64`) images on GHCR. Self-hosted instances compare themselves with the latest stable GitHub Release and show its version, a concise note and links to the release/update guide. The dismissal is remembered per release, so a later release appears again.
 - **Production Compose file** — `docker-compose.production.yml` consumes an immutable published image controlled by `SEO_PLAYGROUND_VERSION`, with a named persistent data volume shared by the web app and Geo-grid worker.
 - **Geo-Grid: #1 markers are now stars** — grid points where the target ranks #1 render as a bulky, slightly oversized rounded star instead of a square, so first-place coverage pops against #2/#3 at a glance. Drawn as an SVG path (fat inner radius, round stroke joins) because CSS `clip-path` can't round polygon corners. A star on the grid center gets a white halo in place of the dashed border, so the center cue survives. Idea from a community fork.
@@ -29,6 +41,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Reviews-per-month chart** — native hover tooltip (month, year, count) via `<title>`, plus a month initial under every bar.
 
 ### Fixed
+- **Rank Tracker "Check now" with several keywords** — the batch was sent as one multi-task request to `organic/live/regular`, which the Live endpoint rejects. Checks are now sent one keyword per request, 4 at a time.
+- **Background worker cut off long passes** — the worker aborted its request after 30 seconds while the server kept working, so a pass through many projects was logged as a failure and the next one could start on top of it. The worker now waits up to 10 minutes, and the server runs one pass at a time (a concurrent call returns `{ busy: true }`).
+- **Release notice showed raw Markdown** — the in-app update notice now strips inline Markdown (bold, links, code) from the release summary, and GitHub Releases use this changelog's section as their notes instead of auto-generated notes, which are empty without pull requests. `npm run check:release` fails when the version has no changelog section.
 - **SERP Checker never checked `status_code`** — a failed DataForSEO call silently returned an empty result set instead of showing the error banner. Found and fixed while migrating the page onto the shared API helper.
 - **Reddit search had zero `try/catch` around its fetch** — a network blip crashed the page instead of showing the normal error banner. Same for **Content Parsing**, which had the same gap. Both fixed while migrating onto the shared API helper.
 - **Domain Intersection (top-level page) silently swallowed every DataForSEO error** as an empty result with `cost: 0`, instead of surfacing it — found and fixed while migrating onto the shared API helper. (Backlinks' own `domain-intersection` sub-page already handled this correctly; same name, different page.)
@@ -49,6 +64,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Rating gauge** — average value now renders as an HTML overlay instead of SVG `<text>`, fixing the number being invisible in WebKit when the `font-weight:900` web font wasn't loaded; also fixes the clipped "N reviews" line.
 - **Rating goal** — targets are now display-aware: counts reflect crossing Google's rounding threshold (`T − 0.05`, with `.x5` rounding down) so reaching a *displayed* rating no longer overstates the 5★ reviews needed. Shows both true average and Google-displayed rating.
 - **Build** — escaped unescaped entities (`technologies`, `reddit` pages) and removed an unused `eslint-disable` directive (`MapPicker`) that were failing `next build`.
+
+### Security
+- **Dashboard no longer exposed to the whole network by default** — both Compose files publish port 3000 on `127.0.0.1` only. The app has no login, so anyone who could reach it could spend the DataForSEO credit. Set `SEO_PLAYGROUND_BIND=0.0.0.0` to restore the old behavior on a trusted network, or put an authenticating reverse proxy in front.
+
+### Upgrade notes
+- Back up your data first. On first start, the existing database becomes the "Default Project" (its search history stays in place) and a new `seo-playground.db.projects` file is created next to it for projects and credentials.
+- Docker users: the dashboard now listens on `127.0.0.1` only; see Security above. The Compose files also start a second `worker` service.
 
 ---
 

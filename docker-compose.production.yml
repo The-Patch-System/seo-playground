@@ -13,8 +13,10 @@ services:
 
   app:
     image: "${SEO_PLAYGROUND_IMAGE:-ghcr.io/paulmassen/seo-playground}:${SEO_PLAYGROUND_VERSION:-0.4.0}"
+    # Loopback only by default: the dashboard has no login and spends DataForSEO credit.
+    # Put a reverse proxy with authentication in front, or set SEO_PLAYGROUND_BIND=0.0.0.0.
     ports:
-      - "${SEO_PLAYGROUND_PORT:-3000}:3000"
+      - "${SEO_PLAYGROUND_BIND:-127.0.0.1}:${SEO_PLAYGROUND_PORT:-3000}:3000"
     volumes:
       - seo-playground-data:/data
     environment:

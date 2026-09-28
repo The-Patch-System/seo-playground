@@ -102,6 +102,8 @@ docker compose down
 HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up -d --build
 ```
 
+**Network access:** both Compose files publish the dashboard on `127.0.0.1` only. SEO Playground has no login, and anyone who can reach it can spend your DataForSEO credit. To reach it from another machine, put a reverse proxy with authentication in front of it (Coolify, Caddy, Traefik…). On a trusted private network only, you can listen on every interface with `SEO_PLAYGROUND_BIND=0.0.0.0`.
+
 ### Production release installation
 
 Use the published image for Coolify, Yunohost packaging, or any long-running self-hosted deployment. Copy `.env.example` to `.env`, keep `SEO_PLAYGROUND_VERSION` pinned to an exact version, then start the production Compose file:

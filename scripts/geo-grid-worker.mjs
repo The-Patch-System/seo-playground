@@ -27,7 +27,9 @@ async function run() {
 
     const response = await fetch(endpoint, {
       headers: { Authorization: `Bearer ${secret}` },
-      signal: AbortSignal.timeout(30_000),
+      // A pass polls every project's pending tasks one after another, so it can take minutes.
+      // Aborting early only hides its result: the server keeps working either way.
+      signal: AbortSignal.timeout(10 * 60_000),
     });
     if (!response.ok) {
       console.error(`[geo-grid-worker] ${response.status} while checking scheduled runs.`);
@@ -35,6 +37,10 @@ async function run() {
     }
 
     const result = await response.json();
+    if (result.busy) {
+      console.info('[geo-grid-worker] Previous pass still running; skipped this check.');
+      return;
+    }
     if (result.due || result.started?.length || result.failed?.length || result.completed) {
       console.info(`[geo-grid-worker] due=${result.due ?? 0} started=${result.started?.length ?? 0} checked=${result.pendingChecked ?? 0} completed=${result.completed ?? 0} failed=${result.failed?.length ?? 0}`);
     }

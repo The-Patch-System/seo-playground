@@ -47,6 +47,16 @@ export function hasNewerStableVersion(current: string | null | undefined, candid
   return parsedCurrent.prerelease !== null;
 }
 
+/** The notice renders plain text, so release-note markup would otherwise show literally. */
+function stripInlineMarkdown(text: string): string {
+  return text
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/(^|[^\w*])[*_](\S(?:.*?\S)?)[*_](?=[^\w*]|$)/g, '$1$2')
+    .replace(/`([^`]*)`/g, '$1')
+    .trim();
+}
+
 /** Keeps the in-app notice useful without turning it into a full changelog. */
 export function releaseSummary(notes: string | null | undefined, limit = 240): string {
   if (!notes) return '';
@@ -54,7 +64,7 @@ export function releaseSummary(notes: string | null | undefined, limit = 240): s
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith('#'))
-    .map((line) => line.replace(/^\s*(?:[-*]+|\d+\.)\s*/, '').trim())
+    .map((line) => stripInlineMarkdown(line.replace(/^\s*(?:[-*]+|\d+\.)\s*/, '')))
     .find(Boolean) ?? '';
   return firstMeaningfulLine.length > limit
     ? `${firstMeaningfulLine.slice(0, limit - 1).trimEnd()}…`
