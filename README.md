@@ -7,7 +7,7 @@ SEO Playground is actively evolving. Here are the latest substantial additions:
 - 🗂️ **Multi-project workspace** — switch between clients or sites in one click. Each project has its own defaults, search history, results, and Rank Tracker depth.
 - 📍 **Geo-grid monitoring, not just one-off maps** — save keyword/location monitors, browse a timeline of snapshots, compare movement point by point, inspect visibility trends, and schedule daily or weekly checks.
 - ⏰ **Background tracking that keeps working** — scheduled Geo-grid and Rank Tracker runs continue without an open browser tab; a task center keeps their progress visible while you work elsewhere.
-- 📄 **Client-ready exports** — generate branded PDF reports and Excel exports for Site Audit, Google Reviews, AI Visibility, and Geo-grid results.
+- 📄 **Client-ready exports** — generate branded PDF reports for Site Audit, Google Reviews, AI Visibility, and Geo-grid results, plus Excel exports for Site Audit and AI Visibility.
 - 🧠 **Richer AI visibility analysis** — explore LLM mentions by platform, location, language, source domain, and brand entity; export target, topic-leaderboard, and historical views.
 - 🚀 **Safer self-hosted releases** — deploy immutable, multi-architecture Docker images with version-aware update notices and a production Compose setup.
 
@@ -21,6 +21,8 @@ If you find this useful, consider supporting the project:
 
 [![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/paulmassendari)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/paulmassendari)
+
+New to DataForSEO? [Create an account through my affiliate link](https://try.dataforseo.com/nrjev32kinaz). It also supports the continued development of SEO Playground, at no extra cost to you. I may earn a commission if you become a customer.
 
 ## Screenshots
 
@@ -135,12 +137,12 @@ Coolify users can use the same image name and exact tag, then redeploy from its 
 Stable releases are published from versioned tags, not from `main`. Update `package.json` and `CHANGELOG.md`, verify the application locally, then create and push a matching tag:
 
 ```bash
-RELEASE_TAG=vX.Y.Z npm run check:release
+RELEASE_TAG=vX.Y.Z npm run check:release   # also requires a "## [X.Y.Z]" section in CHANGELOG.md
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-The `Publish stable release` workflow verifies that the tag matches `package.json`, runs lint/tests/build, publishes the `amd64` and `arm64` images to GHCR, generates a provenance attestation, then creates the GitHub Release with generated notes. Mark the GHCR package public once in GitHub package settings so self-hosted users can pull it anonymously.
+The `Publish stable release` workflow verifies that the tag matches `package.json`, runs lint/tests/build, publishes the `amd64` and `arm64` images to GHCR, generates a provenance attestation, then creates the GitHub Release using that version's CHANGELOG.md section as its notes. Mark the GHCR package public once in GitHub package settings so self-hosted users can pull it anonymously.
 
 ### Option 2 — Node.js (production mode)
 
@@ -225,6 +227,8 @@ Search history and results are cached locally in `seo-playground.db`. The databa
 ## Changelog
 
 Full detailed history: [CHANGELOG.md](CHANGELOG.md).
+
+- **2026-09-28 — v0.4.0** — First versioned release, published as a multi-architecture Docker image on GHCR. Multi-project workspace (per-project defaults, history and schedules). Scheduled Geo-grid (daily/weekly) and Rank Tracker (daily) checks run by a background worker with no browser tab open, plus a task center for queued runs. Geo-grid snapshot timeline, comparison map and trend. PDF reports and Excel exports. Rank Tracker checks of several keywords at once fixed. Both Compose files now listen on `127.0.0.1` only by default, since the dashboard has no login.
 
 - **2026-09-16** — Geo-Grid: points where you rank #1 now show as a bulky rounded star instead of a square, so first-place coverage stands out; the grid center keeps a white halo.
 - **2026-09-15** — Fixed Domain Intersection and Page Intersection (both failed with `Invalid Field: 'targets'`): requests now use DataForSEO's `targets: {"1": …, "2": …}` format and the nested per-target response is mapped correctly. API errors that reject the whole request now show DataForSEO's real message instead of "Empty API response". Removed the Reddit Mentions page: DataForSEO has disabled that endpoint (`50304 — function temporarily unavailable`). Docker on native Linux: fixed every page returning 500 (`SQLITE_CANTOPEN`) because the container user couldn't write to the `./data` bind mount, and the image now ships the locations/categories CSVs, which were never seeded in Docker. Competitors, Ranked Keywords, SERP Checker and Keyword Data now pre-fill the Default Location/Language saved in Settings instead of always using France/French ([#8](https://github.com/paulmassen/seo-playground/issues/8)). SERP Checker now records and shows what each search cost ([#9](https://github.com/paulmassen/seo-playground/issues/9)). New Spending page: spend per day/month and per tool for any date range (presets or custom), built from the cost saved by every tool; calls with no recorded cost are counted separately and estimated at the tool's average rather than treated as $0. Sidebar reorganized by task (Keywords, Domains & Competitors, Backlinks, SERP & Local, AI, Business, Site Audit) with collapsible sections whose open/closed state is remembered, a tool filter (press `/` to focus, Enter opens the first match), and Spending/Settings pinned at the bottom; the Balance badge links to Spending. The Dashboard home now uses the same tool list as the sidebar (it was missing AI Visibility, AI Prompt Test, AI Keyword Data, Query Fan-Out, Web Mentions and Content Parsing).

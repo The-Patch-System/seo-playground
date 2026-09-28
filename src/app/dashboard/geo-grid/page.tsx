@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import {
-  getCredentials, getSetting, getGridHistory, getGridEntry, saveGridSearch,
+  getActiveProject, getCredentials, getSetting, getGridHistory, getGridEntry, saveGridSearch,
   saveGridSearchPending, getGridResults, getGridSeriesHistory, getGridSchedule, gridSeriesId, type GridSearchEntry, type GridPoint, type GridQueueMode,
 } from '@/lib/db';
 import LocalFinderForm from '../local-finder/LocalFinderForm';
@@ -121,9 +121,9 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
             gridSize, spacingKm, params.language ?? defaultLanguage,
             creds.login, creds.pass, queueMode,
           );
-          if (result.error) {
-            gridError = result.error;
-          } else {
+          if (result.error) gridError = result.error;
+          // A failure after some chunks were posted still leaves billed tasks to collect.
+          if (result.taskPoints.length > 0) {
             saveGridSearchPending({ ...baseEntry, status: 'pending', cost: result.cost }, result.taskPoints);
           }
         }
@@ -298,6 +298,7 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
             {gridPending && gridEntry && (
               <GridPending
                 searchId={gridPending.id}
+                projectId={getActiveProject().id}
                 totalPoints={gridPending.totalPoints}
                 queueMode={gridPending.queueMode}
                 keyword={gridEntry.keyword}

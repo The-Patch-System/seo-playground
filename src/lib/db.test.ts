@@ -18,6 +18,7 @@ import {
   getSerpHistory, saveSerpSearch,
   getSpendByTool, getSpendByDay, getFirstSpendTs,
   gridSeriesId, getGridSeriesHistory, getGridSchedule, saveGridSchedule, saveGridSearch, deleteGridSchedule, type GridSearchEntry,
+  claimDueGridSchedules, retryClaimedGridSchedule,
   getRankTrackerSchedule, saveRankTrackerSchedule, deleteRankTrackerSchedule,
   getHistRankHistory, saveHistRankSearch,
 } from './db';
@@ -197,6 +198,30 @@ describe('Geo-grid monitoring', () => {
     saveGridSearch({ ...base, id: 'grid-monitor-two', ts: 2 }, [{ row: 0, col: 0, rank: 2 }]);
     expect(getGridSeriesHistory(seriesId).filter((run) => run.id.startsWith('grid-monitor-')).map((run) => run.id))
       .toEqual(['grid-monitor-two', 'grid-monitor-one']);
+  });
+
+  it('keeps a series complete beyond the 100-run history cap', () => {
+    const otherSeries = gridSeriesId('other keyword', base.center, base.grid_size, base.spacing_km, base.target, base.language);
+    saveGridSearch({ ...base, id: 'grid-old-snapshot', ts: 10 }, [{ row: 0, col: 0, rank: 5 }]);
+    for (let index = 0; index < 101; index += 1) {
+      saveGridSearch({ ...base, series_id: otherSeries, id: `grid-other-${index}`, ts: 1_000 + index }, [{ row: 0, col: 0, rank: 1 }]);
+    }
+    expect(getGridSeriesHistory(seriesId).map((run) => run.id)).toContain('grid-old-snapshot');
+  });
+
+  it('reopens a claimed run for a retry, but not once the slot is too old', () => {
+    const saved = saveGridSchedule({ ...base, frequency: 'daily', weekday: null, time_of_day: '08:30', time_zone: 'Europe/Paris' });
+    const slot = saved.next_run_at;
+    const [claimed] = claimDueGridSchedules(slot + 1_000).filter((item) => item.series_id === seriesId);
+    expect(claimed.scheduled_at).toBe(slot);
+    expect(claimDueGridSchedules(slot + 2_000).some((item) => item.series_id === seriesId)).toBe(false);
+
+    expect(retryClaimedGridSchedule(claimed.projectId, claimed, slot + 1_000)).toBe(true);
+    expect(getGridSchedule(seriesId)?.next_run_at).toBe(slot + 1_000 + 5 * 60_000);
+
+    const [reclaimed] = claimDueGridSchedules(slot + 7 * 3_600_000).filter((item) => item.series_id === seriesId);
+    expect(retryClaimedGridSchedule(reclaimed.projectId, { ...reclaimed, scheduled_at: slot }, slot + 7 * 3_600_000)).toBe(false);
+    deleteGridSchedule(seriesId);
   });
 
   it('persists and removes a daily schedule', () => {

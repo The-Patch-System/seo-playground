@@ -181,6 +181,10 @@ export function updateProject(id: string, input: Pick<Project, 'name' | 'domain'
   }
 }
 
+export function projectExists(id: string): boolean {
+  return Boolean(getControlDb().prepare('SELECT 1 FROM projects WHERE id = ?').get(id));
+}
+
 export function setActiveProject(id: string): void {
   const exists = getControlDb().prepare('SELECT 1 FROM projects WHERE id = ?').get(id);
   if (!exists) throw new Error('Project not found.');
@@ -774,6 +778,22 @@ function initSchema(db: Database.Database) {
   addColumnIfMissing(db, 'domain_find_searches', 'ADD COLUMN technology TEXT');
   addColumnIfMissing(db, 'hist_rank_searches', `ADD COLUMN date_from TEXT NOT NULL DEFAULT ''`);
   addColumnIfMissing(db, 'hist_rank_searches', `ADD COLUMN date_to TEXT NOT NULL DEFAULT ''`);
+
+  backfillGridSeriesIds(db);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_grid_searches_series ON grid_searches(series_id, ts DESC)`);
+}
+
+/** Runs saved before monitors existed have no series_id; persist it so a series can be queried directly. */
+function backfillGridSeriesIds(db: Database.Database): void {
+  const rows = db.prepare(`SELECT id, keyword, center, grid_size, spacing_km, target, language FROM grid_searches WHERE series_id = ''`)
+    .all() as Array<{ id: string; keyword: string; center: string; grid_size: number; spacing_km: number; target: string; language: string }>;
+  if (rows.length === 0) return;
+  const update = db.prepare('UPDATE grid_searches SET series_id = ? WHERE id = ?');
+  db.transaction(() => {
+    for (const row of rows) {
+      update.run(gridSeriesId(row.keyword, row.center, row.grid_size, row.spacing_km, row.target, row.language), row.id);
+    }
+  })();
 }
 
 function addColumnIfMissing(db: Database.Database, table: string, alterClause: string): void {
@@ -1718,6 +1738,8 @@ export interface GridSchedule {
 
 export interface DueGridSchedule extends GridSchedule {
   projectId: string;
+  /** The slot this claim was for; `next_run_at` already points at the following one. */
+  scheduled_at: number;
 }
 
 export interface GridTaskPoint {
@@ -1807,12 +1829,20 @@ export function getGridHistory(): GridSearchEntry[] {
   return rows.map(entryFromGridRow);
 }
 
+/** Every run of one monitor, newest first. Not derived from getGridHistory(), whose cap spans all monitors. */
 export function getGridSeriesHistory(seriesId: string): GridSearchEntry[] {
-  return getGridHistory().filter((entry) => entry.series_id === seriesId);
+  const rows = getDb()
+    .prepare('SELECT id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode, results FROM grid_searches WHERE series_id = ? ORDER BY ts DESC')
+    .all(seriesId) as Array<{ id: string; ts: number; series_id: string; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string; cost: number | null; status: string; queue_mode: string; results: string | null }>;
+  return rows.map(entryFromGridRow);
 }
 
 export function getGridEntry(id: string): (GridSearchEntry & { task_ids?: GridTaskPoint[] }) | null {
-  const row = getDb()
+  return getGridEntryForProject(getActiveProject().id, id);
+}
+
+export function getGridEntryForProject(projectId: string, id: string): (GridSearchEntry & { task_ids?: GridTaskPoint[] }) | null {
+  const row = getDbForProject(projectId)
     .prepare('SELECT id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode, task_ids FROM grid_searches WHERE id = ?')
     .get(id) as { id: string; ts: number; series_id: string; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string; cost: number | null; status: string; queue_mode: string; task_ids: string | null } | undefined;
   if (!row) return null;
@@ -2015,11 +2045,25 @@ export function claimDueGridSchedules(now = Date.now()): DueGridSchedule[] {
       const schedule = parseScheduleRow(row);
       const next = nextGridScheduleRun(schedule, now);
       if (claim.run(next, now, schedule.series_id, schedule.next_run_at).changes === 1) {
-        due.push({ ...schedule, next_run_at: next, projectId: project.id });
+        due.push({ ...schedule, next_run_at: next, scheduled_at: schedule.next_run_at, projectId: project.id });
       }
     }
   }
   return due;
+}
+
+/**
+ * Reopens a claimed Geo-grid run after a posting failure that queued nothing. Retries stop
+ * once the slot is `maxDelayMs` old, so a permanent error doesn't retry until the next slot.
+ */
+export function retryClaimedGridSchedule(
+  projectId: string, schedule: Pick<DueGridSchedule, 'series_id' | 'next_run_at' | 'scheduled_at'>,
+  now = Date.now(), maxDelayMs = 6 * 3_600_000,
+): boolean {
+  const retryAt = now + 5 * 60_000;
+  if (retryAt - schedule.scheduled_at > maxDelayMs || retryAt >= schedule.next_run_at) return false;
+  return getDbForProject(projectId).prepare(`UPDATE grid_schedules SET next_run_at = ?, updated_at = ?
+    WHERE series_id = ? AND next_run_at = ?`).run(retryAt, now, schedule.series_id, schedule.next_run_at).changes === 1;
 }
 
 // --- Instant Pages ---

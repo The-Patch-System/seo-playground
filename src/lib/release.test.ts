@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { hasNewerStableVersion, normalizeVersion, releaseSummary } from './release';
-// @ts-expect-error -- plain ESM script shared with the release workflow; no type declarations.
 import { extractReleaseNotes } from '../../scripts/release-notes.mjs';
 
 describe('release version checks', () => {

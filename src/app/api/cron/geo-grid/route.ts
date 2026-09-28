@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   claimDueGridSchedules, claimDueRankTrackerSchedules, getCredentials, getPendingGridEntriesForProject,
-  getProjects, getTrackedKeywordsForProject, retryClaimedRankTrackerSchedule, saveGridSearchPendingForProject, type GridSearchEntry,
+  getProjects, getTrackedKeywordsForProject, retryClaimedGridSchedule, retryClaimedRankTrackerSchedule, saveGridSearchPendingForProject, type GridSearchEntry,
 } from '@/lib/db';
 import { postGridTasksQueue } from '@/app/dashboard/local-finder/grid-api';
 import { collectGridProgress } from '@/lib/grid-progress';
@@ -63,16 +63,20 @@ async function runPass(credentials: { login: string; pass: string }) {
   const started: string[] = [];
   const failed: Array<{ seriesId: string; error: string }> = [];
 
+  let gridRetries = 0;
   for (const schedule of due) {
     try {
       const result = await postGridTasksQueue(
         schedule.keyword, schedule.center, schedule.grid_size, schedule.spacing_km, schedule.language,
         credentials.login, credentials.pass, schedule.queue_mode === 'priority' ? 'priority' : 'standard',
       );
-      if (result.error) {
-        failed.push({ seriesId: schedule.series_id, error: result.error });
+      if (result.error) failed.push({ seriesId: schedule.series_id, error: result.error });
+      if (result.taskPoints.length === 0) {
+        // Nothing was queued or billed, so the slot can safely be attempted again.
+        if (retryClaimedGridSchedule(schedule.projectId, schedule)) gridRetries += 1;
         continue;
       }
+      // A partial post is kept as-is: re-posting would bill the queued points twice.
       const entry: GridSearchEntry = {
         id: randomUUID(),
         series_id: schedule.series_id,
@@ -90,6 +94,8 @@ async function runPass(credentials: { login: string; pass: string }) {
       saveGridSearchPendingForProject(schedule.projectId, entry, result.taskPoints);
       started.push(entry.id);
     } catch (error) {
+      // postGridTasksQueue reports API failures itself, so this is a local failure after
+      // posting; retrying would bill the same points again.
       failed.push({ seriesId: schedule.series_id, error: error instanceof Error ? error.message : 'Could not start grid run.' });
     }
   }
@@ -142,7 +148,7 @@ async function runPass(credentials: { login: string; pass: string }) {
   }
 
   return {
-    due: due.length, started, failed, pendingChecked, completed,
+    due: due.length, started, failed, gridRetries, pendingChecked, completed,
     rankSchedulesDue: dueRankSchedules.length, rankScheduled, rankScheduleRetries, rankPendingChecked, rankCompleted, rankFailed,
   };
 }
