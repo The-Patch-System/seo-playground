@@ -1,6 +1,6 @@
 # SEO Playground — SEO and Local SEO Dashboard
 
-## ✨ Fresh from the workshop
+## ✨ Update — 2026-09-28
 
 SEO Playground is actively evolving. Here are the latest substantial additions:
 
@@ -25,6 +25,18 @@ If you find this useful, consider supporting the project:
 New to DataForSEO? [Create an account through my affiliate link](https://try.dataforseo.com/nrjev32kinaz). It also supports the continued development of SEO Playground, at no extra cost to you. I may earn a commission if you become a customer.
 
 ## Screenshots
+
+[![Watch a quick tour of SEO Playground](public/readme/menu-tour-poster.jpg)](public/readme/menu-tour.mp4)
+*A quick tour of the dashboard and its 40+ tools (click to play the video)*
+
+![Geo-grid monitoring](public/readme/geo-grid.gif)
+*Geo-grid: see where a business ranks block by block, then switch to any competitor's grid*
+
+![Google Reviews — rating goal](public/readme/google-reviews.gif)
+*Google Reviews: rating distribution, and exactly how many 5★ reviews it takes to reach the next rating*
+
+![Web Mentions](public/readme/web-mentions.gif)
+*Web Mentions: sentiment, emotions, top domains and countries, plus every mention found across the web*
 
 ![Local Finder — Grid Search](public/screenshot-local-finder.png)
 *Local Finder: grid search showing local rankings across a geographic area*
