@@ -1,5 +1,7 @@
 # SEO Playground — SEO and Local SEO Dashboard
 
+![SEO Playground — the free, open-source, self-hosted SEO & Local SEO dashboard](public/readme/hero.png)
+
 ## ✨ Update — 2026-09-28
 
 SEO Playground is actively evolving. Here are the latest substantial additions:
