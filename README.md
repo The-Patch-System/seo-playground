@@ -26,7 +26,8 @@ New to DataForSEO? [Create an account through my affiliate link](https://try.dat
 
 ## Screenshots
 
-[![Watch a quick tour of SEO Playground](public/readme/menu-tour-poster.jpg)](public/readme/menu-tour.mp4)
+https://github.com/user-attachments/assets/fb506723-0996-4704-a6a5-b12b1115b805
+
 *A quick tour of the dashboard and its 40+ tools (click to play the video)*
 
 ![Geo-grid monitoring](public/readme/geo-grid.gif)
