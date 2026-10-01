@@ -8,13 +8,25 @@ import PendingButton from '@/components/PendingButton';
 
 function PositionBadge({ pos }: { pos: number | null }) {
   if (pos === null)
-    return <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-red-50 text-red-400 border border-red-100">—</span>;
+    return (
+      <span title="The domain was not in the results returned for this check" className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-red-50 text-red-400 border border-red-100 whitespace-nowrap">
+        Not found
+      </span>
+    );
   const cls =
     pos <= 3 ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
     : pos <= 10 ? 'bg-blue-50 text-blue-600 border-blue-200'
     : pos <= 30 ? 'bg-yellow-50 text-yellow-600 border-yellow-200'
     : 'bg-slate-100 text-slate-500 border-slate-200';
   return <span className={`px-2 py-0.5 rounded-lg text-[11px] font-black border tabular-nums ${cls}`}>#{pos}</span>;
+}
+
+function AiOverviewBadge() {
+  return (
+    <span title="Cited as a source in Google's AI Overview for this check" className="px-1.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-600 border border-violet-200 dark:bg-violet-950/50 dark:text-violet-300 dark:border-violet-900">
+      AI
+    </span>
+  );
 }
 
 function TrendBadge({ current, previous }: { current: number | null; previous: number | null }) {
@@ -234,6 +246,10 @@ function HistoryChart({ history, keywordId }: { history: RankCheck[]; keywordId:
 
 // ─── Keyword row ──────────────────────────────────────────────────────────────
 
+function formatDay(date: string) {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
 function formatDate(ts: number) {
   return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
@@ -253,6 +269,8 @@ export default function KeywordRow({ kw, history, latest, previous, hasCreds, pe
   const [expanded, setExpanded] = useState(false);
   const currPos = latest?.position ?? null;
   const prevPos = previous?.position ?? null;
+  // The latest check can miss a domain that ranked days earlier; keep that position in view.
+  const lastRanked = latest && currPos === null ? history.find((check) => check.position !== null) ?? null : null;
 
   return (
     <>
@@ -273,7 +291,19 @@ export default function KeywordRow({ kw, history, latest, previous, hasCreds, pe
           <div className="text-[10px] text-slate-400 pl-4">{kw.location} · {kw.language}</div>
         </td>
         <td className="px-3 py-3.5 text-center">
-          {pending ? <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Queued</span> : <PositionBadge pos={currPos} />}
+          {pending ? <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Queued</span> : !latest ? <span className="text-[10px] text-slate-300">—</span> : (
+            <div className="flex flex-col items-center gap-1">
+              <div className="flex items-center justify-center gap-1">
+                <PositionBadge pos={currPos} />
+                {latest.aiOverview && <AiOverviewBadge />}
+              </div>
+              {lastRanked && (
+                <span className="text-[9px] font-semibold text-slate-400 whitespace-nowrap">
+                  last #{lastRanked.position} · {formatDay(lastRanked.date)}
+                </span>
+              )}
+            </div>
+          )}
         </td>
         <td className="px-3 py-3.5 text-center">
           <TrendBadge current={currPos} previous={prevPos} />

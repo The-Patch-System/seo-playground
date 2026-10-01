@@ -2,30 +2,19 @@ import {
   completeRankTaskForProject, failRankTaskForProject, getPendingRankTasksForProject,
   type PendingRankTask,
 } from '@/lib/db';
-
-interface SerpItem {
-  type: string;
-  rank_group?: number;
-  rank_absolute?: number;
-  url?: string;
-  title?: string;
-  domain?: string;
-}
+import { matchRankSerp, type RankSerpItem, type RankSerpMatch } from '@/lib/rank-serp';
 
 interface TaskGetResponse {
   tasks?: Array<{
     status_code?: number;
     status_message?: string;
-    result?: Array<{ items?: SerpItem[] }>;
+    cost?: number;
+    result?: Array<{ items?: RankSerpItem[] }>;
   }>;
 }
 
 const inFlightCollections = new Map<string, Promise<{ pending: number; completed: number; failed: number }>>();
 const stillProcessing = new Set([20100, 40601, 40602]);
-
-function cleanDomain(value: string) {
-  return value.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
-}
 
 /** Collects all ready Standard rank-tracker tasks for one project. */
 export function collectRankProgress(
@@ -65,7 +54,7 @@ async function collectRankProgressOnce(
       failed += 1;
       continue;
     }
-    completeRankTaskForProject(projectId, task.taskId, outcome.position, outcome.url, outcome.title);
+    completeRankTaskForProject(projectId, task.taskId, outcome, outcome.cost);
     completed += 1;
   }
 
@@ -75,10 +64,10 @@ async function collectRankProgressOnce(
 async function collectOne(task: PendingRankTask, auth: string): Promise<
   | { kind: 'pending' }
   | { kind: 'failed'; message: string }
-  | { kind: 'ready'; position: number | null; url: string | null; title: string | null }
+  | ({ kind: 'ready'; cost: number | null } & RankSerpMatch)
 > {
   try {
-    const response = await fetch(`https://api.dataforseo.com/v3/serp/google/organic/task_get/regular/${task.taskId}`, {
+    const response = await fetch(`https://api.dataforseo.com/v3/serp/google/organic/task_get/advanced/${task.taskId}`, {
       headers: { Authorization: `Basic ${auth}` },
       signal: AbortSignal.timeout(15_000),
     });
@@ -89,14 +78,8 @@ async function collectOne(task: PendingRankTask, auth: string): Promise<
     if (!result || stillProcessing.has(status)) return { kind: 'pending' };
     if (status !== 20000) return { kind: 'failed', message: result.status_message ?? `DataForSEO status ${status}` };
 
-    const domain = cleanDomain(task.domain).split('/')[0];
-    const hit = (result.result?.[0]?.items ?? []).find((item) => {
-      if (item.type !== 'organic') return false;
-      const itemDomain = cleanDomain(item.domain ?? item.url ?? '').split('/')[0];
-      return itemDomain === domain || itemDomain.endsWith(`.${domain}`);
-    });
-    // rank_group is the organic position; rank_absolute includes maps, ads and other SERP modules.
-    return { kind: 'ready', position: hit?.rank_group ?? hit?.rank_absolute ?? null, url: hit?.url ?? null, title: hit?.title ?? null };
+    // The Advanced view of the same task adds the AI Overview at no extra charge.
+    return { kind: 'ready', cost: result.cost ?? null, ...matchRankSerp(result.result?.[0]?.items ?? [], task.domain) };
   } catch {
     return { kind: 'pending' };
   }

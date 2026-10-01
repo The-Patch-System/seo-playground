@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Rank Tracker AI Overview citations** — a keyword shows an "AI" badge when Google's AI Overview cites the tracked domain, even if the domain has no organic position. Checks now read DataForSEO's Advanced SERP format.
+
+### Fixed
+- **Site Audit** — the Pages table shows the word count again, and the Keyword Density, Duplicate Tags and Non-indexable tabs no longer fail with `Invalid Field` errors (`order_by`, `type`, `filters`). Non-indexable pages now come from DataForSEO's dedicated endpoint and list the reason each page is excluded.
+
+### Changed
+- **Cheaper Rank Tracker checks** — a check now stops crawling at the results page where the domain is found (`stop_crawl_on_match`), so it is billed for those pages instead of the full depth. The recorded cost is the amount DataForSEO reports once the task completes.
+- **Rank Tracker "Not found"** — a check that does not find the domain now reads "Not found" with the last known position and its date, instead of a bare dash.
+- **Project switcher** — switching projects now keeps you on the current page (for example Rank Tracker) instead of returning to the dashboard home.
+
 ---
 
 ## [0.4.0] — 2026-09-28

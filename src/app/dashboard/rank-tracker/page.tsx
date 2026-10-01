@@ -63,6 +63,7 @@ export default async function RankTrackerPage({ searchParams }: { searchParams: 
     previous_position: previous?.position ?? '',
     checked_at: latest ? new Date(latest.checkedAt).toISOString().split('T')[0] : '',
     url: latest?.url ?? '',
+    ai_overview: latest?.aiOverview == null ? '' : latest.aiOverview ? 'Cited' : 'Not cited',
   }));
   const csvColumns = [
     { key: 'keyword', label: 'Keyword' },
@@ -72,6 +73,7 @@ export default async function RankTrackerPage({ searchParams }: { searchParams: 
     { key: 'previous_position', label: 'Previous Position' },
     { key: 'checked_at', label: 'Checked' },
     { key: 'url', label: 'Ranked URL' },
+    { key: 'ai_overview', label: 'AI Overview' },
   ];
 
   return (

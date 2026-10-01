@@ -9,55 +9,33 @@ import {
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { queueStandardRankChecksForProject } from '@/lib/rank-queue';
-
-interface SerpItem {
-  type: string;
-  rank_group?: number;
-  rank_absolute?: number;
-  url?: string;
-  title?: string;
-  domain?: string;
-}
+import { matchRankSerp, stopCrawlOnMatch, type RankSerpItem } from '@/lib/rank-serp';
 
 interface SerpResponse {
   tasks?: Array<{
     id?: string;
     status_code?: number;
     cost?: number;
-    result?: Array<{ items?: SerpItem[] }>;
+    result?: Array<{ items?: RankSerpItem[] }>;
   }>;
-}
-
-function cleanDomain(d: string) {
-  return d.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
 }
 
 type RankKeyword = { id: number; keyword: string; domain: string; location: string; language: string };
 
-function rankOf(item: SerpItem | undefined) {
-  return item?.rank_group ?? item?.rank_absolute ?? null;
-}
-
 async function checkKeywordLive(keyword: RankKeyword, auth: string, depth: number) {
   try {
-    const response = await fetch('https://api.dataforseo.com/v3/serp/google/organic/live/regular', {
+    const response = await fetch('https://api.dataforseo.com/v3/serp/google/organic/live/advanced', {
       method: 'POST',
       headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
       // The Live endpoint accepts exactly one task per request.
-      body: JSON.stringify([{ keyword: keyword.keyword, location_name: keyword.location, language_name: keyword.language, depth }]),
+      body: JSON.stringify([{ keyword: keyword.keyword, location_name: keyword.location, language_name: keyword.language, depth, stop_crawl_on_match: stopCrawlOnMatch(keyword.domain) }]),
       signal: AbortSignal.timeout(60_000),
     });
     if (!response.ok) return;
     const data = await response.json() as SerpResponse;
     const task = data.tasks?.[0];
     if (task?.status_code !== 20000) return;
-    const domain = cleanDomain(keyword.domain).split('/')[0];
-    const hit = (task.result?.[0]?.items ?? []).find((item) => {
-      if (item.type !== 'organic') return false;
-      const itemDomain = cleanDomain(item.domain ?? item.url ?? '').split('/')[0];
-      return itemDomain === domain || itemDomain.endsWith(`.${domain}`);
-    });
-    saveRankCheck(keyword.id, rankOf(hit), hit?.url ?? null, hit?.title ?? null, task.cost ?? null);
+    saveRankCheck(keyword.id, matchRankSerp(task.result?.[0]?.items ?? [], keyword.domain), task.cost ?? null);
   } catch {
     // Preserve the previous result; a later scheduled check can retry a transient failure.
   }

@@ -235,6 +235,7 @@ Search history and results are cached locally in `seo-playground.db`. The databa
 
 Full detailed history: [CHANGELOG.md](CHANGELOG.md).
 
+- **2026-10-01** — Rank Tracker checks stop crawling once the domain is found (lower cost per check), flag AI Overview citations with an "AI" badge, and show "Not found" with the last known position. Fixed Site Audit's word count and its Keyword Density, Duplicate Tags and Non-indexable tabs. Switching projects from the project switcher now keeps you on the current page instead of returning to the dashboard home.
 - **2026-09-28 — v0.4.0** — First versioned release, published as a multi-architecture Docker image on GHCR. Multi-project workspace (per-project defaults, history and schedules). Scheduled Geo-grid (daily/weekly) and Rank Tracker (daily) checks run by a background worker with no browser tab open, plus a task center for queued runs. Geo-grid snapshot timeline, comparison map and trend. PDF reports and Excel exports. Rank Tracker checks of several keywords at once fixed. Both Compose files now listen on `127.0.0.1` only by default, since the dashboard has no login.
 
 - **2026-09-16** — Geo-Grid: points where you rank #1 now show as a bulky rounded star instead of a square, so first-place coverage stands out; the grid center keeps a white halo.

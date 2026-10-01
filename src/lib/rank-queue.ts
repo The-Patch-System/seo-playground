@@ -1,6 +1,7 @@
 import {
   getPendingRankTasksForProject, savePendingRankTaskForProject, type TrackedKeyword,
 } from '@/lib/db';
+import { stopCrawlOnMatch } from '@/lib/rank-serp';
 
 interface TaskPostResponse {
   tasks?: Array<{ id?: string; status_code?: number; cost?: number }>;
@@ -31,6 +32,7 @@ export async function queueStandardRankChecksForProject(
           language_name: keyword.language,
           depth,
           priority: 1,
+          stop_crawl_on_match: stopCrawlOnMatch(keyword.domain),
         }))),
         signal: AbortSignal.timeout(60_000),
       });

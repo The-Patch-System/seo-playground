@@ -60,9 +60,10 @@ interface AuditPage {
     internal_links_count?: number;
     external_links_count?: number;
     images_count?: number;
+    content?: { plain_text_word_count?: number };
   };
   page_timing?: { duration_time?: number; waiting_time?: number };
-  content?: { plain_text_word_count?: number };
+
   checks?: Record<string, boolean | undefined>;
 }
 
@@ -103,6 +104,8 @@ interface ResourceItem {
   checks?: { broken_resources?: boolean; is_redirect?: boolean };
   accept_type?: string;
 }
+
+interface NonIndexableItem { url?: string; reason?: string }
 
 interface DuplicateTagPage { url?: string; meta?: { title?: string; description?: string } }
 interface DuplicateTagItem {
@@ -249,7 +252,7 @@ async function fetchKeywordDensity(taskId: string, keywordLength: number, login:
   const res = await fetch('https://api.dataforseo.com/v3/on_page/keyword_density', {
     method: 'POST',
     headers: { Authorization: auth(login, pass), 'Content-Type': 'application/json' },
-    body: JSON.stringify([{ id: taskId, keyword_length: keywordLength, limit: 200, order_by: [['frequency', 'desc']] }]),
+    body: JSON.stringify([{ id: taskId, keyword_length: keywordLength, limit: 200, order_by: ['frequency,desc'] }]),
     signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) return { error: `HTTP ${res.status}` };
@@ -287,33 +290,42 @@ async function fetchResources(taskId: string, login: string, pass: string): Prom
   return { items: task.result?.[0]?.items ?? [] };
 }
 
+interface DuplicateTagGroup { accumulator?: string; total_count?: number; pages?: DuplicateTagPage[] }
+
+/** DataForSEO returns one kind of duplicate per request, so titles and descriptions are fetched separately. */
 async function fetchDuplicateTags(taskId: string, login: string, pass: string): Promise<{ items?: DuplicateTagItem[]; error?: string }> {
-  const res = await fetch('https://api.dataforseo.com/v3/on_page/duplicate_tags', {
-    method: 'POST',
-    headers: { Authorization: auth(login, pass), 'Content-Type': 'application/json' },
-    body: JSON.stringify([{ id: taskId, limit: 200 }]),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!res.ok) return { error: `HTTP ${res.status}` };
-  const data = await res.json() as { tasks?: Array<{ status_code?: number; status_message?: string; result?: Array<{ items?: DuplicateTagItem[] }> }> };
-  const task = data?.tasks?.[0];
-  if (!task || (task.status_code && task.status_code !== 20000)) return { error: `DataForSEO: ${task?.status_message}` };
-  return { items: task.result?.[0]?.items ?? [] };
+  const types = ['duplicate_title', 'duplicate_description'];
+  const results = await Promise.all(types.map(async (type) => {
+    const res = await fetch('https://api.dataforseo.com/v3/on_page/duplicate_tags', {
+      method: 'POST',
+      headers: { Authorization: auth(login, pass), 'Content-Type': 'application/json' },
+      body: JSON.stringify([{ id: taskId, type, limit: 200 }]),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return { error: `HTTP ${res.status}` };
+    const data = await res.json() as { tasks?: Array<{ status_code?: number; status_message?: string; result?: Array<{ items?: DuplicateTagGroup[] | null }> }> };
+    const task = data?.tasks?.[0];
+    if (!task || (task.status_code && task.status_code !== 20000)) return { error: `DataForSEO: ${task?.status_message}` };
+    return {
+      items: (task.result?.[0]?.items ?? []).map((group): DuplicateTagItem => ({
+        type, tag: group.accumulator, pages: group.pages ?? [], pages_count: group.total_count,
+      })),
+    };
+  }));
+  const failed = results.find((result) => result.error);
+  if (failed) return { error: failed.error };
+  return { items: results.flatMap((result) => result.items ?? []) };
 }
 
-async function fetchNonIndexable(taskId: string, login: string, pass: string): Promise<{ items?: AuditPage[]; error?: string }> {
-  const res = await fetch('https://api.dataforseo.com/v3/on_page/pages', {
+async function fetchNonIndexable(taskId: string, login: string, pass: string): Promise<{ items?: NonIndexableItem[]; error?: string }> {
+  const res = await fetch('https://api.dataforseo.com/v3/on_page/non_indexable', {
     method: 'POST',
     headers: { Authorization: auth(login, pass), 'Content-Type': 'application/json' },
-    body: JSON.stringify([{
-      id: taskId,
-      limit: 1000,
-      filters: [['resource_type', '=', 'html'], 'and', ['non_indexable', '=', true]],
-    }]),
+    body: JSON.stringify([{ id: taskId, limit: 1000 }]),
     signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) return { error: `HTTP ${res.status}` };
-  const data = await res.json() as { tasks?: Array<{ status_code?: number; status_message?: string; result?: Array<{ items?: AuditPage[] }> }> };
+  const data = await res.json() as { tasks?: Array<{ status_code?: number; status_message?: string; result?: Array<{ items?: NonIndexableItem[] | null }> }> };
   const task = data?.tasks?.[0];
   if (!task || (task.status_code && task.status_code !== 20000)) return { error: `DataForSEO: ${task?.status_message}` };
   return { items: task.result?.[0]?.items ?? [] };
@@ -449,7 +461,7 @@ export default async function SiteAuditPage({ searchParams }: { searchParams: Pr
     else dupTagItems = items ?? [];
   }
 
-  let nonIndexItems: AuditPage[] | null = null;
+  let nonIndexItems: NonIndexableItem[] | null = null;
   let nonIndexError: string | null = null;
   if (view === 'non_indexable' && params.task_id && creds && activeTask?.status === 'finished') {
     const { items, error } = await fetchNonIndexable(params.task_id, creds.login, creds.pass);
@@ -493,7 +505,7 @@ export default async function SiteAuditPage({ searchParams }: { searchParams: Pr
       errors: e,
       warnings: w,
       load_time_ms: p.page_timing?.duration_time ?? '',
-      word_count: p.content?.plain_text_word_count ?? '',
+      word_count: p.meta?.content?.plain_text_word_count ?? '',
     };
   });
   const pageExportColumns = [
@@ -781,7 +793,7 @@ export default async function SiteAuditPage({ searchParams }: { searchParams: Pr
                   )}
 
                   {kwDensityItems && kwDensityItems.length === 0 && (
-                    <div className="px-6 py-12 text-center text-sm text-slate-400">No results.</div>
+                    <div className="px-6 py-12 text-center text-sm text-slate-400">No keyword density data: this audit was crawled without DataForSEO&apos;s keyword density option.</div>
                   )}
 
                   {kwDensityItems && kwDensityItems.length > 0 && (

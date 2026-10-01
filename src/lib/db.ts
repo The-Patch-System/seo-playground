@@ -774,6 +774,7 @@ function initSchema(db: Database.Database) {
   addColumnIfMissing(db, 'grid_searches', `ADD COLUMN queue_mode TEXT NOT NULL DEFAULT 'live'`);
   addColumnIfMissing(db, 'grid_searches', `ADD COLUMN series_id TEXT NOT NULL DEFAULT ''`);
   addColumnIfMissing(db, 'reviews_tasks', 'ADD COLUMN meta TEXT');
+  addColumnIfMissing(db, 'rank_checks', 'ADD COLUMN ai_overview INTEGER');
   addColumnIfMissing(db, 'domain_find_searches', 'ADD COLUMN keyword TEXT');
   addColumnIfMissing(db, 'domain_find_searches', 'ADD COLUMN technology TEXT');
   addColumnIfMissing(db, 'hist_rank_searches', `ADD COLUMN date_from TEXT NOT NULL DEFAULT ''`);
@@ -1312,6 +1313,8 @@ export interface RankCheck {
   url: string | null;
   title: string | null;
   cost: number | null;
+  /** Whether the AI Overview cited the domain; null when there was none or the check predates this. */
+  aiOverview: boolean | null;
 }
 
 export function getTrackedKeywords(): TrackedKeyword[] {
@@ -1345,17 +1348,24 @@ export function removeTrackedKeyword(id: number): void {
   getDb().prepare('DELETE FROM tracked_keywords WHERE id = ?').run(id);
 }
 
-export function saveRankCheck(keywordId: number, position: number | null, url: string | null, title: string | null, cost: number | null): void {
+type RankCheckResult = { position: number | null; url: string | null; title: string | null; aiOverview: boolean | null };
+
+function aiOverviewValue(aiOverview: boolean | null): number | null {
+  return aiOverview === null ? null : aiOverview ? 1 : 0;
+}
+
+export function saveRankCheck(keywordId: number, result: RankCheckResult, cost: number | null): void {
   const now = Date.now();
   const date = new Date(now).toISOString().split('T')[0];
+  const aiOverview = aiOverviewValue(result.aiOverview);
   // Only one check per day per keyword — upsert by date
   const existing = getDb().prepare('SELECT id FROM rank_checks WHERE keyword_id = ? AND date = ?').get(keywordId, date) as { id: number } | undefined;
   if (existing) {
-    getDb().prepare('UPDATE rank_checks SET checked_at = ?, position = ?, url = ?, title = ?, cost = ? WHERE id = ?')
-      .run(now, position, url, title, cost, existing.id);
+    getDb().prepare('UPDATE rank_checks SET checked_at = ?, position = ?, url = ?, title = ?, cost = ?, ai_overview = ? WHERE id = ?')
+      .run(now, result.position, result.url, result.title, cost, aiOverview, existing.id);
   } else {
-    getDb().prepare('INSERT INTO rank_checks (keyword_id, checked_at, date, position, url, title, cost) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(keywordId, now, date, position, url, title, cost);
+    getDb().prepare('INSERT INTO rank_checks (keyword_id, checked_at, date, position, url, title, cost, ai_overview) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(keywordId, now, date, result.position, result.url, result.title, cost, aiOverview);
   }
 }
 
@@ -1375,7 +1385,7 @@ function pendingRankTasksFromDb(db: Database.Database): PendingRankTask[] {
   return rows.map((row) => ({ taskId: row.task_id, keywordId: row.keyword_id, domain: row.domain, cost: row.cost }));
 }
 
-/** Stores the task_post cost once; task_get only echoes it and must not be counted again. */
+/** Stores the task_post cost, the price of the full depth; completing the task replaces it with the amount billed. */
 export function savePendingRankTask(keywordId: number, taskId: string, cost: number | null): void {
   savePendingRankTaskToDb(getDb(), keywordId, taskId, cost);
 }
@@ -1399,7 +1409,7 @@ export function getPendingRankTasksForProject(projectId: string): PendingRankTas
 }
 
 export function completeRankTaskForProject(
-  projectId: string, taskId: string, position: number | null, url: string | null, title: string | null,
+  projectId: string, taskId: string, result: RankCheckResult, billedCost: number | null,
 ): void {
   const db = getDbForProject(projectId);
   const task = db.prepare('SELECT keyword_id FROM rank_tasks WHERE task_id = ?').get(taskId) as { keyword_id: number } | undefined;
@@ -1408,14 +1418,16 @@ export function completeRankTaskForProject(
   const date = new Date(now).toISOString().split('T')[0];
   const existing = db.prepare('SELECT id FROM rank_checks WHERE keyword_id = ? AND date = ?').get(task.keyword_id, date) as { id: number } | undefined;
   if (existing) {
-    db.prepare('UPDATE rank_checks SET checked_at = ?, position = ?, url = ?, title = ? WHERE id = ?')
-      .run(now, position, url, title, existing.id);
+    db.prepare('UPDATE rank_checks SET checked_at = ?, position = ?, url = ?, title = ?, ai_overview = ? WHERE id = ?')
+      .run(now, result.position, result.url, result.title, aiOverviewValue(result.aiOverview), existing.id);
   } else {
-    const cost = db.prepare('SELECT cost FROM rank_tasks WHERE task_id = ?').get(taskId) as { cost: number | null };
-    db.prepare('INSERT INTO rank_checks (keyword_id, checked_at, date, position, url, title, cost) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(task.keyword_id, now, date, position, url, title, cost.cost);
+    // task_post quotes the full depth; a crawl stopped on the match is billed for fewer pages.
+    const cost = billedCost !== null ? { cost: billedCost }
+      : db.prepare('SELECT cost FROM rank_tasks WHERE task_id = ?').get(taskId) as { cost: number | null };
+    db.prepare('INSERT INTO rank_checks (keyword_id, checked_at, date, position, url, title, cost, ai_overview) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(task.keyword_id, now, date, result.position, result.url, result.title, cost.cost, aiOverviewValue(result.aiOverview));
   }
-  db.prepare(`UPDATE rank_tasks SET status = 'done', completed_at = ?, error_message = NULL WHERE task_id = ?`).run(now, taskId);
+  db.prepare(`UPDATE rank_tasks SET status = 'done', completed_at = ?, error_message = NULL, cost = COALESCE(?, cost) WHERE task_id = ?`).run(now, billedCost, taskId);
 }
 
 export function failRankTaskForProject(projectId: string, taskId: string, errorMessage: string): void {
@@ -1487,17 +1499,17 @@ export function retryClaimedRankTrackerSchedule(projectId: string, claimedNextRu
 
 export function getRankHistory(keywordId: number, days = 30): RankCheck[] {
   const rows = getDb().prepare(
-    'SELECT id, keyword_id, checked_at, date, position, url, title, cost FROM rank_checks WHERE keyword_id = ? ORDER BY date DESC LIMIT ?'
-  ).all(keywordId, days) as Array<{ id: number; keyword_id: number; checked_at: number; date: string; position: number | null; url: string | null; title: string | null; cost: number | null }>;
-  return rows.map((r) => ({ id: r.id, keywordId: r.keyword_id, checkedAt: r.checked_at, date: r.date, position: r.position, url: r.url, title: r.title, cost: r.cost }));
+    'SELECT id, keyword_id, checked_at, date, position, url, title, cost, ai_overview FROM rank_checks WHERE keyword_id = ? ORDER BY date DESC LIMIT ?'
+  ).all(keywordId, days) as Array<{ id: number; keyword_id: number; checked_at: number; date: string; position: number | null; url: string | null; title: string | null; cost: number | null; ai_overview: number | null }>;
+  return rows.map((r) => ({ id: r.id, keywordId: r.keyword_id, checkedAt: r.checked_at, date: r.date, position: r.position, url: r.url, title: r.title, cost: r.cost, aiOverview: r.ai_overview === null ? null : r.ai_overview === 1 }));
 }
 
 export function getLatestRankCheck(keywordId: number): RankCheck | null {
   const row = getDb().prepare(
-    'SELECT id, keyword_id, checked_at, date, position, url, title, cost FROM rank_checks WHERE keyword_id = ? ORDER BY date DESC LIMIT 1'
-  ).get(keywordId) as { id: number; keyword_id: number; checked_at: number; date: string; position: number | null; url: string | null; title: string | null; cost: number | null } | undefined;
+    'SELECT id, keyword_id, checked_at, date, position, url, title, cost, ai_overview FROM rank_checks WHERE keyword_id = ? ORDER BY date DESC LIMIT 1'
+  ).get(keywordId) as { id: number; keyword_id: number; checked_at: number; date: string; position: number | null; url: string | null; title: string | null; cost: number | null; ai_overview: number | null } | undefined;
   if (!row) return null;
-  return { id: row.id, keywordId: row.keyword_id, checkedAt: row.checked_at, date: row.date, position: row.position, url: row.url, title: row.title, cost: row.cost };
+  return { id: row.id, keywordId: row.keyword_id, checkedAt: row.checked_at, date: row.date, position: row.position, url: row.url, title: row.title, cost: row.cost, aiOverview: row.ai_overview === null ? null : row.ai_overview === 1 };
 }
 
 // --- Referring Domains ---

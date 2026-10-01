@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Check, ChevronDown, FolderKanban, Plus, Settings } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Project } from '@/lib/db';
@@ -9,6 +10,7 @@ import ProjectFavicon from './ProjectFavicon';
 
 export default function ProjectSwitcher({ projects, activeProject }: { projects: Project[]; activeProject: Project }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,6 +45,7 @@ export default function ProjectSwitcher({ projects, activeProject }: { projects:
             {projects.map((project) => (
               <form key={project.id} action={selectProjectAction}>
                 <input type="hidden" name="id" value={project.id} />
+                <input type="hidden" name="return_to" value={pathname} />
                 <div className={`flex items-center rounded-lg transition-colors ${project.id === activeProject.id ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
                   <button
                     type="submit"

@@ -21,6 +21,15 @@ function refreshProjects() {
   revalidatePath('/dashboard/settings');
 }
 
+/**
+ * Switching projects keeps the current tool open. Only the path is kept: query strings
+ * point at the previous project's history entries and domains.
+ */
+function returnPath(formData: FormData) {
+  const path = String(formData.get('return_to') ?? '');
+  return /^\/dashboard(\/[a-z0-9-]+)*$/.test(path) ? path : '/dashboard';
+}
+
 export async function createProjectAction(formData: FormData) {
   const project = createProject(projectInput(formData));
   setActiveProject(project.id);
@@ -39,7 +48,7 @@ export async function selectProjectAction(formData: FormData) {
   const id = String(formData.get('id') ?? '');
   setActiveProject(id);
   refreshProjects();
-  redirect('/dashboard');
+  redirect(returnPath(formData));
 }
 
 export async function deleteProjectAction(formData: FormData) {
