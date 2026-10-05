@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import GridResults from './GridResults';
+import { useGridSnapshotSelection } from './GridSnapshotSelection';
 import GridSnapshotMapPanel, { type GridMapSnapshot } from './GridSnapshotMapPanel';
 import type { GridPositionTrendPoint } from './GridPositionTrend';
 
@@ -20,9 +21,12 @@ type Props = {
 };
 
 export default function GridAnalysisPanel({ snapshots, selectedId, gridSize, spacingKm, keyword, target, language, brandName, brandLogoUrl, captureId, trend }: Props) {
-  const [activeId, setActiveId] = useState(selectedId);
-
-  useEffect(() => setActiveId(selectedId), [selectedId]);
+  const selection = useGridSnapshotSelection();
+  const [localId, setLocalId] = useState(selectedId);
+  useEffect(() => setLocalId(selectedId), [selectedId]);
+  // Shared with the PDF export button when a provider is mounted.
+  const activeId = selection?.activeId ?? localId;
+  const setActiveId = selection?.setActiveId ?? setLocalId;
 
   const activeSnapshot = useMemo(
     () => snapshots.find((snapshot) => snapshot.id === activeId) ?? snapshots.find((snapshot) => snapshot.id === selectedId) ?? snapshots[0],

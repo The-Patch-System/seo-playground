@@ -61,7 +61,9 @@ async function logoDataUrl(url: string): Promise<string | null> {
   }
 }
 
-async function mapDataUrl(elementId?: string): Promise<string | null> {
+type MapCapture = { dataUrl: string; width: number; height: number };
+
+async function mapDataUrl(elementId?: string): Promise<MapCapture | null> {
   if (!elementId) return null;
   const element = document.getElementById(elementId);
   if (!element) return null;
@@ -73,7 +75,11 @@ async function mapDataUrl(elementId?: string): Promise<string | null> {
     }
     if (!element.querySelector('.leaflet-marker-icon')) return null;
     const { toPng } = await import('html-to-image');
-    return await toPng(element, {
+    const { width, height } = element.getBoundingClientRect();
+    if (!width || !height) return null;
+    const dataUrl = await toPng(element, {
+      width: Math.round(width),
+      height: Math.round(height),
       cacheBust: true,
       pixelRatio: 2,
       backgroundColor: '#e2e8f0',
@@ -81,6 +87,7 @@ async function mapDataUrl(elementId?: string): Promise<string | null> {
       // capturing the root preserves both the basemap tiles and the rank markers.
       style: { borderRadius: '0' },
     });
+    return { dataUrl, width, height };
   } catch {
     return null;
   }
@@ -192,8 +199,14 @@ export default function GridPdfExportButton(props: Props) {
       let mapAdded = false;
       if (mapImage) {
         try {
-          pdf.addImage(mapImage, 'PNG', margin, gridTop, width - margin * 2, 92, undefined, 'FAST');
-          legendY = gridTop + 99;
+          // Preserve the captured map's aspect ratio (no stretching), centred in the content area.
+          const maxW = width - margin * 2;
+          const maxH = 120;
+          const ratio = mapImage.width / mapImage.height;
+          const drawW = Math.min(maxW, maxH * ratio);
+          const drawH = drawW / ratio;
+          pdf.addImage(mapImage.dataUrl, 'PNG', margin + (maxW - drawW) / 2, gridTop, drawW, drawH, undefined, 'FAST');
+          legendY = gridTop + drawH + 7;
           mapAdded = true;
         } catch {
           // Use the vector fallback below if a browser rejects a map tile image.

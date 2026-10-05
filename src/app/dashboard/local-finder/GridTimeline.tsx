@@ -1,6 +1,6 @@
 import type { GridPoint, GridSchedule, GridSearchEntry } from '@/lib/db';
 import { computeGridSummary } from './grid-insights';
-import GridPdfExportButton from './GridPdfExportButton';
+import { GridSnapshotSelectionProvider, GridSelectedSnapshotExportButton } from './GridSnapshotSelection';
 import GridScheduleControl from './GridScheduleControl';
 import GridAnalysisPanel from './GridAnalysisPanel';
 import { type GridMapSnapshot } from './GridSnapshotMapPanel';
@@ -36,6 +36,7 @@ export default function GridTimeline({ entry, results, previousResults, snapshot
   ];
 
   return (
+    <GridSnapshotSelectionProvider selectedId={entry.id}>
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
@@ -48,7 +49,7 @@ export default function GridTimeline({ entry, results, previousResults, snapshot
             <a href={`/dashboard/geo-grid?keyword=${encodeURIComponent(entry.keyword)}&location_coordinate=${encodeURIComponent(entry.center)}&grid_size=${entry.grid_size}&spacing_km=${entry.spacing_km}&grid_target=${encodeURIComponent(entry.target)}&language=${encodeURIComponent(entry.language)}&queue_mode=${entry.queue_mode}&mode=grid`} className="inline-flex items-center rounded-xl border border-blue-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-700 transition-colors hover:bg-blue-50 dark:border-blue-900 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-950">
               Run now
             </a>
-            <GridPdfExportButton results={results} gridSize={entry.grid_size} spacingKm={entry.spacing_km} keyword={entry.keyword} target={entry.target} language={entry.language} searchedAt={entry.ts} brandName={brandName} brandLogoUrl={brandLogoUrl} mapElementId={mapId} />
+            <GridSelectedSnapshotExportButton snapshots={snapshots} fallbackResults={results} fallbackTs={entry.ts} gridSize={entry.grid_size} spacingKm={entry.spacing_km} keyword={entry.keyword} target={entry.target} language={entry.language} brandName={brandName} brandLogoUrl={brandLogoUrl} mapElementId={mapId} />
           </div>
         </div>
       </div>
@@ -84,5 +85,6 @@ export default function GridTimeline({ entry, results, previousResults, snapshot
         </div>
       </div>
     </section>
+    </GridSnapshotSelectionProvider>
   );
 }
