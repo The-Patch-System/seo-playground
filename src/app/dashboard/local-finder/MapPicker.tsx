@@ -221,18 +221,23 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
     setBusinesses([]);
     try {
       let found: BusinessResult[] = [];
+      let searchError = '';
       try {
         const res = await fetch(`/api/business-search?q=${encodeURIComponent(query.trim())}`);
-        const data = await res.json() as { results?: BusinessResult[] };
+        const data = await res.json() as { results?: BusinessResult[]; error?: string };
         found = data.results ?? [];
+        if (!res.ok) searchError = data.error ?? `HTTP ${res.status}`;
       } catch {
-        found = [];
+        searchError = 'network error';
       }
       if (found.length > 0) {
         setBusinesses(found);
         return;
       }
-      if (!(await geocodeAddress(query))) setGeoError('No Google listing or address found. Try the business name plus city, or type lat,lng below.');
+      if (await geocodeAddress(query)) return;
+      setGeoError(searchError
+        ? `Google Maps search failed (${searchError}). Hit Find again, or type lat,lng below.`
+        : 'No Google listing or address found. Try the business name plus city, or type lat,lng below.');
     } catch {
       setGeoError('Search failed. Try again.');
     } finally {
