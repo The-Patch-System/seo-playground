@@ -1,8 +1,8 @@
+import { matchesGridTarget } from '@/lib/grid-target';
 import {
   getGridProgressForProject, updateGridProgressForProject,
   type GridLocalItem, type GridPoint, type GridSearchEntry, type GridTaskPoint,
 } from '@/lib/db';
-import { makeTargetMatcher } from '@/lib/grid-target';
 
 interface DFSTaskGetResponse {
   tasks?: Array<{
@@ -40,7 +40,6 @@ async function collectGridProgressOnce(
   if (!progress || progress.pendingTasks.length === 0) return { status: 'pending', ready: 0, total };
 
   const auth = btoa(`${credentials.login}:${credentials.pass}`);
-  const isTargetItem = makeTargetMatcher(entry.target);
   const stillProcessing = new Set([40602, 40601]);
   const checks = await Promise.all(progress.pendingTasks.map(async (taskPoint) => {
     try {
@@ -58,6 +57,7 @@ async function collectGridProgressOnce(
     }
   }));
 
+  const isTargetItem = (item: { title?: string; domain?: string; url?: string; cid?: string }) => matchesGridTarget(entry.target, item);
   const readyPoints: GridPoint[] = [];
   const pendingTasks: GridTaskPoint[] = [];
   for (const check of checks) {

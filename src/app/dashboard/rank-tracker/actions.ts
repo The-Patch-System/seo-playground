@@ -2,60 +2,14 @@
 
 import {
   getCredentials, getTrackedKeywords, addTrackedKeyword,
-  removeTrackedKeyword, saveRankCheck, getSetting, setSetting,
+  removeTrackedKeyword, getSetting, setSetting,
   addTargetDomain, removeTargetDomain, getActiveProject,
-  saveRankTrackerSchedule, deleteRankTrackerSchedule,
+  saveRankTrackerSchedule, deleteRankTrackerSchedule, getRankTopResultsHistory,
+  type RankTopResultsCheck,
 } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { queueStandardRankChecksForProject } from '@/lib/rank-queue';
-import { matchRankSerp, stopCrawlOnMatch, type RankSerpItem } from '@/lib/rank-serp';
-
-interface SerpResponse {
-  tasks?: Array<{
-    id?: string;
-    status_code?: number;
-    cost?: number;
-    result?: Array<{ items?: RankSerpItem[] }>;
-  }>;
-}
-
-type RankKeyword = { id: number; keyword: string; domain: string; location: string; language: string };
-
-async function checkKeywordLive(keyword: RankKeyword, auth: string, depth: number) {
-  try {
-    const response = await fetch('https://api.dataforseo.com/v3/serp/google/organic/live/advanced', {
-      method: 'POST',
-      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-      // The Live endpoint accepts exactly one task per request.
-      body: JSON.stringify([{ keyword: keyword.keyword, location_name: keyword.location, language_name: keyword.language, depth, stop_crawl_on_match: stopCrawlOnMatch(keyword.domain) }]),
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!response.ok) return;
-    const data = await response.json() as SerpResponse;
-    const task = data.tasks?.[0];
-    if (task?.status_code !== 20000) return;
-    saveRankCheck(keyword.id, matchRankSerp(task.result?.[0]?.items ?? [], keyword.domain), task.cost ?? null);
-  } catch {
-    // Preserve the previous result; a later scheduled check can retry a transient failure.
-  }
-}
-
-/** Immediate checks are deliberately individual: DataForSEO Live rejects multi-task payloads. */
-async function checkKeywordsLive(keywords: RankKeyword[]) {
-  const creds = getCredentials();
-  if (!creds || keywords.length === 0) return;
-  const depth = parseInt(getSetting('rank_tracker_depth') ?? '20', 10);
-  const auth = btoa(`${creds.login}:${creds.pass}`);
-  const queue = [...keywords];
-  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
-    while (queue.length > 0) {
-      const keyword = queue.shift();
-      if (keyword) await checkKeywordLive(keyword, auth, depth);
-    }
-  });
-  await Promise.all(workers);
-}
 
 async function queueStandardRankChecks(
   keywords: Array<{ id: number; keyword: string; domain: string; location: string; language: string }>,
@@ -112,13 +66,8 @@ export async function addKeywordAction(formData: FormData) {
   const kwList = raw.split('\n').map((k) => k.trim()).filter(Boolean).slice(0, 50);
   if (kwList.length === 0) return;
 
-  const toCheck: Array<{ id: number; keyword: string; domain: string; location: string; language: string }> = [];
-  for (const keyword of kwList) {
-    const id = addTrackedKeyword(keyword, domain, location, language);
-    toCheck.push({ id, keyword, domain, location, language });
-  }
-
-  await checkKeywordsLive(toCheck);
+  // Adding only saves the keywords, so they show up at once. Checking is a separate step (Queue, or ↻ on a row).
+  for (const keyword of kwList) addTrackedKeyword(keyword, domain, location, language);
   revalidatePath('/dashboard/rank-tracker');
 }
 
@@ -153,4 +102,10 @@ export async function checkDomainAction(formData: FormData) {
   const keywords = getTrackedKeywords().filter((k) => k.domain === domain);
   await queueStandardRankChecks(keywords);
   redirect(`/dashboard/rank-tracker?domain=${encodeURIComponent(domain)}`);
+}
+
+/** Loaded when a keyword row is expanded, so the list page does not carry ten results per check. */
+export async function getTopResultsAction(keywordId: number): Promise<RankTopResultsCheck[]> {
+  if (!Number.isInteger(keywordId) || keywordId <= 0) return [];
+  return getRankTopResultsHistory(keywordId, 30);
 }

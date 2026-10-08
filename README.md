@@ -2,10 +2,14 @@
 
 ![SEO Playground — the free, open-source, self-hosted SEO & Local SEO dashboard](public/readme/hero.png)
 
-## ✨ Update — 2026-09-28
+## ✨ Update — Unreleased
 
 SEO Playground is actively evolving. Here are the latest substantial additions:
 
+- 🔐 **Optional login (email + password)** — off by default, so a local install works exactly as before. Set `AUTH_ENABLED=true` to protect the whole dashboard and its API before putting it online: the first visit creates your account, then registration closes. No external service needed; it works with Docker and Node. See [Login (optional)](#login-optional).
+- 🧭 **Prompt Tracker** — save the prompts your audience asks AI assistants, then re-run them on demand or every day to see whether ChatGPT, Claude, Gemini or Perplexity mention your brand or domain. Each check keeps the answer, the cited sources and its cost, and each prompt shows its mention rate over time.
+- 🏷️ **White-label reports** — in Settings, brand every PDF with your own name, logo, report colour and header style (straight or wavy bar). The footer has its own text and colours, and e-mail addresses or domains in it become clickable links. A live preview shows the result before you save.
+- 📄 **PDF exports across the app** — Site Audit, Google Reviews, AI Visibility, Geo-grid and Prompt Tracker all export branded PDF reports, with the same header and footer settings everywhere.
 - 🗂️ **Multi-project workspace** — switch between clients or sites in one click. Each project has its own defaults, search history, results, and Rank Tracker depth.
 - 📍 **Geo-grid monitoring, not just one-off maps** — save keyword/location monitors, browse a timeline of snapshots, compare movement point by point, inspect visibility trends, and schedule daily or weekly checks.
 - ⏰ **Background tracking that keeps working** — scheduled Geo-grid and Rank Tracker runs continue without an open browser tab; a task center keeps their progress visible while you work elsewhere.
@@ -75,7 +79,10 @@ https://github.com/user-attachments/assets/fb506723-0996-4704-a6a5-b12b1115b805
 - **AI Optimization** — Visibility in AI-generated answers
 - **AI Visibility** — Target overview (mentions, AI search volume, source/platform breakdown) or topic leaderboard (top mentioned domains and brands) via DataForSEO LLM Mentions
 - **Top Searches** — Local search trends
-- **Settings** — Store your DataForSEO credentials and report identity locally
+- **Prompt Tracker** — Track whether AI assistants (ChatGPT, Claude, Gemini, Perplexity) mention your brand or domain for saved prompts, with on-demand or daily checks, cited sources, a mention calendar and PDF/Markdown exports
+- **AI Prompt Test** — See the live answer, cited sources and cost of any prompt on ChatGPT, Claude, Gemini or Perplexity
+- **PDF reports and Excel exports** — Branded PDF reports for Site Audit, Google Reviews, AI Visibility, Geo-grid and Prompt Tracker, plus Excel exports for Site Audit and AI Visibility
+- **Settings** — Store your DataForSEO credentials and a white-label report identity locally: brand name, logo, report colour, straight or wavy header, and footer text and colours
 
 ## Requirements
 
@@ -111,7 +118,7 @@ docker compose down
 HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up -d --build
 ```
 
-**Network access:** both Compose files publish the dashboard on `127.0.0.1` only. SEO Playground has no login, and anyone who can reach it can spend your DataForSEO credit. To reach it from another machine, put a reverse proxy with authentication in front of it (Coolify, Caddy, Traefik…). On a trusted private network only, you can listen on every interface with `SEO_PLAYGROUND_BIND=0.0.0.0`.
+**Network access:** both Compose files publish the dashboard on `127.0.0.1` only. By default SEO Playground has no login, and anyone who can reach it can spend your DataForSEO credit. To reach it from another machine, either turn on the built-in [login](#login-optional) (`AUTH_ENABLED=true`, optional and off by default) or put a reverse proxy with authentication in front of it (Coolify, Caddy, Traefik…). On a trusted private network only, you can listen on every interface with `SEO_PLAYGROUND_BIND=0.0.0.0`.
 
 ### Production release installation
 
@@ -218,6 +225,32 @@ GEO_GRID_WORKER_INTERVAL_MS=120000 docker compose up -d
 
 The schedule uses the browser timezone that created it, including daylight-saving changes.
 
+### Login (optional)
+
+**Login is optional and disabled by default.** Without `AUTH_ENABLED=true` nothing changes: no login page, no account, no extra files — the right choice on `localhost` or behind your own authentication (reverse proxy, VPN). Before putting the dashboard online, turn on the built-in email and password login:
+
+```bash
+# .env next to docker-compose.yml (Docker) or exported before `npm run launch` (Node)
+AUTH_ENABLED=true
+BETTER_AUTH_URL=https://seo.example.com   # the public URL; use http://... or leave unset on a LAN
+```
+
+To deploy online, in this order: (1) set the variables above and start the app, still reachable only from `127.0.0.1`; (2) open it and create your account; (3) only then expose it, behind HTTPS. To turn the login off again, remove `AUTH_ENABLED` (your accounts stay in the `.auth` file for later).
+
+Open the dashboard: the first visit shows **Create your account**. That is the only account — registration closes as soon as it exists, so create it right after deploying (the default Docker setup only listens on `127.0.0.1` until you expose it). After that, every page and `/api` route requires a signed-in session. Sign out with the icon at the top right.
+
+- Accounts and sessions live in `seo-playground.db.auth` next to the main database, with the signing secret in `seo-playground.db.auth-secret` (set `BETTER_AUTH_SECRET` to manage it yourself). Back both files up with your data.
+- Passwords are hashed (scrypt), at least 10 characters, and sign-in attempts are rate-limited.
+- The Geo-grid worker is unaffected: `/api/cron` keeps its own private secret.
+- Serve it over **HTTPS** (Caddy, Traefik, a Cloudflare Tunnel…). Passwords are sent as-is to the server, so plain http is only suitable for a trusted network. An `https://` `BETTER_AUTH_URL` marks the session cookie `Secure`.
+- Forgot the password? Stop the app and delete `seo-playground.db.auth*`; the next visit shows the setup page again. Your SEO data is not touched.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AUTH_ENABLED` | off | `true` turns the login on. |
+| `BETTER_AUTH_URL` | derived from the request | Public URL of the dashboard; required behind a reverse proxy. |
+| `BETTER_AUTH_SECRET` | generated automatically | Optional override for the session signing secret. |
+
 ## Data Storage
 
 Search history and results are cached locally in `seo-playground.db`. The database is created automatically on first run.
@@ -235,6 +268,7 @@ Search history and results are cached locally in `seo-playground.db`. The databa
 
 Full detailed history: [CHANGELOG.md](CHANGELOG.md).
 
+- **Unreleased** — **Prompt Tracker** (`/dashboard/prompt-tracker`): save prompts and re-run them on demand or daily to check brand/domain mentions in ChatGPT, Claude, Gemini and Perplexity answers, with stored answers, sources and costs, a mention calendar, and PDF/Markdown exports. **White-label reports**: Settings now control the brand name, an uploaded PNG/JPEG logo, the report colour, a straight or wavy header, and the footer text, background, text and link colours; the same identity applies to Site Audit, Google Reviews, AI Visibility, Geo-grid and Prompt Tracker PDFs. Geo-grid PDFs no longer overflow their competitor table, and logos keep their proportions. Rank Tracker shows AI Overview citations and the top 10 of each check. AI Prompt Test offers every DataForSEO model, with a default per platform.
 - **2026-10-01** — Rank Tracker checks stop crawling once the domain is found (lower cost per check), flag AI Overview citations with an "AI" badge, and show "Not found" with the last known position. Fixed Site Audit's word count and its Keyword Density, Duplicate Tags and Non-indexable tabs. Switching projects from the project switcher now keeps you on the current page instead of returning to the dashboard home.
 - **2026-09-28 — v0.4.0** — First versioned release, published as a multi-architecture Docker image on GHCR. Multi-project workspace (per-project defaults, history and schedules). Scheduled Geo-grid (daily/weekly) and Rank Tracker (daily) checks run by a background worker with no browser tab open, plus a task center for queued runs. Geo-grid snapshot timeline, comparison map and trend. PDF reports and Excel exports. Rank Tracker checks of several keywords at once fixed. Both Compose files now listen on `127.0.0.1` only by default, since the dashboard has no login.
 

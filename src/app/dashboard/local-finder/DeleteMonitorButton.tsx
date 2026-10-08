@@ -1,6 +1,6 @@
 'use client';
 
-// Patch fork: deletes a Geo-grid monitor (every snapshot plus its schedule).
+// Deletes a Geo-grid monitor (every snapshot plus its schedule).
 import { deleteGridMonitor } from '../geo-grid/actions';
 
 export default function DeleteMonitorButton({ runId, compact = false }: { runId: string; compact?: boolean }) {

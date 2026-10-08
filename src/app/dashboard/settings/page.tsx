@@ -1,7 +1,10 @@
 export const dynamic = 'force-dynamic';
 
 import { getCredentials, getSetting } from '@/lib/db';
+import { getBrandSettings } from '@/lib/brand-server';
+import { DEFAULT_BRAND_COLOR, normalizeHexColor } from '@/lib/brand';
 import { updateSettings, deleteCredentials } from './actions';
+import BrandIdentityFields from './BrandIdentityFields';
 
 interface DFUserResponse {
   tasks?: Array<{
@@ -15,8 +18,13 @@ const inputCls = 'w-full px-5 py-4 bg-white dark:bg-slate-800 border border-slat
 
 export default async function SettingsPage() {
   const creds = getCredentials();
+  // Raw values: blank fields stay blank so the defaults remain visible as placeholders.
   const brandName = getSetting('brand_name') ?? '';
-  const brandLogoUrl = getSetting('brand_logo_url') ?? '';
+  const brandFooter = getSetting('brand_footer') ?? '';
+  const brandColor = normalizeHexColor(getSetting('brand_color')) ?? DEFAULT_BRAND_COLOR;
+  const resolvedBrand = getBrandSettings();
+  const brandLogo = resolvedBrand.logo;
+  const brandStyle = resolvedBrand;
 
   let balance = 0;
   let status = 'NOT CONNECTED';
@@ -102,21 +110,17 @@ export default async function SettingsPage() {
 
             <div className="border-t border-slate-200 dark:border-slate-700" />
 
-            {/* Report identity */}
+            {/* White-label report identity */}
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Report identity</p>
-              <p className="text-xs text-slate-400 mb-4">Used for PDF reports. Leave the name blank to use SEO Playground.</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Brand name</label>
-                  <input name="brand_name" type="text" defaultValue={brandName} placeholder="e.g. Acme SEO" className={inputCls} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Logo URL</label>
-                  <input name="brand_logo_url" type="url" defaultValue={brandLogoUrl} placeholder="https://example.com/logo.png" className={inputCls} />
-                  <p className="text-[10px] text-slate-400 ml-1">PNG, JPG, or WebP. If available, it replaces the name in PDF reports.</p>
-                </div>
-              </div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">White-label reports</p>
+              <p className="text-xs text-slate-400 mb-6">Applied to every PDF you export. Leave the name blank to use SEO Playground.</p>
+              <BrandIdentityFields
+                initialName={brandName}
+                initialColor={brandColor}
+                initialFooter={brandFooter}
+                initialStyle={brandStyle}
+                currentLogo={brandLogo}
+              />
             </div>
 
             <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-blue-700 shadow-xl shadow-blue-200 dark:shadow-none transition-all active:scale-[0.98]">

@@ -21,6 +21,7 @@ import {
   claimDueGridSchedules, retryClaimedGridSchedule,
   getRankTrackerSchedule, saveRankTrackerSchedule, deleteRankTrackerSchedule,
   getHistRankHistory, saveHistRankSearch,
+  addTrackedKeyword, saveRankCheck, getRankTopResultsHistory,
 } from './db';
 
 afterAll(() => {
@@ -275,5 +276,22 @@ describe('Historical Rank search cache', () => {
     expect(getHistRankHistory().find((entry) => entry.id === 'historical-rank-range')).toMatchObject({
       dateFrom: '2020-10-01', dateTo: '2026-09-27',
     });
+  });
+});
+
+describe('rank check top results', () => {
+  const top = (domain: string) => [{ position: 1, domain, url: `https://${domain}/`, title: null }];
+
+  it('keeps the first results page of a check and skips checks that have none', () => {
+    const id = addTrackedKeyword('top results kw', 'example.com', 'France', 'French');
+    saveRankCheck(id, { position: null, url: null, title: null, aiOverview: null, topResults: null }, null);
+    expect(getRankTopResultsHistory(id)).toEqual([]);
+
+    // A second check on the same day replaces the first rather than adding a row.
+    saveRankCheck(id, { position: 2, url: 'https://example.com/', title: null, aiOverview: null, topResults: top('a.com') }, null);
+    const history = getRankTopResultsHistory(id);
+    expect(history).toHaveLength(1);
+    expect(history[0].topResults).toEqual(top('a.com'));
+    expect(history[0].position).toBe(2);
   });
 });

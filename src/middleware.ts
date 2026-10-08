@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authEnabled } from '@/lib/auth-config';
 
-// Patch fork: password-protect the whole dashboard. The app has no login of its own and
-// spends DataForSEO credit, so it fails closed when no password is configured.
-// The Geo-grid worker endpoint (CRON_SECRET) and the reporting API (REPORTING_API_KEY) are
-// excluded below; they authenticate with their own keys.
+// Patch fork: two ways to protect the dashboard.
+// - Default: one shared password (HTTP basic auth). Username SITE_USERNAME (default "patch"),
+//   password SITE_PASSWORD. Fails closed (503) when no password is configured.
+// - AUTH_ENABLED=true: upstream's per-user email + password login (/setup, /login).
+// In both modes /api/cron (CRON_SECRET) and /api/v1 (REPORTING_API_KEY) use their own keys.
 
 export const config = {
   runtime: 'nodejs',
-  matcher: ['/((?!api/cron/|api/v1/|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|robots.txt).*)'],
 };
+
+const KEY_AUTH_PREFIXES = ['/api/cron', '/api/v1'];
+const LOGIN_PUBLIC_PREFIXES = ['/login', '/setup', '/api/auth'];
+
+function startsWithAny(pathname: string, prefixes: string[]) {
+  return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
 function safeEqual(a: string, b: string) {
   if (a.length !== b.length) return false;
@@ -17,7 +26,7 @@ function safeEqual(a: string, b: string) {
   return diff === 0;
 }
 
-export function middleware(request: NextRequest) {
+function sharedPassword(request: NextRequest) {
   const username = process.env.SITE_USERNAME?.trim() || 'patch';
   const password = process.env.SITE_PASSWORD?.trim();
   if (!password) return new NextResponse('SITE_PASSWORD is not configured.', { status: 503 });
@@ -38,4 +47,33 @@ export function middleware(request: NextRequest) {
     status: 401,
     headers: { 'WWW-Authenticate': 'Basic realm="SEO Playground", charset="UTF-8"' },
   });
+}
+
+/** Upstream: validate the session by asking this server's auth handler (revoked sessions fail immediately). */
+async function hasValidSession(request: NextRequest): Promise<boolean> {
+  const cookie = request.headers.get('cookie');
+  if (!cookie || !cookie.includes('session_token')) return false;
+  const port = process.env.PORT?.trim() || request.nextUrl.port || '3000';
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/auth/get-session`, { headers: { cookie }, cache: 'no-store' });
+    if (!response.ok) return false;
+    const data = await response.json() as { session?: unknown } | null;
+    return Boolean(data?.session);
+  } catch {
+    return false; // Fail closed.
+  }
+}
+
+export async function middleware(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+  if (startsWithAny(pathname, KEY_AUTH_PREFIXES)) return NextResponse.next();
+  if (!authEnabled()) return sharedPassword(request);
+
+  if (startsWithAny(pathname, LOGIN_PUBLIC_PREFIXES)) return NextResponse.next();
+  if (await hasValidSession(request)) return NextResponse.next();
+  if (pathname.startsWith('/api/')) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const url = request.nextUrl.clone();
+  url.pathname = '/login';
+  url.search = pathname === '/' || pathname === '/dashboard' ? '' : `?next=${encodeURIComponent(pathname + search)}`;
+  return NextResponse.redirect(url);
 }

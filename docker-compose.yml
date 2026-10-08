@@ -15,7 +15,7 @@ services:
     # Linux, where uids aren't remapped. Defaults to 1000, the first user on most distros; override
     # with HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up. No effect on Docker Desktop.
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-    # Loopback only by default: the dashboard has no login and spends DataForSEO credit.
+    # Loopback only by default: the dashboard has no login unless AUTH_ENABLED=true, and it spends DataForSEO credit.
     ports:
       - "${SEO_PLAYGROUND_BIND:-127.0.0.1}:3000:3000"
     volumes:
@@ -25,6 +25,9 @@ services:
       DB_PATH: /data/seo-playground.db
       CRON_SECRET: ${CRON_SECRET:-}
       CRON_SECRET_FILE: /data/.geo-grid-worker-secret
+      AUTH_ENABLED: ${AUTH_ENABLED:-}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
     depends_on:
       init:
         condition: service_completed_successfully

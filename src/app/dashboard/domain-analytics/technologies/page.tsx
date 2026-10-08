@@ -10,7 +10,6 @@ import {
   type DomainFindEntry,
 } from '@/lib/db';
 import SearchForm from '@/components/SearchForm';
-import CopyMarkdownButton from '@/components/CopyMarkdownButton';
 import { stableSearchId } from '@/lib/dedupe';
 import { callDataForSeoFirst } from '@/lib/dataforseo';
 import TechFindTable from './TechFindTable';

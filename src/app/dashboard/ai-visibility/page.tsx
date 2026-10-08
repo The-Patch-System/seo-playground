@@ -8,6 +8,7 @@ import {
   type AiVisibilityMode,
 } from '@/lib/db';
 import { labsLocationLabel, toLabsCountry } from '@/lib/geo-options';
+import { getBrandSettings } from '@/lib/brand-server';
 import { stableSearchId } from '@/lib/dedupe';
 import { callDataForSeoFirst } from '@/lib/dataforseo';
 import SearchForm from '@/components/SearchForm';
@@ -282,8 +283,9 @@ export default async function AiVisibilityPage({ searchParams }: { searchParams:
   const limit = Math.min(Math.max(parseInt(params.limit ?? '10', 10) || 10, 1), 50);
   const defaultLocation = toLabsCountry(getSetting('default_location') ?? 'France');
   const defaultLanguage = getSetting('default_language') ?? 'French';
-  const brandName = getSetting('brand_name')?.trim() || 'SEO Playground';
-  const brandLogoUrl = getSetting('brand_logo_url')?.trim() || undefined;
+  const brand = getBrandSettings();
+  const brandName = brand.name;
+  const brandLogoUrl = brand.logo ?? undefined;
   const location = platform === 'chat_gpt' ? 'United States' : (params.location ?? defaultLocation);
   const language = platform === 'chat_gpt' ? 'English' : (params.language ?? defaultLanguage);
   const dateFrom = params.date_from ?? '';
@@ -518,7 +520,7 @@ export default async function AiVisibilityPage({ searchParams }: { searchParams:
         <div className="flex items-center justify-between gap-4 border-y border-slate-100 dark:border-slate-800 py-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Export current report</p>
           <div className="flex items-center gap-3">
-            <ReportPdfExportButton brandName={brandName} brandLogoUrl={brandLogoUrl} filename={`ai-visibility-${reportSlug}.pdf`}
+            <ReportPdfExportButton brandName={brandName} brandLogoUrl={brandLogoUrl} brandColor={brand.color} brandFooter={brand.footer} brandStyle={brand} filename={`ai-visibility-${reportSlug}.pdf`}
               title="AI visibility report" subject={displayTarget} generatedAt={reportDate} metrics={reportMetrics} sections={reportSections} />
             <ExportExcelButton sheets={reportSheets} filename={`ai-visibility-${reportSlug}.xls`} />
             <ExportCSVButton data={reportCsvData} columns={reportCsvColumns} filename={`ai-visibility-${reportSlug}.csv`} />

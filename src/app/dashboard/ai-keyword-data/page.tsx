@@ -55,11 +55,6 @@ async function fetchAiKeywordData(
 
 // ---- UI helpers ----
 
-function fmt(n?: number) {
-  if (n === undefined || n === null) return '—';
-  return n.toLocaleString('en-GB');
-}
-
 function formatDate(ts: number) {
   return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
@@ -185,7 +180,7 @@ export default async function AiKeywordDataPage({ searchParams }: { searchParams
                   name="keywords"
                   defaultValue={activeEntry ? '' : keywords}
                   rows={6}
-                  placeholder={'plombier paris\nmeilleur restaurant italien\nseo agi'}
+                  placeholder={'plumber paris\nbest italian restaurant\nseo agi'}
                   required
                   className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all font-mono resize-y dark:bg-slate-800"
                 />

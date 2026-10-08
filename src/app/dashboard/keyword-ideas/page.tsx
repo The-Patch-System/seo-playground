@@ -96,7 +96,7 @@ export default async function KeywordIdeasPage({ searchParams }: { searchParams:
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-1.5">Seed keyword</label>
-            <input type="text" name="keyword" defaultValue={displayKeyword} placeholder="plombier" required
+            <input type="text" name="keyword" defaultValue={displayKeyword} placeholder="plumber" required
               className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800" />
           </div>
           <LabsLocationLanguageFields

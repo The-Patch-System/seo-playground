@@ -316,7 +316,7 @@ export default async function QueryFanOutPage({ searchParams }: { searchParams: 
                   name="seeds"
                   defaultValue={activeEntry ? '' : seedsRaw}
                   rows={5}
-                  placeholder={'plombier\ndébouchage\nfuite'}
+                  placeholder={'plumber\ndrain cleaning\nleak'}
                   required
                   className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all font-mono resize-y dark:bg-slate-800"
                 />

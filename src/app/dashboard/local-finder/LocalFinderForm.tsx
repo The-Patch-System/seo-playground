@@ -87,6 +87,7 @@ export default function LocalFinderForm({ defaults }: Props) {
   const [gridSize, setGridSize] = useState(parseInt(defaults.gridSize ?? '5', 10));
   const [spacingKm, setSpacingKm] = useState(parseFloat(defaults.spacingKm ?? '1'));
   const [queueMode, setQueueMode] = useState<QueueMode>((defaults.queueMode as QueueMode) || 'live');
+  const [language, setLanguage] = useState(defaults.language || 'English');
   const [gridTarget, setGridTarget] = useState(defaults.gridTarget ?? '');
 
   const osOptions =
@@ -120,7 +121,8 @@ export default function LocalFinderForm({ defaults }: Props) {
         </label>
         <select
           name="language"
-          defaultValue={defaults.language || 'English'}
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
           className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800"
         >
           {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
@@ -151,6 +153,7 @@ export default function LocalFinderForm({ defaults }: Props) {
               showGrid={isGrid && !!coordinate}
               gridSize={isGrid ? gridSize : undefined}
               spacingKm={isGrid ? spacingKm : undefined}
+              language={language}
               onBusinessSelect={isGrid ? (business) => setGridTarget(formatBusinessTarget(business.title, business.cid)) : undefined}
             />
           </Suspense>

@@ -218,7 +218,7 @@ export default async function RankTrackerPage({ searchParams }: { searchParams: 
                         <input type="hidden" name="domain" value={activeDomain} />
                         <PendingButton
                           type="submit"
-                          className="px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-700 transition-all shadow-md shadow-blue-100"
+                          className="px-3 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-700 transition-all shadow-md shadow-blue-100 dark:shadow-none"
                           pendingClassName="px-3 py-1.5 bg-blue-300 text-white text-[9px] font-black uppercase tracking-widest rounded-lg cursor-not-allowed"
                           pendingChildren={`Queuing ${rows.length}…`}
                         >
@@ -255,7 +255,7 @@ export default async function RankTrackerPage({ searchParams }: { searchParams: 
                     name="keywords"
                     required
                     rows={5}
-                    placeholder={"plombier paris\nplombier urgence\ndébouchage canalisation"}
+                    placeholder={"plumber paris\nemergency plumber\ndrain unclogging"}
                     className={`${inputCls} resize-y font-mono`}
                   />
                 </div>
@@ -276,12 +276,11 @@ export default async function RankTrackerPage({ searchParams }: { searchParams: 
 
                 <PendingButton
                   type="submit"
-                  disabled={!creds}
                   className="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-blue-700 shadow-lg shadow-blue-200 dark:shadow-none transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-                  pendingClassName="w-full bg-blue-400 text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-blue-100 cursor-not-allowed"
-                  pendingChildren="Checking rankings…"
+                  pendingClassName="w-full bg-blue-400 text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-blue-100 dark:shadow-none cursor-not-allowed"
+                  pendingChildren="Adding…"
                 >
-                  Add &amp; Check
+                  Add
                 </PendingButton>
               </form>
             </div>

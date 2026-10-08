@@ -22,7 +22,7 @@ const us = { rank_group: 1, title: 'Elevation Athletics', cid: '9715887968687677
 const rival = { rank_group: 2, title: 'Rival PT', cid: '42', is_target: false };
 const pointsAt = (centerRank: number) => Array.from({ length: 9 }, (_, i) => ({
   row: Math.floor(i / 3), col: i % 3, rank: i === 4 ? centerRank : i % 2 === 0 ? 5 : null,
-  items: i === 4 ? [{ ...us, rank_group: centerRank }, rival] : [rival],
+  items: i === 4 ? [{ ...us, rank_group: centerRank }, rival] : i % 2 === 0 ? [rival, { ...us, rank_group: 5 }] : [rival],
 }));
 
 describe('reporting API data', () => {
@@ -49,7 +49,7 @@ describe('reporting API data', () => {
     expect(run.positions[4]).toEqual({ point: { id: 'r1c1', coordinates: { lat: 32.894142, lng: -97.2691 } }, position: 1, diff: -2 });
     expect(run.positions[1]).toEqual({ point: { id: 'r0c1', coordinates: expect.any(Object) } });
     expect(run.top_competitors[0]).toMatchObject({ business: { cid: '42', name: 'Rival PT' }, found_points: 9, average_position: 2 });
-    expect(run.top_competitors.find((c) => c.is_target)).toMatchObject({ found_points: 1, average_position: 1 });
+    expect(run.top_competitors.find((c) => c.is_target)).toMatchObject({ found_points: 5, average_position: 4.2 });
     const lean = getRun('run-new', undefined, { competitors: false });
     expect(lean && 'points' in lean && 'results' in lean.points[0]).toBe(false);
     expect(getRun('missing')).toBeNull();

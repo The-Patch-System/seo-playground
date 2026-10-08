@@ -155,7 +155,7 @@ export default async function RelatedKeywordsPage({ searchParams }: { searchPara
             <input
               type="text" name="keyword"
               defaultValue={displayKeyword}
-              placeholder="e.g. plombier"
+              placeholder="e.g. plumber"
               required
               className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-300 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
             />

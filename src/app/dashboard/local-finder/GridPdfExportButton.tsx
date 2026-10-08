@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Download, LoaderCircle } from 'lucide-react';
 import type { GridPoint } from '@/lib/db';
 import { computeCompetitors, computeGridSummary } from './grid-insights';
+import { brandPalette, fitBox, footerPalette, imageSize, resolveBrandStyle, type BrandStyle } from '@/lib/brand';
+import { drawFooter, drawHeaderBand } from '@/lib/brand-pdf';
 
 type Props = {
   results: GridPoint[];
@@ -15,6 +17,12 @@ type Props = {
   searchedAt: number;
   brandName: string;
   brandLogoUrl?: string;
+  /** White-label header colour (hex). Defaults to the standard report ink. */
+  brandColor?: string;
+  /** White-label footer text. When blank, the footer reads "Prepared by <brand name>". */
+  brandFooter?: string;
+  /** Header shape and footer colours (background, text, links). */
+  brandStyle?: Partial<BrandStyle>;
   /** Id of the live Leaflet map that must be embedded in this report. */
   mapElementId?: string;
 };
@@ -110,6 +118,9 @@ export default function GridPdfExportButton(props: Props) {
       const margin = 16;
       const summary = computeGridSummary(props.results);
       const logo = props.brandLogoUrl ? await logoDataUrl(props.brandLogoUrl) : null;
+      const logoSize = logo ? await imageSize(logo) : null;
+      const brand = brandPalette(props.brandColor);
+      const style = resolveBrandStyle(props.brandStyle);
       const mapImage = await mapDataUrl(props.mapElementId);
       const formatDate = new Intl.DateTimeFormat(undefined, {
         dateStyle: 'long', timeStyle: 'short',
@@ -120,12 +131,13 @@ export default function GridPdfExportButton(props: Props) {
       const setColor = (color: readonly [number, number, number]) => pdf.setTextColor(color[0], color[1], color[2]);
       const fill = (color: readonly [number, number, number]) => pdf.setFillColor(color[0], color[1], color[2]);
 
-      fill(palette.ink);
-      pdf.rect(0, 0, width, 38, 'F');
+      drawHeaderBand(pdf, width, 38, style.headerStyle, brand.fill);
       let logoAdded = false;
-      if (logo) {
+      if (logo && logoSize) {
+        // Keep the logo's aspect ratio inside a 28 x 18 mm box instead of stretching it.
+        const box = fitBox(logoSize.width, logoSize.height, 28, 18);
         try {
-          pdf.addImage(logo, margin, 10, 28, 18);
+          pdf.addImage(logo, margin, 10 + (18 - box.height) / 2, box.width, box.height);
           logoAdded = true;
         } catch {
           // The text mark below remains the reliable brand fallback.
@@ -134,19 +146,19 @@ export default function GridPdfExportButton(props: Props) {
       if (!logoAdded) {
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(15);
-        pdf.setTextColor(255, 255, 255);
+        pdf.setTextColor(...brand.text);
         text(props.brandName, margin, 21);
       }
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(7.5);
-      pdf.setTextColor(148, 163, 184);
+      pdf.setTextColor(...brand.subtle);
       text('LOCAL SEARCH INTELLIGENCE', width - margin, 15, { align: 'right' });
       pdf.setFontSize(16);
-      pdf.setTextColor(255, 255, 255);
+      pdf.setTextColor(...brand.text);
       text('Geo-grid ranking report', width - margin, 24, { align: 'right' });
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(8);
-      pdf.setTextColor(203, 213, 225);
+      pdf.setTextColor(...brand.subtle);
       text(formatDate, width - margin, 30, { align: 'right' });
 
       setColor(palette.ink);
@@ -259,9 +271,11 @@ export default function GridPdfExportButton(props: Props) {
         legendX += label.length > 7 ? 21 : 15;
       });
 
-      const competitors = computeCompetitors(props.results).slice(0, 5);
       let y = legendY + 15;
-      if (competitors.length > 0 && y < height - 46) {
+      // Only as many rows as fit above the footer band, so the table never runs into it.
+      const rowsThatFit = Math.floor((height - 18 - (y + 11 + 7)) / 7.2);
+      const competitors = computeCompetitors(props.results).slice(0, Math.max(0, Math.min(5, rowsThatFit)));
+      if (competitors.length > 0) {
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(11);
         setColor(palette.ink);
@@ -300,12 +314,20 @@ export default function GridPdfExportButton(props: Props) {
         });
       }
 
-      pdf.setDrawColor(...palette.line);
-      pdf.line(margin, height - 14, width - margin, height - 14);
+      drawFooter(pdf, {
+        text: props.brandFooter?.trim() || `Prepared by ${props.brandName}`,
+        style,
+        pageWidth: width,
+        pageHeight: height,
+        margin,
+        baseline: height - 9,
+        bandTop: height - 12,
+        reservedRight: 60,
+      });
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(6.5);
-      setColor(palette.muted);
-      text(`Prepared by ${props.brandName}`, margin, height - 9);
+      const footerText = footerPalette(style).text;
+      pdf.setTextColor(footerText[0], footerText[1], footerText[2]);
       text('Geo-grid ranking report', width - margin, height - 9, { align: 'right' });
       pdf.save(`geo-grid-${filenamePart(props.keyword)}-${new Date(props.searchedAt).toISOString().slice(0, 10)}.pdf`);
     } finally {

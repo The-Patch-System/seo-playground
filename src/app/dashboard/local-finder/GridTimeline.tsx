@@ -1,3 +1,4 @@
+import type { BrandStyle } from '@/lib/brand';
 import type { GridPoint, GridSchedule, GridSearchEntry } from '@/lib/db';
 import { computeGridSummary } from './grid-insights';
 import { GridSnapshotSelectionProvider, GridSelectedSnapshotExportButton } from './GridSnapshotSelection';
@@ -15,6 +16,9 @@ type Props = {
   schedule: GridSchedule | null;
   brandName: string;
   brandLogoUrl?: string;
+  brandColor?: string;
+  brandFooter?: string;
+  brandStyle?: Partial<BrandStyle>;
   trend: GridPositionTrendPoint[];
 };
 
@@ -25,7 +29,7 @@ function metricDelta(current: number | null, previous: number | null, inverse = 
   return `${value > 0 ? '+' : ''}${value}`;
 }
 
-export default function GridTimeline({ entry, results, previousResults, snapshots, schedule, brandName, brandLogoUrl, trend }: Props) {
+export default function GridTimeline({ entry, results, previousResults, snapshots, schedule, brandName, brandLogoUrl, brandColor, brandFooter, brandStyle, trend }: Props) {
   const current = computeGridSummary(results);
   const previous = previousResults ? computeGridSummary(previousResults) : null;
   const mapId = `geo-grid-report-map-${entry.id}`;
@@ -50,7 +54,7 @@ export default function GridTimeline({ entry, results, previousResults, snapshot
             <a href={`/dashboard/geo-grid?keyword=${encodeURIComponent(entry.keyword)}&location_coordinate=${encodeURIComponent(entry.center)}&grid_size=${entry.grid_size}&spacing_km=${entry.spacing_km}&grid_target=${encodeURIComponent(entry.target)}&language=${encodeURIComponent(entry.language)}&queue_mode=${entry.queue_mode}&mode=grid`} className="inline-flex items-center rounded-xl border border-blue-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-700 transition-colors hover:bg-blue-50 dark:border-blue-900 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-950">
               Run now
             </a>
-            <GridSelectedSnapshotExportButton snapshots={snapshots} fallbackResults={results} fallbackTs={entry.ts} gridSize={entry.grid_size} spacingKm={entry.spacing_km} keyword={entry.keyword} target={entry.target} language={entry.language} brandName={brandName} brandLogoUrl={brandLogoUrl} mapElementId={mapId} />
+            <GridSelectedSnapshotExportButton snapshots={snapshots} fallbackResults={results} fallbackTs={entry.ts} gridSize={entry.grid_size} spacingKm={entry.spacing_km} keyword={entry.keyword} target={entry.target} language={entry.language} brandName={brandName} brandLogoUrl={brandLogoUrl} brandColor={brandColor} brandFooter={brandFooter} brandStyle={brandStyle} mapElementId={mapId} />
             <DeleteMonitorButton runId={entry.id} />
           </div>
         </div>
@@ -81,6 +85,8 @@ export default function GridTimeline({ entry, results, previousResults, snapshot
             language={entry.language}
             brandName={brandName}
             brandLogoUrl={brandLogoUrl}
+            brandColor={brandColor}
+            brandFooter={brandFooter} brandStyle={brandStyle}
             captureId={mapId}
             trend={trend}
           />

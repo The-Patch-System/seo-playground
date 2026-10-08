@@ -20,6 +20,8 @@ interface Props {
   showGrid?: boolean;
   gridSize?: number;
   spacingKm?: number;
+  /** Language name from the form (e.g. "French"); used for the Google Maps business search. */
+  language?: string;
   /** Called when a Google listing is picked from the search results. */
   onBusinessSelect?: (business: BusinessResult) => void;
 }
@@ -50,7 +52,7 @@ function calcGridCoords(
   return coords;
 }
 
-export default function MapPicker({ coordinate, onChange, showGrid, gridSize, spacingKm, onBusinessSelect }: Props) {
+export default function MapPicker({ coordinate, onChange, showGrid, gridSize, spacingKm, language, onBusinessSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import('leaflet').Map | null>(null);
   const markerRef = useRef<import('leaflet').Marker | null>(null);
@@ -180,7 +182,7 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
   }, [showGrid, coordinate, gridSize, spacingKm]);
 
   // ── Business / address search ──────────────────────────────────────────────
-  // Patch fork: search Google Maps (DataForSEO) first so a clinic can be picked by name and
+  // Search Google Maps (DataForSEO) first so a business can be picked by name and
   // matched on its exact listing; fall back to OpenStreetMap for plain addresses.
   async function placeMarker(latN: number, lngN: number) {
     if (!mapRef.current) return;
@@ -223,7 +225,14 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
       let found: BusinessResult[] = [];
       let searchError = '';
       try {
-        const res = await fetch(`/api/business-search?q=${encodeURIComponent(query.trim())}`);
+        // Bias the Google Maps search to the area currently shown on the map, in the form's language.
+        const center = mapRef.current.getCenter();
+        const params = new URLSearchParams({
+          q: query.trim(),
+          location_coordinate: `${center.lat.toFixed(6)},${center.lng.toFixed(6)},${mapRef.current.getZoom()}`,
+        });
+        if (language) params.set('language', language);
+        const res = await fetch(`/api/business-search?${params}`);
         const data = await res.json() as { results?: BusinessResult[]; error?: string };
         found = data.results ?? [];
         if (!res.ok) searchError = data.error ?? `HTTP ${res.status}`;
@@ -256,7 +265,7 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleGeocode(); } }}
-          placeholder="Search a business name (e.g. Elevation Athletics Fort Worth) or address…"
+          placeholder="Search a business name (e.g. Best Plumbing Austin) or an address…"
           className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-300 dark:placeholder-slate-500 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <button

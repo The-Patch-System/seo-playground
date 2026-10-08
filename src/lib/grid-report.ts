@@ -3,7 +3,7 @@
 // Semrush Map Rank Tracker API where it helps (positions[], metrics, top competitors)
 // so the reporting agent can swap sources with a thin adapter.
 import { getProjects, getDbForProject, entryFromGridRow, type GridPoint, type GridSearchEntry, type Project } from './db';
-import { parseTargetCid } from './grid-target';
+import { parseTargetCid, reconcileGridPoints } from './grid-target';
 
 const COLUMNS = 'id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode';
 
@@ -56,8 +56,8 @@ function scheduleOf(row: ScheduleRow | undefined) {
   };
 }
 
-function parsePoints(json: string | null): GridPoint[] {
-  try { return JSON.parse(json ?? '[]') as GridPoint[]; } catch { return []; }
+function parsePoints(json: string | null, target: string): GridPoint[] {
+  try { return reconcileGridPoints(JSON.parse(json ?? '[]') as GridPoint[], target); } catch { return []; }
 }
 
 /** Same share-of-voice formula as the dashboard's visibility score: rank 1 = 100%, unranked = 0%. */
@@ -166,7 +166,7 @@ function previousDonePoints(project: Project, entry: GridSearchEntry): GridPoint
   const row = getDbForProject(project.id)
     .prepare("SELECT results FROM grid_searches WHERE series_id = ? AND ts < ? AND status = 'done' ORDER BY ts DESC LIMIT 1")
     .get(entry.series_id, entry.ts) as { results: string | null } | undefined;
-  return row ? parsePoints(row.results) : null;
+  return row ? parsePoints(row.results, entry.target) : null;
 }
 
 export function getRun(runId: string, projectId?: string, options: { points?: boolean; competitors?: boolean } = {}) {
@@ -176,7 +176,7 @@ export function getRun(runId: string, projectId?: string, options: { points?: bo
   const entry = entryFromGridRow(found.row);
   const header = runHeader(found.project, entry);
   if (!includePoints) return header;
-  const points = parsePoints(found.row.results);
+  const points = parsePoints(found.row.results, entry.target);
   const previous = previousDonePoints(found.project, entry);
   const previousRank = new Map((previous ?? []).map((p) => [`${p.row}:${p.col}`, p.rank]));
   return {
