@@ -6,6 +6,7 @@ import {
   type ReviewsTask,
 } from '@/lib/db';
 import { submitReviewsTaskAction } from './actions';
+import { getBrandSettings } from '@/lib/brand-server';
 import PendingButton from '@/components/PendingButton';
 import HistorySidebar from '@/components/HistorySidebar';
 import LocationPicker from '@/components/LocationPicker';
@@ -521,8 +522,9 @@ export default async function GoogleReviewsPage({ searchParams }: { searchParams
   const params = await searchParams;
   const defaultLocation = getSetting('default_location') ?? 'France';
   const defaultLanguage = getSetting('default_language') ?? 'French';
-  const brandName = getSetting('brand_name')?.trim() || 'SEO Playground';
-  const brandLogoUrl = getSetting('brand_logo_url')?.trim() || undefined;
+  const brand = getBrandSettings();
+  const brandName = brand.name;
+  const brandLogoUrl = brand.logo ?? undefined;
 
   // Auto-poll: check tasks_ready on every load and fetch ready tasks
   if (creds) {
@@ -780,7 +782,7 @@ export default async function GoogleReviewsPage({ searchParams }: { searchParams
           <div className="flex items-center justify-between gap-4 border-y border-slate-100 dark:border-slate-800 py-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Export reputation report</p>
             <div className="flex items-center gap-3">
-              <ReportPdfExportButton brandName={brandName} brandLogoUrl={brandLogoUrl} filename={`${reviewFileStem}-reputation-report.pdf`}
+              <ReportPdfExportButton brandName={brandName} brandLogoUrl={brandLogoUrl} brandColor={brand.color} brandFooter={brand.footer} brandStyle={brand} filename={`${reviewFileStem}-reputation-report.pdf`}
                 title="Google reviews report" subject={meta?.title || activeTask.business} generatedAt={activeTask.ts}
                 metrics={[
                   { label: 'Average rating', value: avgRating?.toFixed(2) ?? '—', detail: 'out of 5 stars' },

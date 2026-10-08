@@ -1,9 +1,10 @@
 import {
-  getCredentials, getSetting, getSiteAuditHistory, getSiteAuditTask, upsertSiteAuditTask,
+  getCredentials, getSiteAuditHistory, getSiteAuditTask, upsertSiteAuditTask,
   saveSiteAuditResult, getSiteAuditSummary, getSiteAuditPages,
   type SiteAuditEntry,
 } from '@/lib/db';
 import { redirect } from 'next/navigation';
+import { getBrandSettings } from '@/lib/brand-server';
 import SearchForm from '@/components/SearchForm';
 import ExportCSVButton from '@/components/ExportCSVButton';
 import ExportExcelButton from '@/components/ExportExcelButton';
@@ -362,8 +363,9 @@ function IssueRow({ label, count, sev }: { label: string; count: number; sev: Se
 export default async function SiteAuditPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const creds = getCredentials();
   const params = await searchParams;
-  const brandName = getSetting('brand_name')?.trim() || 'SEO Playground';
-  const brandLogoUrl = getSetting('brand_logo_url')?.trim() || undefined;
+  const brand = getBrandSettings();
+  const brandName = brand.name;
+  const brandLogoUrl = brand.logo ?? undefined;
   const view = params.view ?? 'overview';
   const kwLen = parseInt(params.kw_len ?? '1', 10) || 1;
 
@@ -639,7 +641,7 @@ export default async function SiteAuditPage({ searchParams }: { searchParams: Pr
                   <div className="flex items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Export audit report</p>
                     <div className="flex items-center gap-3">
-                      <ReportPdfExportButton brandName={brandName} brandLogoUrl={brandLogoUrl} filename={`${auditFileStem}-site-audit-report.pdf`}
+                      <ReportPdfExportButton brandName={brandName} brandLogoUrl={brandLogoUrl} brandColor={brand.color} brandFooter={brand.footer} brandStyle={brand} filename={`${auditFileStem}-site-audit-report.pdf`}
                         title="Site audit report" subject={activeTask!.target} generatedAt={activeTask!.ts}
                         metrics={[
                           { label: 'On-page score', value: score?.toFixed(1) ?? '—', detail: 'out of 100' },

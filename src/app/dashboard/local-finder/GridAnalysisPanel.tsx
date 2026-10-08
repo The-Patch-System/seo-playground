@@ -1,5 +1,7 @@
 'use client';
 
+import type { BrandStyle } from '@/lib/brand';
+
 import { useEffect, useMemo, useState } from 'react';
 import GridResults from './GridResults';
 import { useGridSnapshotSelection } from './GridSnapshotSelection';
@@ -16,11 +18,14 @@ type Props = {
   language: string;
   brandName: string;
   brandLogoUrl?: string;
+  brandColor?: string;
+  brandFooter?: string;
+  brandStyle?: Partial<BrandStyle>;
   captureId: string;
   trend: GridPositionTrendPoint[];
 };
 
-export default function GridAnalysisPanel({ snapshots, selectedId, gridSize, spacingKm, keyword, target, language, brandName, brandLogoUrl, captureId, trend }: Props) {
+export default function GridAnalysisPanel({ snapshots, selectedId, gridSize, spacingKm, keyword, target, language, brandName, brandLogoUrl, brandColor, brandFooter, brandStyle, captureId, trend }: Props) {
   const selection = useGridSnapshotSelection();
   const [localId, setLocalId] = useState(selectedId);
   useEffect(() => setLocalId(selectedId), [selectedId]);
@@ -67,6 +72,8 @@ export default function GridAnalysisPanel({ snapshots, selectedId, gridSize, spa
           snapshotDate={activeSnapshot.ts}
           brandName={brandName}
           brandLogoUrl={brandLogoUrl}
+          brandColor={brandColor}
+          brandFooter={brandFooter} brandStyle={brandStyle}
         />
       </section>
     </>

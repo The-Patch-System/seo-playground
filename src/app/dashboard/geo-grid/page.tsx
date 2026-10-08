@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { getBrandSettings } from '@/lib/brand-server';
 import {
   getActiveProject, getCredentials, getSetting, getGridHistory, getGridEntry, saveGridSearch,
   saveGridSearchPending, getGridResults, getGridSeriesHistory, getGridSchedule, gridSeriesId, type GridSearchEntry, type GridPoint, type GridQueueMode,
@@ -51,8 +52,9 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
   const defaultLanguage = getSetting('default_language') ?? 'English';
   const defaultCoordinates = getSetting('default_coordinates') ?? '';
   const defaultDomain = getSetting('default_domain') ?? '';
-  const brandName = getSetting('brand_name')?.trim() || 'SEO Playground';
-  const brandLogoUrl = getSetting('brand_logo_url')?.trim() || undefined;
+  const brand = getBrandSettings();
+  const brandName = brand.name;
+  const brandLogoUrl = brand.logo ?? undefined;
 
   let gridResults: GridPoint[] | null = null;
   let gridEntry: GridSearchEntry | null = null;
@@ -317,6 +319,9 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
                   schedule={gridSchedule}
                   brandName={brandName}
                   brandLogoUrl={brandLogoUrl}
+                  brandColor={brand.color}
+                  brandFooter={brand.footer}
+                  brandStyle={brand}
                   trend={trend}
                 />
               </>

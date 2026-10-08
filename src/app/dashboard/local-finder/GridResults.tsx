@@ -1,5 +1,7 @@
 'use client';
 
+import type { BrandStyle } from '@/lib/brand';
+
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { GridPoint } from '@/lib/db';
 import { computeCompetitors, computeGridSummary, computeRingStats, type CompetitorSummary } from './grid-insights';
@@ -19,6 +21,9 @@ interface Props {
   snapshotDate?: number;
   brandName: string;
   brandLogoUrl?: string;
+  brandColor?: string;
+  brandFooter?: string;
+  brandStyle?: Partial<BrandStyle>;
 }
 
 function rankColor(rank: number | null): string {
@@ -36,7 +41,7 @@ function formatSnapshotDate(ts: number) {
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(new Date(ts));
 }
 
-export default function GridResults({ results, gridSize, spacingKm, keyword, target, cost, language, searchedAt, snapshotDate, brandName, brandLogoUrl }: Props) {
+export default function GridResults({ results, gridSize, spacingKm, keyword, target, cost, language, searchedAt, snapshotDate, brandName, brandLogoUrl, brandColor, brandFooter, brandStyle }: Props) {
   const [highlight, setHighlight] = useState<CompetitorSummary | null>(null);
 
   // A competitor key belongs to one snapshot. Clear it when the timeline moves
@@ -177,6 +182,8 @@ export default function GridResults({ results, gridSize, spacingKm, keyword, tar
               searchedAt={searchedAt}
               brandName={brandName}
               brandLogoUrl={brandLogoUrl}
+              brandColor={brandColor}
+              brandFooter={brandFooter} brandStyle={brandStyle}
             />
             {cost !== undefined && (
               <span className="text-[10px] font-mono text-slate-400">cost: ${cost.toFixed(4)}</span>

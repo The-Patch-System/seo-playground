@@ -1,5 +1,7 @@
 'use client';
 
+import type { BrandStyle } from '@/lib/brand';
+
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { GridPoint } from '@/lib/db';
 import GridPdfExportButton from './GridPdfExportButton';
@@ -33,6 +35,9 @@ type ExportProps = {
   language: string;
   brandName: string;
   brandLogoUrl?: string;
+  brandColor?: string;
+  brandFooter?: string;
+  brandStyle?: Partial<BrandStyle>;
   mapElementId: string;
 };
 
