@@ -1,6 +1,6 @@
 'use server';
 
-import { deleteGridSchedule, getGridEntry, saveGridSchedule, type GridQueueMode, type GridScheduleFrequency } from '@/lib/db';
+import { deleteGridSchedule, deleteGridSeries, getGridEntry, saveGridSchedule, type GridQueueMode, type GridScheduleFrequency } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -42,4 +42,12 @@ export async function updateGridSchedule(formData: FormData) {
 
   revalidatePath('/dashboard/geo-grid');
   redirect(`/dashboard/geo-grid?grid_history_id=${encodeURIComponent(runId)}#results`);
+}
+
+/** Deletes a whole monitor (all snapshots and its schedule). */
+export async function deleteGridMonitor(formData: FormData) {
+  const entry = getGridEntry(String(formData.get('run_id') ?? ''));
+  if (entry) deleteGridSeries(entry.series_id);
+  revalidatePath('/dashboard/geo-grid');
+  redirect('/dashboard/geo-grid');
 }

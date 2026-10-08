@@ -17,7 +17,7 @@ import {
   getWebMentionsHistory, saveWebMentionsSearch, getWebMentionsItems, getWebMentionsSummary, type WebMentionsEntry,
   getSerpHistory, saveSerpSearch,
   getSpendByTool, getSpendByDay, getFirstSpendTs,
-  gridSeriesId, getGridSeriesHistory, getGridSchedule, saveGridSchedule, saveGridSearch, deleteGridSchedule, type GridSearchEntry,
+  gridSeriesId, getGridSeriesHistory, getGridSchedule, saveGridSchedule, saveGridSearch, deleteGridSchedule, deleteGridSeries, type GridSearchEntry,
   claimDueGridSchedules, retryClaimedGridSchedule,
   getRankTrackerSchedule, saveRankTrackerSchedule, deleteRankTrackerSchedule,
   getHistRankHistory, saveHistRankSearch,
@@ -231,6 +231,17 @@ describe('Geo-grid monitoring', () => {
     expect(getGridSchedule(seriesId)).toMatchObject({ frequency: 'daily', time_of_day: '08:30', time_zone: 'Europe/Paris' });
     deleteGridSchedule(seriesId);
     expect(getGridSchedule(seriesId)).toBeNull();
+  });
+
+  it('deletes a whole monitor: every snapshot and its schedule', () => {
+    const doomed = gridSeriesId('delete me', base.center, base.grid_size, base.spacing_km, base.target, base.language);
+    saveGridSearch({ ...base, series_id: doomed, id: 'grid-delete-one', ts: 5 }, [{ row: 0, col: 0, rank: 1 }]);
+    saveGridSearch({ ...base, series_id: doomed, id: 'grid-delete-two', ts: 6 }, [{ row: 0, col: 0, rank: 2 }]);
+    saveGridSchedule({ ...base, series_id: doomed, frequency: 'weekly', weekday: 1, time_of_day: '09:00', time_zone: 'UTC' });
+    deleteGridSeries(doomed);
+    expect(getGridSeriesHistory(doomed)).toEqual([]);
+    expect(getGridSchedule(doomed)).toBeNull();
+    expect(getGridSeriesHistory(seriesId).length).toBeGreaterThan(0);
   });
 });
 

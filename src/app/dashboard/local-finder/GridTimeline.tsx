@@ -4,6 +4,7 @@ import { computeGridSummary } from './grid-insights';
 import { GridSnapshotSelectionProvider, GridSelectedSnapshotExportButton } from './GridSnapshotSelection';
 import GridScheduleControl from './GridScheduleControl';
 import GridAnalysisPanel from './GridAnalysisPanel';
+import DeleteMonitorButton from './DeleteMonitorButton';
 import { type GridMapSnapshot } from './GridSnapshotMapPanel';
 import { type GridPositionTrendPoint } from './GridPositionTrend';
 
@@ -54,6 +55,7 @@ export default function GridTimeline({ entry, results, previousResults, snapshot
               Run now
             </a>
             <GridSelectedSnapshotExportButton snapshots={snapshots} fallbackResults={results} fallbackTs={entry.ts} gridSize={entry.grid_size} spacingKm={entry.spacing_km} keyword={entry.keyword} target={entry.target} language={entry.language} brandName={brandName} brandLogoUrl={brandLogoUrl} brandColor={brandColor} brandFooter={brandFooter} brandStyle={brandStyle} mapElementId={mapId} />
+            <DeleteMonitorButton runId={entry.id} />
           </div>
         </div>
       </div>

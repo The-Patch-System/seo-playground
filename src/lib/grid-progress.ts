@@ -1,4 +1,4 @@
-import { matchesGridTarget } from './grid-target';
+import { matchesGridTarget } from '@/lib/grid-target';
 import {
   getGridProgressForProject, updateGridProgressForProject,
   type GridLocalItem, type GridPoint, type GridSearchEntry, type GridTaskPoint,
@@ -57,7 +57,7 @@ async function collectGridProgressOnce(
     }
   }));
 
-  const isTarget = (title: string, domain: string, url: string) => matchesGridTarget(entry.target, { title, domain, url });
+  const isTargetItem = (item: { title?: string; domain?: string; url?: string; cid?: string }) => matchesGridTarget(entry.target, item);
   const readyPoints: GridPoint[] = [];
   const pendingTasks: GridTaskPoint[] = [];
   for (const check of checks) {
@@ -65,11 +65,11 @@ async function collectGridProgressOnce(
       pendingTasks.push(check.taskPoint);
       continue;
     }
-    const match = check.items.find((item) => isTarget(item.title ?? '', item.domain ?? '', item.url ?? ''));
+    const match = check.items.find((item) => isTargetItem(item));
     const items: GridLocalItem[] = check.items.slice(0, 20).map((item) => ({
       rank_group: item.rank_group, title: item.title ?? '—', domain: item.domain, url: item.url, cid: item.cid,
       rating_value: item.rating?.value, rating_votes: item.rating?.votes_count,
-      is_target: isTarget(item.title ?? '', item.domain ?? '', item.url ?? ''),
+      is_target: isTargetItem(item),
     }));
     readyPoints.push({ row: check.taskPoint.row, col: check.taskPoint.col, lat: check.taskPoint.lat, lng: check.taskPoint.lng, rank: match ? match.rank_group : null, items });
   }
