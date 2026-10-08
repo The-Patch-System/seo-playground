@@ -1,4 +1,5 @@
 import type { GridPoint, GridLocalItem, GridTaskPoint } from '@/lib/db';
+import { matchesGridTarget } from '@/lib/grid-target';
 
 export interface LocalPackItem {
   type: string;
@@ -103,17 +104,13 @@ export async function fetchGridSearch(
   const [centerLat, centerLng] = parts;
   const coords = generateGridCoords(centerLat, centerLng, gridSize, spacingKm);
   const auth = btoa(`${login}:${pass}`);
-  const targetLower = target.toLowerCase();
 
   const pointResults = await mapWithConcurrency(
     coords, 6,
     async ({ row, col, lat, lng }) => {
       const { items: rawItems, cost } = await fetchOneGridPoint(keyword, lat, lng, language, auth);
 
-      const isTarget = (item: LocalPackItem) =>
-        (item.title ?? '').toLowerCase().includes(targetLower) ||
-        (item.domain ?? '').toLowerCase().includes(targetLower) ||
-        (item.url ?? '').toLowerCase().includes(targetLower);
+      const isTarget = (item: LocalPackItem) => matchesGridTarget(target, item);
 
       const match = rawItems.find(isTarget);
       const items: GridLocalItem[] = rawItems.slice(0, 20).map((item) => ({

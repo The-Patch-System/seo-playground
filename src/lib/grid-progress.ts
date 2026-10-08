@@ -1,3 +1,4 @@
+import { matchesGridTarget } from './grid-target';
 import {
   getGridProgressForProject, updateGridProgressForProject,
   type GridLocalItem, type GridPoint, type GridSearchEntry, type GridTaskPoint,
@@ -39,7 +40,6 @@ async function collectGridProgressOnce(
   if (!progress || progress.pendingTasks.length === 0) return { status: 'pending', ready: 0, total };
 
   const auth = btoa(`${credentials.login}:${credentials.pass}`);
-  const target = entry.target.toLowerCase();
   const stillProcessing = new Set([40602, 40601]);
   const checks = await Promise.all(progress.pendingTasks.map(async (taskPoint) => {
     try {
@@ -57,8 +57,7 @@ async function collectGridProgressOnce(
     }
   }));
 
-  const isTarget = (title: string, domain: string, url: string) =>
-    title.toLowerCase().includes(target) || domain.toLowerCase().includes(target) || url.toLowerCase().includes(target);
+  const isTarget = (title: string, domain: string, url: string) => matchesGridTarget(entry.target, { title, domain, url });
   const readyPoints: GridPoint[] = [];
   const pendingTasks: GridTaskPoint[] = [];
   for (const check of checks) {
