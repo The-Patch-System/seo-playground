@@ -2,6 +2,7 @@ import {
   getGridProgressForProject, updateGridProgressForProject,
   type GridLocalItem, type GridPoint, type GridSearchEntry, type GridTaskPoint,
 } from '@/lib/db';
+import { makeTargetMatcher } from '@/lib/grid-target';
 
 interface DFSTaskGetResponse {
   tasks?: Array<{
@@ -39,7 +40,7 @@ async function collectGridProgressOnce(
   if (!progress || progress.pendingTasks.length === 0) return { status: 'pending', ready: 0, total };
 
   const auth = btoa(`${credentials.login}:${credentials.pass}`);
-  const target = entry.target.toLowerCase();
+  const isTargetItem = makeTargetMatcher(entry.target);
   const stillProcessing = new Set([40602, 40601]);
   const checks = await Promise.all(progress.pendingTasks.map(async (taskPoint) => {
     try {
@@ -57,8 +58,6 @@ async function collectGridProgressOnce(
     }
   }));
 
-  const isTarget = (title: string, domain: string, url: string) =>
-    title.toLowerCase().includes(target) || domain.toLowerCase().includes(target) || url.toLowerCase().includes(target);
   const readyPoints: GridPoint[] = [];
   const pendingTasks: GridTaskPoint[] = [];
   for (const check of checks) {
@@ -66,11 +65,11 @@ async function collectGridProgressOnce(
       pendingTasks.push(check.taskPoint);
       continue;
     }
-    const match = check.items.find((item) => isTarget(item.title ?? '', item.domain ?? '', item.url ?? ''));
+    const match = check.items.find((item) => isTargetItem(item));
     const items: GridLocalItem[] = check.items.slice(0, 20).map((item) => ({
       rank_group: item.rank_group, title: item.title ?? '—', domain: item.domain, url: item.url, cid: item.cid,
       rating_value: item.rating?.value, rating_votes: item.rating?.votes_count,
-      is_target: isTarget(item.title ?? '', item.domain ?? '', item.url ?? ''),
+      is_target: isTargetItem(item),
     }));
     readyPoints.push({ row: check.taskPoint.row, col: check.taskPoint.col, lat: check.taskPoint.lat, lng: check.taskPoint.lng, rank: match ? match.rank_group : null, items });
   }

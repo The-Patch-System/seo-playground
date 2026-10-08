@@ -9,6 +9,7 @@ import GridTimeline from '../local-finder/GridTimeline';
 import type { GridPositionTrendPoint } from '../local-finder/GridPositionTrend';
 import type { GridMapSnapshot } from '../local-finder/GridSnapshotMapPanel';
 import HistorySidebar from '@/components/HistorySidebar';
+import DeleteMonitorButton from '../local-finder/DeleteMonitorButton';
 import { fetchGridSearch, postGridTasksQueue, stableGridId } from '../local-finder/grid-api';
 
 interface SearchParams {
@@ -230,6 +231,8 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
         </a>
         <div className="flex items-center justify-between gap-3 mt-1.5">
           <span className="text-[11px] text-slate-400">{formatDate(entry.ts)}</span>
+          <div className="flex items-center gap-3">
+          <DeleteMonitorButton runId={entry.id} compact />
           <a
             href={gridRerunUrl(entry)}
             className="text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-800 transition-colors"
@@ -237,6 +240,7 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
           >
             Run now ↻
           </a>
+          </div>
         </div>
       </div>
     );

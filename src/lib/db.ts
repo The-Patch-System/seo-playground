@@ -2052,6 +2052,15 @@ export function deleteGridSchedule(seriesId: string): void {
   getDb().prepare('DELETE FROM grid_schedules WHERE series_id = ?').run(seriesId);
 }
 
+/** Patch fork: removes a monitor entirely (every snapshot in the series plus its schedule). */
+export function deleteGridSeries(seriesId: string): void {
+  const db = getDb();
+  db.transaction(() => {
+    db.prepare('DELETE FROM grid_searches WHERE series_id = ?').run(seriesId);
+    db.prepare('DELETE FROM grid_schedules WHERE series_id = ?').run(seriesId);
+  })();
+}
+
 /** Claims due schedules across every project so one cron run cannot enqueue duplicates. */
 export function claimDueGridSchedules(now = Date.now()): DueGridSchedule[] {
   const due: DueGridSchedule[] = [];

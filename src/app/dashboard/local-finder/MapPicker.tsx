@@ -2,12 +2,26 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+export interface BusinessResult {
+  title: string;
+  address: string;
+  lat: number;
+  lng: number;
+  cid: string;
+  domain: string;
+  category: string;
+  rating: number | null;
+  reviews: number | null;
+}
+
 interface Props {
   coordinate: string;
   onChange: (coord: string) => void;
   showGrid?: boolean;
   gridSize?: number;
   spacingKm?: number;
+  /** Called when a Google listing is picked from the search results. */
+  onBusinessSelect?: (business: BusinessResult) => void;
 }
 
 interface NominatimResult {
@@ -36,7 +50,7 @@ function calcGridCoords(
   return coords;
 }
 
-export default function MapPicker({ coordinate, onChange, showGrid, gridSize, spacingKm }: Props) {
+export default function MapPicker({ coordinate, onChange, showGrid, gridSize, spacingKm, onBusinessSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import('leaflet').Map | null>(null);
   const markerRef = useRef<import('leaflet').Marker | null>(null);
@@ -46,6 +60,7 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
   const [query, setQuery] = useState('');
   const [geocoding, setGeocodng] = useState(false);
   const [geoError, setGeoError] = useState('');
+  const [businesses, setBusinesses] = useState<BusinessResult[]>([]);
 
   const mapHeight = expanded ? 420 : 260;
 
@@ -67,9 +82,9 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
 
       const [defaultLat, defaultLng] = coordinate
         ? coordinate.split(',').map(Number)
-        : [48.8566, 2.3522];
+        : [39.8283, -98.5795];
 
-      const map = L.map(containerRef.current!).setView([defaultLat, defaultLng], 12);
+      const map = L.map(containerRef.current!).setView([defaultLat, defaultLng], coordinate ? 12 : 4);
       mapRef.current = map;
       gridLayerRef.current = L.layerGroup().addTo(map);
 
@@ -164,30 +179,62 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
     });
   }, [showGrid, coordinate, gridSize, spacingKm]);
 
-  // ── Geocoding ─────────────────────────────────────────────────────────────
+  // ── Business / address search ──────────────────────────────────────────────
+  // Patch fork: search Google Maps (DataForSEO) first so a clinic can be picked by name and
+  // matched on its exact listing; fall back to OpenStreetMap for plain addresses.
+  async function placeMarker(latN: number, lngN: number) {
+    if (!mapRef.current) return;
+    const L = await import('leaflet');
+    if (markerRef.current) {
+      markerRef.current.setLatLng([latN, lngN]);
+    } else {
+      markerRef.current = L.marker([latN, lngN]).addTo(mapRef.current!);
+    }
+    mapRef.current.setView([latN, lngN], 13);
+    onChange(`${latN.toFixed(6)},${lngN.toFixed(6)}`);
+    setExpanded(true);
+  }
+
+  async function selectBusiness(business: BusinessResult) {
+    setBusinesses([]);
+    setQuery(business.title);
+    await placeMarker(business.lat, business.lng);
+    onBusinessSelect?.(business);
+  }
+
+  async function geocodeAddress(text: string): Promise<boolean> {
+    const cleaned = text
+      .replace(/\s*(#|\b(?:suite|ste\.?|unit|apt\.?|bldg|building|floor|fl\.?)\b)\s*[\w-]+/gi, '')
+      .replace(/\s+,/g, ',').replace(/,\s*,/g, ',').trim();
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleaned)}&format=json&limit=1`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const results: NominatimResult[] = await res.json();
+    if (!results.length) return false;
+    await placeMarker(parseFloat(results[0].lat), parseFloat(results[0].lon));
+    return true;
+  }
+
   async function handleGeocode() {
     if (!query.trim() || !mapRef.current) return;
     setGeocodng(true);
     setGeoError('');
+    setBusinesses([]);
     try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
-      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-      const results: NominatimResult[] = await res.json();
-      if (!results.length) { setGeoError('Location not found.'); return; }
-      const { lat, lon } = results[0];
-      const coord = `${parseFloat(lat).toFixed(6)},${parseFloat(lon).toFixed(6)}`;
-      const L = await import('leaflet');
-      const latN = parseFloat(lat), lngN = parseFloat(lon);
-      if (markerRef.current) {
-        markerRef.current.setLatLng([latN, lngN]);
-      } else {
-        markerRef.current = L.marker([latN, lngN]).addTo(mapRef.current!);
+      let found: BusinessResult[] = [];
+      try {
+        const res = await fetch(`/api/business-search?q=${encodeURIComponent(query.trim())}`);
+        const data = await res.json() as { results?: BusinessResult[] };
+        found = data.results ?? [];
+      } catch {
+        found = [];
       }
-      mapRef.current.setView([latN, lngN], 13);
-      onChange(coord);
-      setExpanded(true);
+      if (found.length > 0) {
+        setBusinesses(found);
+        return;
+      }
+      if (!(await geocodeAddress(query))) setGeoError('No Google listing or address found. Try the business name plus city, or type lat,lng below.');
     } catch {
-      setGeoError('Geocoding failed. Try again.');
+      setGeoError('Search failed. Try again.');
     } finally {
       setGeocodng(false);
     }
@@ -204,7 +251,7 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleGeocode(); } }}
-          placeholder="Search a city, address, place…"
+          placeholder="Search a business name (e.g. Elevation Athletics Fort Worth) or address…"
           className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-300 dark:placeholder-slate-500 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <button
@@ -217,6 +264,25 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
         </button>
       </div>
       {geoError && <p className="text-[11px] text-red-500 -mt-1">{geoError}</p>}
+      {businesses.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+          <p className="bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:bg-slate-800">Google Maps listings · pick one</p>
+          {businesses.map((business) => (
+            <button
+              key={business.cid}
+              type="button"
+              onClick={() => selectBusiness(business)}
+              className="block w-full border-t border-slate-100 px-3 py-2 text-left transition-colors hover:bg-blue-50 dark:border-slate-800 dark:hover:bg-blue-950"
+            >
+              <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">{business.title}</span>
+              <span className="block text-[11px] text-slate-400">
+                {[business.category, business.address].filter(Boolean).join(' · ')}
+                {business.rating != null ? ` · ${business.rating}★ (${business.reviews ?? 0})` : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Map */}
       <div
