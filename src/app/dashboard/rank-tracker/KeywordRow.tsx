@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useSyncExternalStore } from 'react';
-import type { TrackedKeyword, RankCheck } from '@/lib/db';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import type { TrackedKeyword, RankCheck, RankTopResultsCheck } from '@/lib/db';
 import PendingButton from '@/components/PendingButton';
+import TopResultsPanel from './TopResultsPanel';
+import { getTopResultsAction } from './actions';
 
 // ─── Badges ───────────────────────────────────────────────────────────────────
 
@@ -83,9 +85,20 @@ interface TooltipData {
   date: string;
   position: number | null;
   url: string | null;
+  /** null when no top 10 data was loaded for this keyword. */
+  hasTop: boolean | null;
 }
 
-function HistoryChart({ history, keywordId }: { history: RankCheck[]; keywordId: number }) {
+interface HistoryChartProps {
+  history: RankCheck[];
+  keywordId: number;
+  /** Dates that saved a top 10 (clickable); null while loading or when none were saved. */
+  topDates: Set<string> | null;
+  selectedDate: string | null;
+  onSelect: (date: string) => void;
+}
+
+function HistoryChart({ history, keywordId, topDates, selectedDate, onSelect }: HistoryChartProps) {
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
 
   const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
@@ -95,7 +108,8 @@ function HistoryChart({ history, keywordId }: { history: RankCheck[]; keywordId:
 
   const positions = sorted.map((h) => h.position).filter((p): p is number => p !== null);
 
-  if (positions.length === 0)
+  // A domain that was never found has no point to plot, but its days still have a top 10 to open.
+  if (positions.length === 0 && !topDates)
     return <div className="py-6 text-center text-slate-400 text-xs">No ranking data recorded yet.</div>;
 
   const W = 600, H = 150;
@@ -103,8 +117,8 @@ function HistoryChart({ history, keywordId }: { history: RankCheck[]; keywordId:
   const chartW = W - PAD.l - PAD.r;
   const chartH = H - PAD.t - PAD.b;
 
-  const minPos = Math.max(1, Math.min(...positions) - 2);
-  const maxPos = Math.max(...positions) + 2;
+  const minPos = positions.length > 0 ? Math.max(1, Math.min(...positions) - 2) : 1;
+  const maxPos = positions.length > 0 ? Math.max(...positions) + 2 : 11;
   const posRange = Math.max(maxPos - minPos, 5);
 
   const n = sorted.length;
@@ -133,7 +147,7 @@ function HistoryChart({ history, keywordId }: { history: RankCheck[]; keywordId:
     : '';
 
   const latestPos = positions[positions.length - 1];
-  const stroke = latestPos <= 10 ? '#3b82f6' : '#6366f1';
+  const stroke = latestPos === undefined || latestPos <= 10 ? '#3b82f6' : '#6366f1';
   const gradId = `kw-grad-${keywordId}`;
 
   // Y-axis labels
@@ -198,29 +212,62 @@ function HistoryChart({ history, keywordId }: { history: RankCheck[]; keywordId:
         {/* Bottom axis */}
         <line x1={PAD.l} y1={PAD.t + chartH} x2={W - PAD.r} y2={PAD.t + chartH} stroke="#e2e8f0" strokeWidth="1" />
 
+        {positions.length === 0 && (
+          <text x={W / 2} y={PAD.t + chartH / 2} textAnchor="middle" fontSize="10" fill="#94a3b8">
+            Domain not found in these checks — click a day to see who ranks
+          </text>
+        )}
+
+        {/* Days not ranked but with a saved top 10: marker on the bottom axis so they can still be selected */}
+        {topDates && allPoints.filter((p) => p.y === null && topDates.has(p.entry.date)).map(({ x, entry }) => {
+          const y = PAD.t + chartH;
+          const isSelected = selectedDate === entry.date;
+          return (
+            <circle
+              key={`unranked-${entry.date}`}
+              cx={x}
+              cy={y}
+              r={isSelected ? 5 : 3.5}
+              fill={isSelected ? '#94a3b8' : 'white'}
+              stroke="#94a3b8"
+              strokeWidth="2"
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setTooltip({ x, y, date: entry.date, position: null, url: null, hasTop: true })}
+              onMouseLeave={() => setTooltip(null)}
+              onClick={() => onSelect(entry.date)}
+            />
+          );
+        })}
+
         {/* Data points */}
         {validPoints.map(({ x, y, entry }, i) => {
           const isHovered = tooltip?.date === entry.date;
+          const hasTop = topDates ? topDates.has(entry.date) : null;
+          const isSelected = hasTop === true && selectedDate === entry.date;
           return (
-            <circle
-              key={i}
-              cx={x}
-              cy={y}
-              r={isHovered ? 5 : 3.5}
-              fill={isHovered ? stroke : 'white'}
-              stroke={stroke}
-              strokeWidth="2"
-              style={{ cursor: 'crosshair' }}
-              onMouseEnter={() => setTooltip({ x, y, date: entry.date, position: entry.position, url: entry.url ?? null })}
-              onMouseLeave={() => setTooltip(null)}
-            />
+            <g key={i}>
+              {isSelected && <circle cx={x} cy={y} r={9} fill="none" stroke={stroke} strokeWidth="1.5" strokeOpacity="0.35" />}
+              <circle
+                cx={x}
+                cy={y}
+                r={isHovered || isSelected ? 5 : 3.5}
+                fill={isHovered || isSelected ? stroke : 'white'}
+                stroke={stroke}
+                strokeWidth="2"
+                style={{ cursor: hasTop ? 'pointer' : 'crosshair' }}
+                onMouseEnter={() => setTooltip({ x, y, date: entry.date, position: entry.position, url: entry.url ?? null, hasTop })}
+                onMouseLeave={() => setTooltip(null)}
+                onClick={hasTop ? () => onSelect(entry.date) : undefined}
+              />
+            </g>
           );
         })}
 
         {/* Tooltip */}
         {tooltip && (() => {
           const hasUrl = !!tooltip.url;
-          const tipW = 180, tipH = hasUrl ? 54 : 38;
+          const hint = tooltip.hasTop === null ? null : tooltip.hasTop ? 'Click to see the top 10' : 'No top 10 saved';
+          const tipW = 180, tipH = 38 + (hasUrl ? 16 : 0) + (hint ? 14 : 0);
           const tipX = Math.max(PAD.l, Math.min(tooltip.x - tipW / 2, W - PAD.r - tipW));
           const tipY = Math.max(PAD.t, tooltip.y - tipH - 12);
           return (
@@ -234,6 +281,11 @@ function HistoryChart({ history, keywordId }: { history: RankCheck[]; keywordId:
               {hasUrl && (
                 <text x={tipX + 10} y={tipY + 46} fontSize="8.5" fill="#94a3b8">
                   {(tooltip.url!.replace(/^https?:\/\//, '')).slice(0, 30) + (tooltip.url!.length > 35 ? '…' : '')}
+                </text>
+              )}
+              {hint && (
+                <text x={tipX + 10} y={tipY + (hasUrl ? 60 : 44)} fontSize="8.5" fill={tooltip.hasTop ? stroke : '#94a3b8'} fontWeight="600">
+                  {hint}
                 </text>
               )}
             </g>
@@ -271,11 +323,29 @@ interface Props {
 
 export default function KeywordRow({ kw, history, latest, previous, hasCreds, pending, checkAction, removeAction }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [topChecks, setTopChecks] = useState<RankTopResultsCheck[] | null>(null);
+  const [topFailed, setTopFailed] = useState(false);
+  const [pickedDate, setPickedDate] = useState<string | null>(null);
   const hydrated = useSyncExternalStore(subscribeNever, () => true, () => false);
   const currPos = latest?.position ?? null;
   const prevPos = previous?.position ?? null;
   // The latest check can miss a domain that ranked days earlier; keep that position in view.
   const lastRanked = latest && currPos === null ? history.find((check) => check.position !== null) ?? null : null;
+
+  // Loaded once the row is open, and again after a re-check, so the list page does not carry ten results per check.
+  const latestCheckedAt = latest?.checkedAt ?? null;
+  useEffect(() => {
+    if (!expanded) return;
+    let cancelled = false;
+    getTopResultsAction(kw.id)
+      .then((result) => { if (!cancelled) { setTopChecks(result); setTopFailed(false); } })
+      .catch(() => { if (!cancelled) setTopFailed(true); });
+    return () => { cancelled = true; };
+  }, [expanded, kw.id, latestCheckedAt]);
+
+  // Newest saved top 10 until a day is picked on the chart or in the panel.
+  const topDates = topChecks && topChecks.length > 0 ? new Set(topChecks.map((check) => check.date)) : null;
+  const selectedDate = topChecks?.find((check) => check.date === pickedDate)?.date ?? topChecks?.[0]?.date ?? null;
 
   return (
     <>
@@ -352,11 +422,12 @@ export default function KeywordRow({ kw, history, latest, previous, hasCreds, pe
 
       {expanded && (
         <tr className="bg-slate-50/40 dark:bg-slate-800/30">
-          <td colSpan={6} className="px-5 pt-1 pb-5">
+          {/* max-w-0: this cell must not size the table. A long unbreakable URL would otherwise stretch it past the page. */}
+          <td colSpan={6} className="px-5 pt-1 pb-5 max-w-0">
             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
               Position history — last 30 days
             </div>
-            <HistoryChart history={history} keywordId={kw.id} />
+            <HistoryChart history={history} keywordId={kw.id} topDates={topDates} selectedDate={selectedDate} onSelect={setPickedDate} />
             {latest?.url && (
               <div className="mt-2 flex items-center gap-2">
                 <span className="text-[10px] text-slate-400 font-semibold shrink-0">Ranked URL:</span>
@@ -371,6 +442,7 @@ export default function KeywordRow({ kw, history, latest, previous, hasCreds, pe
                 </a>
               </div>
             )}
+            <TopResultsPanel checks={topChecks} failed={topFailed} trackedDomain={kw.domain} selectedDate={selectedDate} onSelect={setPickedDate} />
           </td>
         </tr>
       )}
