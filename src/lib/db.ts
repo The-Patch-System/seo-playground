@@ -2820,3 +2820,6 @@ export function getFirstSpendTs(): number | null {
   const row = db.prepare(`SELECT MIN(ts) AS ts FROM (${union})`).get() as { ts: number | null };
   return row.ts;
 }
+
+// Patch fork: exposed for the read-only reporting API (src/lib/grid-report.ts).
+export { getDbForProject, entryFromGridRow };

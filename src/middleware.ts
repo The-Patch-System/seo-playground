@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Patch fork: password-protect the whole dashboard. The app has no login of its own and
 // spends DataForSEO credit, so it fails closed when no password is configured.
-// The Geo-grid worker endpoint is excluded below; it authenticates with CRON_SECRET.
+// The Geo-grid worker endpoint (CRON_SECRET) and the reporting API (REPORTING_API_KEY) are
+// excluded below; they authenticate with their own keys.
 
 export const config = {
   runtime: 'nodejs',
-  matcher: ['/((?!api/cron/|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!api/cron/|api/v1/|_next/static|_next/image|favicon.ico).*)'],
 };
 
 function safeEqual(a: string, b: string) {
