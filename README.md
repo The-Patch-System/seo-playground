@@ -2,10 +2,13 @@
 
 ![SEO Playground — the free, open-source, self-hosted SEO & Local SEO dashboard](public/readme/hero.png)
 
-## ✨ Update — 2026-09-28
+## ✨ Update — Unreleased
 
 SEO Playground is actively evolving. Here are the latest substantial additions:
 
+- 🧭 **Prompt Tracker** — save the prompts your audience asks AI assistants, then re-run them on demand or every day to see whether ChatGPT, Claude, Gemini or Perplexity mention your brand or domain. Each check keeps the answer, the cited sources and its cost, and each prompt shows its mention rate over time.
+- 🏷️ **White-label reports** — in Settings, brand every PDF with your own name, logo, report colour and header style (straight or wavy bar). The footer has its own text and colours, and e-mail addresses or domains in it become clickable links. A live preview shows the result before you save.
+- 📄 **PDF exports across the app** — Site Audit, Google Reviews, AI Visibility, Geo-grid and Prompt Tracker all export branded PDF reports, with the same header and footer settings everywhere.
 - 🗂️ **Multi-project workspace** — switch between clients or sites in one click. Each project has its own defaults, search history, results, and Rank Tracker depth.
 - 📍 **Geo-grid monitoring, not just one-off maps** — save keyword/location monitors, browse a timeline of snapshots, compare movement point by point, inspect visibility trends, and schedule daily or weekly checks.
 - ⏰ **Background tracking that keeps working** — scheduled Geo-grid and Rank Tracker runs continue without an open browser tab; a task center keeps their progress visible while you work elsewhere.
@@ -75,7 +78,10 @@ https://github.com/user-attachments/assets/fb506723-0996-4704-a6a5-b12b1115b805
 - **AI Optimization** — Visibility in AI-generated answers
 - **AI Visibility** — Target overview (mentions, AI search volume, source/platform breakdown) or topic leaderboard (top mentioned domains and brands) via DataForSEO LLM Mentions
 - **Top Searches** — Local search trends
-- **Settings** — Store your DataForSEO credentials and report identity locally
+- **Prompt Tracker** — Track whether AI assistants (ChatGPT, Claude, Gemini, Perplexity) mention your brand or domain for saved prompts, with on-demand or daily checks, cited sources, a mention calendar and PDF/Markdown exports
+- **AI Prompt Test** — See the live answer, cited sources and cost of any prompt on ChatGPT, Claude, Gemini or Perplexity
+- **PDF reports and Excel exports** — Branded PDF reports for Site Audit, Google Reviews, AI Visibility, Geo-grid and Prompt Tracker, plus Excel exports for Site Audit and AI Visibility
+- **Settings** — Store your DataForSEO credentials and a white-label report identity locally: brand name, logo, report colour, straight or wavy header, and footer text and colours
 
 ## Requirements
 
@@ -235,6 +241,7 @@ Search history and results are cached locally in `seo-playground.db`. The databa
 
 Full detailed history: [CHANGELOG.md](CHANGELOG.md).
 
+- **Unreleased** — **Prompt Tracker** (`/dashboard/prompt-tracker`): save prompts and re-run them on demand or daily to check brand/domain mentions in ChatGPT, Claude, Gemini and Perplexity answers, with stored answers, sources and costs, a mention calendar, and PDF/Markdown exports. **White-label reports**: Settings now control the brand name, an uploaded PNG/JPEG logo, the report colour, a straight or wavy header, and the footer text, background, text and link colours; the same identity applies to Site Audit, Google Reviews, AI Visibility, Geo-grid and Prompt Tracker PDFs. Geo-grid PDFs no longer overflow their competitor table, and logos keep their proportions. Rank Tracker shows AI Overview citations and the top 10 of each check. AI Prompt Test offers every DataForSEO model, with a default per platform.
 - **2026-10-01** — Rank Tracker checks stop crawling once the domain is found (lower cost per check), flag AI Overview citations with an "AI" badge, and show "Not found" with the last known position. Fixed Site Audit's word count and its Keyword Density, Duplicate Tags and Non-indexable tabs. Switching projects from the project switcher now keeps you on the current page instead of returning to the dashboard home.
 - **2026-09-28 — v0.4.0** — First versioned release, published as a multi-architecture Docker image on GHCR. Multi-project workspace (per-project defaults, history and schedules). Scheduled Geo-grid (daily/weekly) and Rank Tracker (daily) checks run by a background worker with no browser tab open, plus a task center for queued runs. Geo-grid snapshot timeline, comparison map and trend. PDF reports and Excel exports. Rank Tracker checks of several keywords at once fixed. Both Compose files now listen on `127.0.0.1` only by default, since the dashboard has no login.
 
