@@ -1730,7 +1730,7 @@ export interface GridSearchEntry {
   summary?: GridHistorySummary;
 }
 
-export type GridScheduleFrequency = 'daily' | 'weekly';
+export type GridScheduleFrequency = 'daily' | 'weekly' | 'monthly';
 
 export interface GridSchedule {
   series_id: string;
@@ -1742,6 +1742,7 @@ export interface GridSchedule {
   language: string;
   queue_mode: GridQueueMode;
   frequency: GridScheduleFrequency;
+  /** Day of week (0-6) for weekly schedules; day of month (1-28) for monthly schedules. */
   weekday: number | null;
   time_of_day: string;
   time_zone: string;
@@ -2005,9 +2006,11 @@ function nextGridScheduleRun(schedule: Pick<GridSchedule, 'frequency' | 'weekday
   const [hour, minute] = validTimeOfDay(schedule.time_of_day).split(':').map(Number);
   const local = zonedParts(after, timeZone);
   const firstDay = new Date(Date.UTC(local.year, local.month - 1, local.day));
-  for (let offset = 0; offset <= 8; offset += 1) {
+  const maxOffset = schedule.frequency === 'monthly' ? 62 : 8;
+  for (let offset = 0; offset <= maxOffset; offset += 1) {
     const candidateDay = new Date(firstDay.getTime() + offset * 86_400_000);
     if (schedule.frequency === 'weekly' && candidateDay.getUTCDay() !== (schedule.weekday ?? 1)) continue;
+    if (schedule.frequency === 'monthly' && candidateDay.getUTCDate() !== (schedule.weekday ?? 1)) continue;
     const candidate = localTimeToTimestamp(
       candidateDay.getUTCFullYear(), candidateDay.getUTCMonth() + 1, candidateDay.getUTCDate(), hour, minute, timeZone,
     );
@@ -2025,10 +2028,14 @@ export function getGridSchedule(seriesId: string): GridSchedule | null {
 
 export function saveGridSchedule(input: Omit<GridSchedule, 'next_run_at'>): GridSchedule {
   const now = Date.now();
-  const frequency = input.frequency === 'weekly' ? 'weekly' : 'daily';
+  const frequency: GridScheduleFrequency = input.frequency === 'weekly' || input.frequency === 'monthly' ? input.frequency : 'daily';
   const time_of_day = validTimeOfDay(input.time_of_day);
   const time_zone = validTimeZone(input.time_zone);
-  const weekday = frequency === 'weekly' && input.weekday != null && input.weekday >= 0 && input.weekday <= 6 ? input.weekday : null;
+  const weekday = frequency === 'weekly' && input.weekday != null && input.weekday >= 0 && input.weekday <= 6
+    ? input.weekday
+    : frequency === 'monthly'
+      ? (input.weekday != null && Number.isInteger(input.weekday) && input.weekday >= 1 && input.weekday <= 28 ? input.weekday : 15)
+      : null;
   const next_run_at = nextGridScheduleRun({ frequency, weekday, time_of_day, time_zone }, now);
   getDb().prepare(`INSERT INTO grid_schedules
     (series_id, keyword, target, center, grid_size, spacing_km, language, queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at, created_at, updated_at)

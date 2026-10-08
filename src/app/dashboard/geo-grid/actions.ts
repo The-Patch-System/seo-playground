@@ -22,7 +22,7 @@ export async function updateGridSchedule(formData: FormData) {
 
   if (frequency === 'off') {
     deleteGridSchedule(entry.series_id);
-  } else if (frequency === 'daily' || frequency === 'weekly') {
+  } else if (frequency === 'daily' || frequency === 'weekly' || frequency === 'monthly') {
     const queueMode = formData.get('queue_mode') as GridQueueMode;
     saveGridSchedule({
       series_id: entry.series_id,
@@ -34,7 +34,8 @@ export async function updateGridSchedule(formData: FormData) {
       language: entry.language,
       queue_mode: queueMode === 'priority' || queueMode === 'standard' ? queueMode : 'standard',
       frequency,
-      weekday: frequency === 'weekly' ? Number(formData.get('weekday')) : null,
+      weekday: frequency === 'weekly' ? Number(formData.get('weekday'))
+        : frequency === 'monthly' ? Number(formData.get('day_of_month')) : null,
       time_of_day: String(formData.get('time_of_day') ?? '08:00'),
       time_zone: safeTimeZone(formData.get('time_zone')),
     });

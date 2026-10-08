@@ -231,6 +231,18 @@ describe('Geo-grid monitoring', () => {
     deleteGridSchedule(seriesId);
     expect(getGridSchedule(seriesId)).toBeNull();
   });
+
+  it('schedules monthly runs on the chosen day of the month', () => {
+    const saved = saveGridSchedule({ ...base, frequency: 'monthly', weekday: 15, time_of_day: '11:00', time_zone: 'America/New_York' });
+    const local = (ts: number) => new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', day: 'numeric', hour: 'numeric', minute: '2-digit', hourCycle: 'h23' }).format(new Date(ts));
+    expect(saved.weekday).toBe(15);
+    expect(local(saved.next_run_at)).toMatch(/^15, 11:00$/);
+    const [claimed] = claimDueGridSchedules(saved.next_run_at + 1_000).filter((item) => item.series_id === seriesId);
+    expect(claimed.next_run_at - saved.next_run_at).toBeGreaterThan(27 * 86_400_000);
+    expect(local(claimed.next_run_at)).toMatch(/^15, 11:00$/);
+    expect(saveGridSchedule({ ...base, frequency: 'monthly', weekday: 31, time_of_day: '11:00', time_zone: 'UTC' }).weekday).toBe(15);
+    deleteGridSchedule(seriesId);
+  });
 });
 
 describe('Rank Tracker monitoring', () => {
