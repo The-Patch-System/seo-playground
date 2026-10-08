@@ -1,4 +1,5 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import { SIDEBAR_COLLAPSED_COOKIE, parseCollapsedSections } from '@/lib/sidebar';
 import BalanceBadge from '@/components/BalanceBadge';
@@ -6,9 +7,19 @@ import ThemeToggle from '@/components/ThemeToggle';
 import UpdateBanner from '@/components/UpdateBanner';
 import GridTaskCenter from '@/components/GridTaskCenter';
 import ProjectSync from '@/components/ProjectSync';
+import AccountMenu from '@/components/AccountMenu';
+import { getSession } from '@/lib/auth';
+import { authEnabled } from '@/lib/auth-config';
 import { getActiveProject, getProjects } from '@/lib/db';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // The middleware already rejects anonymous requests; this is the authoritative check and gives us the email.
+  let accountEmail: string | null = null;
+  if (authEnabled()) {
+    const session = await getSession(await headers());
+    if (!session) redirect('/login');
+    accountEmail = session.user.email;
+  }
   const collapsed = parseCollapsedSections((await cookies()).get(SIDEBAR_COLLAPSED_COOKIE)?.value);
   const activeProject = getActiveProject();
   const projects = getProjects();
@@ -23,6 +34,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <GridTaskCenter />
           <ThemeToggle />
           <BalanceBadge />
+          {accountEmail && <AccountMenu email={accountEmail} />}
         </header>
 
         <div className="flex-1 overflow-hidden">

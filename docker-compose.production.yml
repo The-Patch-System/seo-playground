@@ -13,7 +13,7 @@ services:
 
   app:
     image: "${SEO_PLAYGROUND_IMAGE:-ghcr.io/paulmassen/seo-playground}:${SEO_PLAYGROUND_VERSION:-0.4.0}"
-    # Loopback only by default: the dashboard has no login and spends DataForSEO credit.
+    # Loopback only by default: the dashboard has no login unless AUTH_ENABLED=true, and it spends DataForSEO credit.
     # Put a reverse proxy with authentication in front, or set SEO_PLAYGROUND_BIND=0.0.0.0.
     ports:
       - "${SEO_PLAYGROUND_BIND:-127.0.0.1}:${SEO_PLAYGROUND_PORT:-3000}:3000"
@@ -23,6 +23,9 @@ services:
       DB_PATH: /data/seo-playground.db
       CRON_SECRET: ${CRON_SECRET:-}
       CRON_SECRET_FILE: /data/.geo-grid-worker-secret
+      AUTH_ENABLED: ${AUTH_ENABLED:-}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
     depends_on:
       init:
         condition: service_completed_successfully

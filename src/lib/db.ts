@@ -42,6 +42,11 @@ function baseDbPath(): string {
   return process.env.DB_PATH ?? path.join(process.cwd(), 'seo-playground.db');
 }
 
+/** SQLite file holding the login accounts and sessions; kept apart from the SEO data. */
+export function authDbPath(): string {
+  return `${baseDbPath()}.auth`;
+}
+
 function controlDbPath(): string {
   return `${baseDbPath()}.projects`;
 }

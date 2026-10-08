@@ -224,6 +224,30 @@ GEO_GRID_WORKER_INTERVAL_MS=120000 docker compose up -d
 
 The schedule uses the browser timezone that created it, including daylight-saving changes.
 
+### Login (optional)
+
+The dashboard has no login by default, which is fine on `localhost`. Before putting it online, turn on the built-in email and password login:
+
+```bash
+# .env next to docker-compose.yml (Docker) or exported before `npm run launch` (Node)
+AUTH_ENABLED=true
+BETTER_AUTH_URL=https://seo.example.com   # the public URL; use http://... or leave unset on a LAN
+```
+
+Open the dashboard: the first visit shows **Create your account**. That is the only account — registration closes as soon as it exists, so create it right after deploying (the default Docker setup only listens on `127.0.0.1` until you expose it). After that, every page and `/api` route requires a signed-in session. Sign out with the icon at the top right.
+
+- Accounts and sessions live in `seo-playground.db.auth` next to the main database, with the signing secret in `seo-playground.db.auth-secret` (set `BETTER_AUTH_SECRET` to manage it yourself). Back both files up with your data.
+- Passwords are hashed (scrypt), at least 10 characters, and sign-in attempts are rate-limited.
+- The Geo-grid worker is unaffected: `/api/cron` keeps its own private secret.
+- Serve it over **HTTPS** (Caddy, Traefik, a Cloudflare Tunnel…). Passwords are sent as-is to the server, so plain http is only suitable for a trusted network. An `https://` `BETTER_AUTH_URL` marks the session cookie `Secure`.
+- Forgot the password? Stop the app and delete `seo-playground.db.auth*`; the next visit shows the setup page again. Your SEO data is not touched.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AUTH_ENABLED` | off | `true` turns the login on. |
+| `BETTER_AUTH_URL` | derived from the request | Public URL of the dashboard; required behind a reverse proxy. |
+| `BETTER_AUTH_SECRET` | generated automatically | Optional override for the session signing secret. |
+
 ## Data Storage
 
 Search history and results are cached locally in `seo-playground.db`. The database is created automatically on first run.
