@@ -55,11 +55,6 @@ async function fetchAiKeywordData(
 
 // ---- UI helpers ----
 
-function fmt(n?: number) {
-  if (n === undefined || n === null) return '—';
-  return n.toLocaleString('en-GB');
-}
-
 function formatDate(ts: number) {
   return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }

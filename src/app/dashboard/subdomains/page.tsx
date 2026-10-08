@@ -31,7 +31,6 @@ async function fetchSubdomains(target: string, location: string, language: strin
   return { items: result?.items ?? [], cost };
 }
 
-function fmt(n?: number) { return n != null ? n.toLocaleString('en-GB') : '—'; }
 function formatDate(ts: number) { return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
 
 export default async function SubdomainsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {

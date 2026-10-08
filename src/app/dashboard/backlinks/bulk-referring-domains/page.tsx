@@ -26,7 +26,6 @@ async function fetchBulkRd(targets: string[], login: string, pass: string): Prom
   return { items: result?.items ?? [], cost };
 }
 
-function fmt(n?: number) { return n != null ? n.toLocaleString('en-GB') : '—'; }
 function formatDate(ts: number) { return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
 
 export default async function BulkRefDomainsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
