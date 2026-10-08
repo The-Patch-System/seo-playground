@@ -2,9 +2,10 @@ import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  claimDueGridSchedules, claimDueRankTrackerSchedules, getCredentials, getPendingGridEntriesForProject,
-  getProjects, getTrackedKeywordsForProject, retryClaimedGridSchedule, retryClaimedRankTrackerSchedule, saveGridSearchPendingForProject, type GridSearchEntry,
+  claimDueGridSchedules, claimDueRankTrackerSchedules, claimDuePromptTrackerSchedules, getCredentials, getPendingGridEntriesForProject,
+  getProjects, getTrackedKeywordsForProject, getTrackedPrompts, retryClaimedGridSchedule, retryClaimedRankTrackerSchedule, saveGridSearchPendingForProject, type GridSearchEntry,
 } from '@/lib/db';
+import { runPromptChecks } from '@/lib/prompt-tracker';
 import { postGridTasksQueue } from '@/app/dashboard/local-finder/grid-api';
 import { collectGridProgress } from '@/lib/grid-progress';
 import { collectRankProgress } from '@/lib/rank-progress';
@@ -147,8 +148,24 @@ async function runPass(credentials: { login: string; pass: string }) {
     }
   }
 
+  // Prompt Tracker checks are synchronous (no task polling), so each due project runs to completion here.
+  // A failed run is not retried: the calls already made would be billed again.
+  const duePromptSchedules = claimDuePromptTrackerSchedules();
+  let promptRuns = 0;
+  let promptRunsFailed = 0;
+  for (const schedule of duePromptSchedules) {
+    try {
+      const summary = await runPromptChecks(getTrackedPrompts(schedule.projectId), credentials, schedule.projectId);
+      promptRuns += summary.ran;
+      promptRunsFailed += summary.failed;
+    } catch {
+      promptRunsFailed += 1;
+    }
+  }
+
   return {
     due: due.length, started, failed, gridRetries, pendingChecked, completed,
     rankSchedulesDue: dueRankSchedules.length, rankScheduled, rankScheduleRetries, rankPendingChecked, rankCompleted, rankFailed,
+    promptSchedulesDue: duePromptSchedules.length, promptRuns, promptRunsFailed,
   };
 }
