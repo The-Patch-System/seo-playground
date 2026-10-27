@@ -2,7 +2,7 @@
 // Used to move Semrush Map Rank Tracker campaigns over: one call per location sets up the
 // monthly schedule and copies the starting-point scan plus recent history.
 import {
-  getProjects, gridSeriesId, saveGridSchedule, saveImportedGridRunForProject,
+  createProject, getProjects, gridSeriesId, saveGridSchedule, saveImportedGridRunForProject,
   type GridPoint, type GridSearchEntry,
 } from './db';
 import { formatBusinessTarget } from './grid-target';
@@ -15,8 +15,11 @@ export interface ImportRunInput {
   points: Array<{ row: number; col: number; lat?: number; lng?: number; rank: number | null }>;
 }
 
+/** A project by id, or by client (found by domain, created if missing). */
+export type MonitorProjectInput = string | { name: string; domain: string };
+
 export interface CreateMonitorInput {
-  project?: string;
+  project?: MonitorProjectInput;
   keyword: string;
   business: { name: string; cid?: string | null };
   center: { lat: number; lng: number };
@@ -41,10 +44,30 @@ function validRank(rank: unknown): number | null {
   return Number.isInteger(value) && value >= 1 && value <= 20 ? value : null;
 }
 
-export function createMonitor(input: CreateMonitorInput) {
+function bareDomain(domain: string): string {
+  return domain.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+}
+
+/** One project per client website, so a multi-location clinic's monitors sit together. */
+function resolveProjectId(project: MonitorProjectInput | undefined, center: { lat: number; lng: number }): string {
   const projects = getProjects();
-  const projectId = input.project ?? projects[0]?.id ?? 'default';
-  if (!projects.some((project) => project.id === projectId)) fail(`Unknown project "${projectId}".`);
+  if (project === undefined || typeof project === 'string') {
+    const projectId = project ?? projects[0]?.id ?? 'default';
+    if (!projects.some((existing) => existing.id === projectId)) fail(`Unknown project "${projectId}".`);
+    return projectId;
+  }
+  const name = project.name?.trim();
+  const domain = bareDomain(project.domain ?? '');
+  if (!name || !domain) fail('project.name and project.domain are required.');
+  const existing = projects.find((candidate) => bareDomain(candidate.domain) === domain);
+  if (existing) return existing.id;
+  return createProject({
+    name, domain, defaultLocation: 'United States', defaultLanguage: 'English',
+    defaultCoordinates: `${center.lat},${center.lng}`, rankTrackerDepth: '100',
+  }).id;
+}
+
+export function createMonitor(input: CreateMonitorInput) {
 
   const keyword = input.keyword?.trim();
   if (!keyword) fail('keyword is required.');
@@ -60,6 +83,7 @@ export function createMonitor(input: CreateMonitorInput) {
   const spacingKm = input.spacing_km ?? spacingKmForRadius(input.radius_mi ?? DEFAULT_RADIUS_MI, gridSize);
   if (!Number.isFinite(spacingKm) || spacingKm <= 0 || spacingKm > 50) fail('radius_mi / spacing_km is out of range.');
 
+  const projectId = resolveProjectId(input.project, { lat, lng });
   const language = input.language?.trim() || 'English';
   const centerText = `${lat.toFixed(6)},${lng.toFixed(6)}`;
   const target = cid ? formatBusinessTarget(name, cid) : name;
