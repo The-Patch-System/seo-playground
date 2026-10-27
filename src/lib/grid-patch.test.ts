@@ -8,7 +8,7 @@ const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'grid-patch-test-'));
 process.env.DB_PATH = path.join(tmpDir, 'test.db');
 
 import {
-  claimDueGridSchedules, getGridMonitorsLatest, getGridSchedule, gridSeriesId, pruneGridHistoryForProject,
+  claimDueGridSchedules, deleteGridSeriesForProject, getGridMonitorsLatest, getGridSchedule, gridSeriesId, pruneGridHistoryForProject,
   saveGridSchedule, saveGridSearch, type GridSearchEntry,
 } from './db';
 import { createMonitor, MonitorInputError } from './grid-import';
@@ -65,6 +65,13 @@ describe('monitor import', () => {
     expect(first.project).not.toBe('default');
     expect(second.project).toBe(first.project);
     expect(() => createMonitor({ project: { name: '', domain: 'x.com' }, keyword: 'pt', business: { name: 'x' }, center: { lat: 1, lng: 1 } })).toThrow(/project/);
+  });
+
+  it('deletes an imported monitor from its client project', () => {
+    const created = createMonitor({ project: { name: 'Gone PT', domain: 'gonept.com' }, keyword: 'pt', business: { name: 'Gone PT', cid: '303' }, center: { lat: 35.2, lng: -80.8 }, runs: [{ run_at: iso(NOW - DAY), points: grid(4) }] });
+    expect(deleteGridSeriesForProject(created.project, created.monitor_id)).toBe(2);
+    expect(listMonitors({ cid: '303' })).toEqual([]);
+    expect(deleteGridSeriesForProject(created.project, created.monitor_id)).toBe(0);
   });
 
   it('rejects bad input', () => {
