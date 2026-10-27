@@ -58,6 +58,15 @@ describe('monitor import', () => {
     expect(monitor).toMatchObject({ monitor_id: created.monitor_id, runs: 0, latest_run: null, schedule: { day_of_month: 15, time_zone: 'America/New_York' } });
   });
 
+  it('files a monitor under its client project, created once per website', () => {
+    const project = { name: 'Summit PT', domain: 'https://www.summitpt.com/' };
+    const first = createMonitor({ project, keyword: 'physical therapy', business: { name: 'Summit PT Denver', cid: '101' }, center: { lat: 39.7392, lng: -104.9903 }, schedule: false });
+    const second = createMonitor({ project: { name: 'Summit PT', domain: 'summitpt.com' }, keyword: 'physical therapy', business: { name: 'Summit PT Boulder', cid: '102' }, center: { lat: 40.015, lng: -105.2705 }, schedule: false });
+    expect(first.project).not.toBe('default');
+    expect(second.project).toBe(first.project);
+    expect(() => createMonitor({ project: { name: '', domain: 'x.com' }, keyword: 'pt', business: { name: 'x' }, center: { lat: 1, lng: 1 } })).toThrow(/project/);
+  });
+
   it('rejects bad input', () => {
     expect(() => createMonitor({ keyword: '', business: { name: 'x' }, center: { lat: 1, lng: 1 } })).toThrow(MonitorInputError);
     expect(() => createMonitor({ keyword: 'pt', business: { name: 'x', cid: 'abc' }, center: { lat: 1, lng: 1 } })).toThrow(/CID/);

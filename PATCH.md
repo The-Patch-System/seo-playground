@@ -26,7 +26,8 @@ Fork of [paulmassen/seo-playground](https://github.com/paulmassen/seo-playground
 All requests need `x-api-key: <REPORTING_API_KEY>` (or `Authorization: Bearer <key>`). Covers every project.
 
 - `POST /api/v1/geo-grid/monitors` : creates a monitor **without running a scan** (no DataForSEO cost). Body:
-  `{ keyword, business: { name, cid }, center: { lat, lng }, grid_size?: 9, radius_mi?: 5 | spacing_km?, language?: "English", project?, schedule?: { day_of_month?: 15, time_of_day?: "12:00" } | false, runs?: [{ run_at, pinned?, points: [{ row, col, lat?, lng?, rank }] }] }`.
+  `{ keyword, business: { name, cid }, center: { lat, lng }, grid_size?: 9, radius_mi?: 5 | spacing_km?, language?: "English", project?: "<project id>" | { name, domain }, schedule?: { day_of_month?: 15, time_of_day?: "12:00" } | false, runs?: [{ run_at, pinned?, points: [{ row, col, lat?, lng?, rank }] }] }`.
+  A `project` object files the monitor under that client's project, matched by website domain and created on first use (one project per clinic website, so multi-location clinics share one).
   `runs[]` imports past scans (e.g. from Semrush MRT); ranks above 20 are stored as "20+". `pinned: true` marks the starting-point scan. Repeating the call for the same location and scan dates does not create duplicates.
 
 - `GET /api/v1/geo-grid/monitors` : all monitors (including scheduled ones with no runs yet) with schedule and latest completed run summary. Filters: `?cid=`, `?q=` (keyword/target text), `?project=`.
