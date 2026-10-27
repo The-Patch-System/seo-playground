@@ -9,13 +9,15 @@ const days = [
   ['Sunday', 0], ['Monday', 1], ['Tuesday', 2], ['Wednesday', 3], ['Thursday', 4], ['Friday', 5], ['Saturday', 6],
 ] as const;
 
-export default function GridScheduleControl({ runId, schedule }: { runId: string; schedule: GridSchedule | null }) {
+export default function GridScheduleControl({ runId, schedule, clinicTimeZone = null }: { runId: string; schedule: GridSchedule | null; clinicTimeZone?: string | null }) {
   const [frequency, setFrequency] = useState<'off' | 'daily' | 'weekly' | 'monthly'>(schedule?.frequency ?? 'off');
-  const [timeZone, setTimeZone] = useState(schedule?.time_zone ?? 'UTC');
+  // Patch fork: schedules run in the clinic's time zone (from the map center). The browser's
+  // zone is only a fallback when the center can't be resolved.
+  const [timeZone, setTimeZone] = useState(clinicTimeZone ?? schedule?.time_zone ?? 'UTC');
 
   useEffect(() => {
-    if (!schedule) setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
-  }, [schedule]);
+    if (!clinicTimeZone && !schedule) setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  }, [schedule, clinicTimeZone]);
 
   return (
     <form action={updateGridSchedule} className="border-t border-slate-200 pt-4 dark:border-slate-800">
@@ -45,7 +47,7 @@ export default function GridScheduleControl({ runId, schedule }: { runId: string
           <option value="weekly">Every week</option>
           <option value="monthly">Every month</option>
         </select>
-        <input name="time_of_day" type="time" defaultValue={schedule?.time_of_day ?? '08:00'} disabled={frequency === 'off'} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200" />
+        <input name="time_of_day" type="time" defaultValue={schedule?.time_of_day ?? '12:00'} disabled={frequency === 'off'} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200" />
         {frequency === 'monthly' ? (
           <select name="day_of_month" defaultValue={schedule?.frequency === 'monthly' ? (schedule.weekday ?? 15) : 15} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
             {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => <option key={day} value={day}>Day {day}</option>)}
@@ -61,7 +63,7 @@ export default function GridScheduleControl({ runId, schedule }: { runId: string
         </select>
       </div>
       <div className="mt-2 flex items-center justify-between gap-3">
-        <p className="text-[10px] text-slate-400">{timeZone.replace(/_/g, ' ')} · Requires the configured cron endpoint.</p>
+        <p className="text-[10px] text-slate-400">{clinicTimeZone ? 'Clinic time' : 'Local time'}: {timeZone.replace(/_/g, ' ')}</p>
         <button type="submit" className="text-[10px] font-black uppercase tracking-widest text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400">
           {frequency === 'off' ? 'Save' : 'Save schedule'}
         </button>

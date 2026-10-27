@@ -1,6 +1,7 @@
 'use server';
 
 import { deleteGridSchedule, deleteGridSeries, getGridEntry, saveGridSchedule, type GridQueueMode, type GridScheduleFrequency } from '@/lib/db';
+import { timeZoneForCenter } from '@/lib/grid-timezone';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -36,8 +37,9 @@ export async function updateGridSchedule(formData: FormData) {
       frequency,
       weekday: frequency === 'weekly' ? Number(formData.get('weekday'))
         : frequency === 'monthly' ? Number(formData.get('day_of_month')) : null,
-      time_of_day: String(formData.get('time_of_day') ?? '08:00'),
-      time_zone: safeTimeZone(formData.get('time_zone')),
+      time_of_day: String(formData.get('time_of_day') ?? '12:00'),
+      // Patch fork: always the clinic's time zone when the map center resolves to one.
+      time_zone: timeZoneForCenter(entry.center) ?? safeTimeZone(formData.get('time_zone')),
     });
   }
 

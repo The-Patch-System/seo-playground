@@ -3,6 +3,7 @@
 import { useState, lazy, Suspense } from 'react';
 import { LANGUAGES } from '@/lib/geo-options';
 import { formatBusinessTarget } from '@/lib/grid-target';
+import { DEFAULT_RADIUS_MI, RADIUS_OPTIONS_MI, radiusMiForSpacing, spacingKmForRadius } from '@/lib/grid-radius';
 
 const MapPicker = lazy(() => import('./MapPicker'));
 
@@ -50,7 +51,7 @@ function formatLiveDuration(totalPoints: number) {
   return `~${Math.ceil(seconds / 60)} min`;
 }
 
-function GridPreview({ size, spacingKm }: { size: number; spacingKm: number }) {
+function GridPreview({ size, spacingKm, radiusMi }: { size: number; spacingKm: number; radiusMi: number }) {
   const half = Math.floor(size / 2);
   return (
     <div className="flex flex-col items-center gap-2 py-2">
@@ -72,7 +73,7 @@ function GridPreview({ size, spacingKm }: { size: number; spacingKm: number }) {
         })}
       </div>
       <p className="text-[10px] text-slate-400 font-medium">
-        {size}×{size} points · {spacingKm} km spacing · ~{((size - 1) * spacingKm).toFixed(1)} km coverage
+        {size}×{size} points · {radiusMi} mi radius · {(spacingKm / 1.609344).toFixed(2)} mi between points
       </p>
     </div>
   );
@@ -84,9 +85,16 @@ export default function LocalFinderForm({ defaults }: Props) {
   const [device, setDevice] = useState(defaults.device || 'desktop');
   const [coordinate, setCoordinate] = useState(defaults.locationCoordinate || defaults.defaultCenter);
   const [isLoading, setIsLoading] = useState(false);
-  const [gridSize, setGridSize] = useState(parseInt(defaults.gridSize ?? '5', 10));
-  const [spacingKm, setSpacingKm] = useState(parseFloat(defaults.spacingKm ?? '1'));
-  const [queueMode, setQueueMode] = useState<QueueMode>((defaults.queueMode as QueueMode) || 'live');
+  const [gridSize, setGridSize] = useState(parseInt(defaults.gridSize ?? '9', 10));
+  // Patch fork: the map is set by radius in miles (5 mi default, 10 mi for rural clinics).
+  const [radiusMi, setRadiusMi] = useState(() => {
+    const fromDefaults = defaults.spacingKm ? radiusMiForSpacing(parseFloat(defaults.spacingKm), parseInt(defaults.gridSize ?? '9', 10)) : NaN;
+    return Number.isFinite(fromDefaults) && fromDefaults > 0 ? fromDefaults : DEFAULT_RADIUS_MI;
+  });
+  const spacingKm = spacingKmForRadius(radiusMi, gridSize);
+  const radiusOptions = Array.from(new Set<number>([...RADIUS_OPTIONS_MI, radiusMi])).sort((a, b) => a - b);
+  const [queueMode, setQueueMode] = useState<QueueMode>((defaults.queueMode as QueueMode) || 'standard');
+  const [scheduleMonthly, setScheduleMonthly] = useState(true);
   const [language, setLanguage] = useState(defaults.language || 'English');
   const [gridTarget, setGridTarget] = useState(defaults.gridTarget ?? '');
 
@@ -211,19 +219,16 @@ export default function LocalFinderForm({ defaults }: Props) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-1.5">Spacing (km)</label>
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-1.5">Radius (miles)</label>
+              <input type="hidden" name="spacing_km" value={spacingKm} />
               <select
-                name="spacing_km"
-                value={spacingKm}
-                onChange={(e) => setSpacingKm(parseFloat(e.target.value))}
+                value={radiusMi}
+                onChange={(e) => setRadiusMi(parseFloat(e.target.value))}
                 className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800"
               >
-                <option value="0.5">0.5 km</option>
-                <option value="1">1 km</option>
-                <option value="2">2 km</option>
-                <option value="3">3 km</option>
-                <option value="5">5 km</option>
-                <option value="10">10 km</option>
+                {radiusOptions.map((mi) => (
+                  <option key={mi} value={mi}>{mi} mi{mi === 5 ? ' (standard)' : mi === 10 ? ' (rural)' : ''}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -231,8 +236,24 @@ export default function LocalFinderForm({ defaults }: Props) {
           {/* Grid preview */}
           <div className="bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 text-center">Grid preview</p>
-            <GridPreview size={gridSize} spacingKm={spacingKm} />
+            <GridPreview size={gridSize} spacingKm={spacingKm} radiusMi={radiusMi} />
           </div>
+
+          {/* Patch fork: schedule the monthly scan when the monitor is created */}
+          <label className="flex items-start gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="schedule_monthly"
+              value="1"
+              checked={scheduleMonthly}
+              onChange={(e) => setScheduleMonthly(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block text-xs font-bold text-slate-800 dark:text-slate-100">Scan monthly on the 15th at noon, clinic time</span>
+              <span className="block text-[11px] text-slate-400 mt-0.5">Runs during business hours in the clinic&apos;s own time zone. You can change it later on the monitor.</span>
+            </span>
+          </label>
 
           {/* Queue mode */}
           <div>

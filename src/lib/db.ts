@@ -817,6 +817,8 @@ function initSchema(db: Database.Database) {
   addColumnIfMissing(db, 'grid_searches', 'ADD COLUMN task_ids TEXT');
   addColumnIfMissing(db, 'grid_searches', `ADD COLUMN queue_mode TEXT NOT NULL DEFAULT 'live'`);
   addColumnIfMissing(db, 'grid_searches', `ADD COLUMN series_id TEXT NOT NULL DEFAULT ''`);
+  // Patch fork: a pinned run (the client's starting-point scan) is never pruned by retention.
+  addColumnIfMissing(db, 'grid_searches', 'ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0');
   addColumnIfMissing(db, 'reviews_tasks', 'ADD COLUMN meta TEXT');
   addColumnIfMissing(db, 'rank_checks', 'ADD COLUMN ai_overview INTEGER');
   addColumnIfMissing(db, 'rank_checks', 'ADD COLUMN top_results TEXT');
@@ -1848,6 +1850,8 @@ export interface GridTaskPoint {
   col: number;
   lat: number;
   lng: number;
+  /** Patch fork: how many times this point has been posted (failed tasks are re-posted). */
+  attempts?: number;
 }
 
 export interface GridLocalItem {
@@ -1868,6 +1872,8 @@ export interface GridPoint {
   lng?: number;
   rank: number | null;
   items?: GridLocalItem[];
+  /** Patch fork: DataForSEO returned no usable result for this point even after retries. */
+  failed?: boolean;
 }
 
 /**
@@ -1925,6 +1931,15 @@ function summarizeGridResults(resultsJson: string | null, target: string): GridH
 export function getGridHistory(): GridSearchEntry[] {
   const rows = getDb()
     .prepare('SELECT id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode, results FROM grid_searches ORDER BY ts DESC LIMIT 100')
+    .all() as Array<{ id: string; ts: number; series_id: string; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string; cost: number | null; status: string; queue_mode: string; results: string | null }>;
+  return rows.map(entryFromGridRow);
+}
+
+/** Patch fork: the newest run of every monitor (no cap, so hundreds of monitors all list). */
+export function getGridMonitorsLatest(): GridSearchEntry[] {
+  const rows = getDb()
+    .prepare(`SELECT id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode, results
+      FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY series_id ORDER BY ts DESC) AS rn FROM grid_searches) WHERE rn = 1 ORDER BY ts DESC`)
     .all() as Array<{ id: string; ts: number; series_id: string; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string; cost: number | null; status: string; queue_mode: string; results: string | null }>;
   return rows.map(entryFromGridRow);
 }
@@ -2114,7 +2129,7 @@ export function getGridSchedule(seriesId: string): GridSchedule | null {
   return row ? parseScheduleRow(row) : null;
 }
 
-export function saveGridSchedule(input: Omit<GridSchedule, 'next_run_at'>): GridSchedule {
+export function saveGridSchedule(input: Omit<GridSchedule, 'next_run_at'>, projectId?: string): GridSchedule {
   const now = Date.now();
   const frequency: GridScheduleFrequency = input.frequency === 'weekly' || input.frequency === 'monthly' ? input.frequency : 'daily';
   const time_of_day = validTimeOfDay(input.time_of_day);
@@ -2125,7 +2140,7 @@ export function saveGridSchedule(input: Omit<GridSchedule, 'next_run_at'>): Grid
       ? (input.weekday != null && Number.isInteger(input.weekday) && input.weekday >= 1 && input.weekday <= 28 ? input.weekday : 15)
       : null;
   const next_run_at = nextGridScheduleRun({ frequency, weekday, time_of_day, time_zone }, now);
-  getDb().prepare(`INSERT INTO grid_schedules
+  (projectId ? getDbForProject(projectId) : getDb()).prepare(`INSERT INTO grid_schedules
     (series_id, keyword, target, center, grid_size, spacing_km, language, queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(series_id) DO UPDATE SET
@@ -2149,15 +2164,21 @@ export function deleteGridSeries(seriesId: string): void {
   })();
 }
 
-/** Claims due schedules across every project so one cron run cannot enqueue duplicates. */
-export function claimDueGridSchedules(now = Date.now()): DueGridSchedule[] {
+/**
+ * Claims due schedules across every project so one cron run cannot enqueue duplicates.
+ * Patch fork: at most `maxClaims` per call (oldest slot first). The rest stay due and are
+ * picked up by the next pass, so hundreds of monitors on the same day start in waves.
+ */
+export function claimDueGridSchedules(now = Date.now(), maxClaims = Number.POSITIVE_INFINITY): DueGridSchedule[] {
   const due: DueGridSchedule[] = [];
   for (const project of getProjects()) {
+    if (due.length >= maxClaims) break;
     const db = getDbForProject(project.id);
     const rows = db.prepare(`SELECT series_id, keyword, target, center, grid_size, spacing_km, language,
-      queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at FROM grid_schedules WHERE next_run_at <= ?`).all(now) as Parameters<typeof parseScheduleRow>[0][];
+      queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at FROM grid_schedules WHERE next_run_at <= ? ORDER BY next_run_at ASC`).all(now) as Parameters<typeof parseScheduleRow>[0][];
     const claim = db.prepare('UPDATE grid_schedules SET next_run_at = ?, updated_at = ? WHERE series_id = ? AND next_run_at = ?');
     for (const row of rows) {
+      if (due.length >= maxClaims) break;
       const schedule = parseScheduleRow(row);
       const next = nextGridScheduleRun(schedule, now);
       if (claim.run(next, now, schedule.series_id, schedule.next_run_at).changes === 1) {
@@ -2180,6 +2201,38 @@ export function retryClaimedGridSchedule(
   if (retryAt - schedule.scheduled_at > maxDelayMs || retryAt >= schedule.next_run_at) return false;
   return getDbForProject(projectId).prepare(`UPDATE grid_schedules SET next_run_at = ?, updated_at = ?
     WHERE series_id = ? AND next_run_at = ?`).run(retryAt, now, schedule.series_id, schedule.next_run_at).changes === 1;
+}
+
+/** Patch fork: marks (or unmarks) a run as the monitor's starting point, which retention never deletes. */
+export function setGridRunPinnedForProject(projectId: string, runId: string, pinned: boolean): boolean {
+  return getDbForProject(projectId).prepare('UPDATE grid_searches SET pinned = ? WHERE id = ?').run(pinned ? 1 : 0, runId).changes === 1;
+}
+
+/** Patch fork: stores a finished run that was collected elsewhere (e.g. imported from Semrush). */
+export function saveImportedGridRunForProject(projectId: string, entry: GridSearchEntry, results: GridPoint[], pinned = false): void {
+  getDbForProject(projectId)
+    .prepare('INSERT OR REPLACE INTO grid_searches (id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, results, status, queue_mode, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(entry.id, entry.ts, entry.series_id, entry.keyword, entry.target, entry.center, entry.grid_size, entry.spacing_km, entry.language, entry.cost ?? null, JSON.stringify(results), 'done', entry.queue_mode, pinned ? 1 : 0);
+}
+
+export const GRID_RETENTION_MS = 183 * 86_400_000;
+
+/**
+ * Patch fork retention: each monitor keeps its starting-point run plus the last ~6 months.
+ * The starting point is the pinned run, or the oldest finished run when none is pinned.
+ * Pending runs are never touched. Returns how many runs were deleted.
+ */
+export function pruneGridHistoryForProject(projectId: string, now = Date.now(), keepMs = GRID_RETENTION_MS): number {
+  const db = getDbForProject(projectId);
+  const cutoff = now - keepMs;
+  return db.prepare(`DELETE FROM grid_searches
+    WHERE status = 'done' AND pinned = 0 AND ts < ?
+      AND id NOT IN (
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (PARTITION BY series_id ORDER BY ts ASC) AS rn FROM grid_searches
+          WHERE status = 'done' AND series_id NOT IN (SELECT series_id FROM grid_searches WHERE pinned = 1)
+        ) WHERE rn = 1
+      )`).run(cutoff).changes;
 }
 
 // --- Instant Pages ---

@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
 import { getBrandSettings } from '@/lib/brand-server';
 import {
-  getActiveProject, getCredentials, getSetting, getGridHistory, getGridEntry, saveGridSearch,
-  saveGridSearchPending, getGridResults, getGridSeriesHistory, getGridSchedule, gridSeriesId, type GridSearchEntry, type GridPoint, type GridQueueMode,
+  getActiveProject, getCredentials, getSetting, getGridMonitorsLatest, getGridEntry, saveGridSearch,
+  saveGridSearchPending, getGridResults, getGridSeriesHistory, getGridSchedule, saveGridSchedule, gridSeriesId, type GridSearchEntry, type GridPoint, type GridQueueMode,
 } from '@/lib/db';
+import { DEFAULT_GRID_SIZE, DEFAULT_RADIUS_MI, DEFAULT_SCHEDULE_DAY, DEFAULT_SCHEDULE_TIME, radiusMiForSpacing, spacingKmForRadius } from '@/lib/grid-radius';
+import { timeZoneForCenter } from '@/lib/grid-timezone';
 import LocalFinderForm from '../local-finder/LocalFinderForm';
 import GridPending from '../local-finder/GridPending';
 import GridTimeline from '../local-finder/GridTimeline';
@@ -22,6 +24,7 @@ interface SearchParams {
   grid_target?: string;
   grid_history_id?: string;
   queue_mode?: string;
+  schedule_monthly?: string;
 }
 
 function formatDate(ts: number) {
@@ -81,9 +84,10 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
     if (!creds) {
       gridError = 'DataForSEO credentials missing. Configure them in Settings.';
     } else {
-      const gridSize = Math.min(Math.max(parseInt(params.grid_size ?? '5', 10), 3), 11);
-      const spacingKm = parseFloat(params.spacing_km ?? '1');
-      const queueMode = (params.queue_mode ?? 'live') as GridQueueMode;
+      const gridSize = Math.min(Math.max(parseInt(params.grid_size ?? String(DEFAULT_GRID_SIZE), 10), 3), 11);
+      const requestedSpacing = parseFloat(params.spacing_km ?? '');
+      const spacingKm = Number.isFinite(requestedSpacing) && requestedSpacing > 0 ? requestedSpacing : spacingKmForRadius(DEFAULT_RADIUS_MI, gridSize);
+      const queueMode = (['live', 'priority', 'standard'].includes(params.queue_mode ?? '') ? params.queue_mode : 'standard') as GridQueueMode;
       const language = params.language ?? defaultLanguage;
       const seriesId = gridSeriesId(
         params.keyword, params.location_coordinate, gridSize, spacingKm, params.grid_target, language,
@@ -130,6 +134,16 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
             saveGridSearchPending({ ...baseEntry, status: 'pending', cost: result.cost }, result.taskPoints);
           }
         }
+
+        // Patch fork: schedule the monthly scan at setup, at noon in the clinic's time zone.
+        if (!gridError && params.schedule_monthly === '1' && !getGridSchedule(seriesId)) {
+          saveGridSchedule({
+            series_id: seriesId, keyword: params.keyword, target: params.grid_target, center: params.location_coordinate,
+            grid_size: gridSize, spacing_km: spacingKm, language, queue_mode: 'standard', frequency: 'monthly',
+            weekday: DEFAULT_SCHEDULE_DAY, time_of_day: DEFAULT_SCHEDULE_TIME,
+            time_zone: timeZoneForCenter(params.location_coordinate) ?? 'America/New_York',
+          });
+        }
       }
 
       // Redirect to a stable history-id URL so every subsequent poll / router.refresh() looks up
@@ -142,7 +156,8 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
     }
   }
 
-  const gridHistory = getGridHistory();
+  // Patch fork: one row per monitor with no cap (upstream listed only the newest 100 runs).
+  const latestBySeries = getGridMonitorsLatest();
   const seriesRuns = gridEntry ? getGridSeriesHistory(gridEntry.series_id) : [];
   const selectedRunIndex = seriesRuns.findIndex((run) => run.id === gridEntry?.id);
   const previousRun = selectedRunIndex >= 0 ? seriesRuns[selectedRunIndex + 1] : undefined;
@@ -179,7 +194,6 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
         top11Plus: points.filter((point) => point.rank !== null && point.rank >= 11).length,
       }];
     });
-  const latestBySeries = Array.from(new Map(gridHistory.map((entry) => [entry.series_id, entry])).values());
 
   const formDefaults = {
     keyword: (params.keyword ?? gridEntry?.keyword ?? '').toString(),
@@ -194,10 +208,10 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
     timeFilter: '',
     gridMode: true,
     forceGridMode: true,
-    gridSize: (params.grid_size ?? gridEntry?.grid_size ?? '5').toString(),
-    spacingKm: (params.spacing_km ?? gridEntry?.spacing_km ?? '1').toString(),
+    gridSize: (params.grid_size ?? gridEntry?.grid_size ?? DEFAULT_GRID_SIZE).toString(),
+    spacingKm: (params.spacing_km ?? gridEntry?.spacing_km ?? '').toString(),
     gridTarget: (params.grid_target ?? gridEntry?.target ?? defaultDomain).toString(),
-    queueMode: (params.queue_mode ?? gridEntry?.queue_mode ?? 'live').toString(),
+    queueMode: (params.queue_mode ?? gridEntry?.queue_mode ?? 'standard').toString(),
   };
 
   const monitorItems = latestBySeries.map((entry) => {
@@ -216,7 +230,7 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
             )}
           </div>
           <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-            {entry.target} · {entry.spacing_km} km spacing
+            {entry.target} · {radiusMiForSpacing(entry.spacing_km, entry.grid_size)} mi radius
             {entry.cost !== undefined ? ` · $${entry.cost.toFixed(4)}` : ''}
           </p>
           {entry.summary && (
@@ -327,6 +341,7 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
                   brandFooter={brand.footer}
                   brandStyle={brand}
                   trend={trend}
+                  clinicTimeZone={timeZoneForCenter(gridEntry.center)}
                 />
               </>
             )}

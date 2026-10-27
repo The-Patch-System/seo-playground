@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   claimDueGridSchedules, claimDueRankTrackerSchedules, claimDuePromptTrackerSchedules, getCredentials, getPendingGridEntriesForProject,
-  getProjects, getTrackedKeywordsForProject, getTrackedPrompts, retryClaimedGridSchedule, retryClaimedRankTrackerSchedule, saveGridSearchPendingForProject, type GridSearchEntry,
+  getProjects, getTrackedKeywordsForProject, getTrackedPrompts, pruneGridHistoryForProject, retryClaimedGridSchedule, retryClaimedRankTrackerSchedule, saveGridSearchPendingForProject, type GridSearchEntry,
 } from '@/lib/db';
 import { runPromptChecks } from '@/lib/prompt-tracker';
 import { postGridTasksQueue } from '@/app/dashboard/local-finder/grid-api';
@@ -34,6 +34,12 @@ function isAuthorized(request: NextRequest) {
 // outlast the worker interval; overlapping passes would only queue duplicate polling.
 let passInProgress = false;
 
+// Patch fork: start at most this many scheduled monitors per pass (one pass a minute). Hundreds of
+// clinics share the 15th, so they start in waves instead of one burst against DataForSEO.
+const MAX_GRID_CLAIMS_PER_PASS = Math.max(1, Number.parseInt(process.env.GEO_GRID_MAX_CLAIMS_PER_PASS ?? '20', 10) || 20);
+// Patch fork: retention (starting-point scan + last ~6 months) runs at most once a day.
+let lastPruneAt = 0;
+
 /**
  * Invoke this endpoint every 5–15 minutes from the platform scheduler. It claims
  * all due schedules before posting them to DataForSEO, so overlapping cron calls
@@ -59,7 +65,7 @@ export async function GET(request: NextRequest) {
 
 async function runPass(credentials: { login: string; pass: string }) {
 
-  const due = claimDueGridSchedules();
+  const due = claimDueGridSchedules(Date.now(), MAX_GRID_CLAIMS_PER_PASS);
   const dueRankSchedules = claimDueRankTrackerSchedules();
   const started: string[] = [];
   const failed: Array<{ seriesId: string; error: string }> = [];
@@ -163,8 +169,20 @@ async function runPass(credentials: { login: string; pass: string }) {
     }
   }
 
+  let gridRunsPruned = 0;
+  if (Date.now() - lastPruneAt > 86_400_000) {
+    lastPruneAt = Date.now();
+    for (const project of getProjects()) {
+      try {
+        gridRunsPruned += pruneGridHistoryForProject(project.id);
+      } catch {
+        // Retention is housekeeping; a failure here must not affect scans.
+      }
+    }
+  }
+
   return {
-    due: due.length, started, failed, gridRetries, pendingChecked, completed,
+    due: due.length, started, failed, gridRetries, pendingChecked, completed, gridRunsPruned,
     rankSchedulesDue: dueRankSchedules.length, rankScheduled, rankScheduleRetries, rankPendingChecked, rankCompleted, rankFailed,
     promptSchedulesDue: duePromptSchedules.length, promptRuns, promptRunsFailed,
   };
