@@ -2214,6 +2214,20 @@ export function setGridRunPinnedForProject(projectId: string, runId: string, pin
   return getDbForProject(projectId).prepare('UPDATE grid_searches SET pinned = ? WHERE id = ?').run(pinned ? 1 : 0, runId).changes === 1;
 }
 
+/**
+ * Patch fork: makes this run the monitor's one starting-point map (unpins any other run in the
+ * same series). Reports and retention both rely on there being a single pinned run.
+ */
+export function pinGridRunForProject(projectId: string, runId: string): boolean {
+  const db = getDbForProject(projectId);
+  return db.transaction(() => {
+    const row = db.prepare('SELECT series_id FROM grid_searches WHERE id = ?').get(runId) as { series_id: string } | undefined;
+    if (!row) return false;
+    db.prepare('UPDATE grid_searches SET pinned = 0 WHERE series_id = ? AND id != ?').run(row.series_id, runId);
+    return db.prepare('UPDATE grid_searches SET pinned = 1 WHERE id = ?').run(runId).changes === 1;
+  })();
+}
+
 /** Patch fork: stores a finished run that was collected elsewhere (e.g. imported from Semrush). */
 export function saveImportedGridRunForProject(projectId: string, entry: GridSearchEntry, results: GridPoint[], pinned = false): void {
   getDbForProject(projectId)
