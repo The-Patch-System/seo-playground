@@ -8,7 +8,7 @@ const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'grid-patch-test-'));
 process.env.DB_PATH = path.join(tmpDir, 'test.db');
 
 import {
-  claimDueGridSchedules, deleteGridSeriesForProject, getGridMonitorsLatest, getGridSchedule, gridSeriesId, pruneGridHistoryForProject,
+  claimDueGridSchedules, deleteGridSeriesForProject, getGridMonitorsLatest, pinGridRunForProject, getGridSchedule, gridSeriesId, pruneGridHistoryForProject,
   saveGridSchedule, saveGridSearch, type GridSearchEntry,
 } from './db';
 import { createMonitor, MonitorInputError } from './grid-import';
@@ -72,6 +72,26 @@ describe('monitor import', () => {
     expect(deleteGridSeriesForProject(created.project, created.monitor_id)).toBe(2);
     expect(listMonitors({ cid: '303' })).toEqual([]);
     expect(deleteGridSeriesForProject(created.project, created.monitor_id)).toBe(0);
+  });
+
+  it('keeps a single starting-point map per monitor', () => {
+    const body = {
+      project: { name: 'Pin PT', domain: 'pinpt.com' }, keyword: 'pt', business: { name: 'Pin PT', cid: '404' },
+      center: { lat: 36.1, lng: -86.7 }, schedule: false as const,
+      runs: [
+        { run_at: iso(NOW - 300 * DAY), pinned: true, points: grid(5) },
+        { run_at: iso(NOW - 20 * DAY), points: grid(4) },
+      ],
+    };
+    const created = createMonitor(body);
+    const pinnedIds = () => getMonitorRuns(created.monitor_id)!.runs.filter((r) => r.pinned).map((r) => r.run_id);
+    expect(pinnedIds()).toEqual([created.imported_runs[0]]);
+    // Re-import pinning the other scan: the old pin is replaced, not added to.
+    createMonitor({ ...body, runs: [{ ...body.runs[0], pinned: false }, { ...body.runs[1], pinned: true }] });
+    expect(pinnedIds()).toEqual([created.imported_runs[1]]);
+    expect(pinGridRunForProject(created.project, created.imported_runs[0])).toBe(true);
+    expect(pinnedIds()).toEqual([created.imported_runs[0]]);
+    expect(pinGridRunForProject(created.project, 'missing')).toBe(false);
   });
 
   it('rejects bad input', () => {

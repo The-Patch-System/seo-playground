@@ -2,7 +2,7 @@
 // Used to move Semrush Map Rank Tracker campaigns over: one call per location sets up the
 // monthly schedule and copies the starting-point scan plus recent history.
 import {
-  createProject, getProjects, gridSeriesId, saveGridSchedule, saveImportedGridRunForProject,
+  createProject, getProjects, gridSeriesId, pinGridRunForProject, saveGridSchedule, saveImportedGridRunForProject,
   type GridPoint, type GridSearchEntry,
 } from './db';
 import { formatBusinessTarget } from './grid-target';
@@ -102,6 +102,7 @@ export function createMonitor(input: CreateMonitorInput) {
   }
 
   const imported: string[] = [];
+  let pinnedId: string | null = null;
   const total = gridSize * gridSize;
   for (const run of input.runs ?? []) {
     const ts = Date.parse(run.run_at);
@@ -127,7 +128,10 @@ export function createMonitor(input: CreateMonitorInput) {
     };
     saveImportedGridRunForProject(projectId, entry, points, run.pinned === true);
     imported.push(id);
+    if (run.pinned === true) pinnedId = id;
   }
+  // One starting-point map per monitor: a re-import that pins a different scan replaces the old pin.
+  if (pinnedId) pinGridRunForProject(projectId, pinnedId);
 
   return { monitor_id: seriesId, project: projectId, target, center: centerText, grid_size: gridSize, spacing_km: spacingKm, schedule, imported_runs: imported };
 }
