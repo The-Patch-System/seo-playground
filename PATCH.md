@@ -31,6 +31,7 @@ All requests need `x-api-key: <REPORTING_API_KEY>` (or `Authorization: Bearer <k
   `runs[]` imports past scans (e.g. from Semrush MRT); ranks above 20 are stored as "20+". `pinned: true` marks the starting-point scan. Repeating the call for the same location and scan dates does not create duplicates.
 
 - `GET /api/v1/geo-grid/monitors` : all monitors (including scheduled ones with no runs yet) with schedule and latest completed run summary. Filters: `?cid=`, `?q=` (keyword/target text), `?project=`.
+- `DELETE /api/v1/geo-grid/monitors/{monitor_id}` : removes a monitor (all snapshots and its schedule) from every project, or only `?project=`.
 - `GET /api/v1/geo-grid/monitors/{monitor_id}/latest` : newest completed run with every grid point.
 - `GET /api/v1/geo-grid/monitors/{monitor_id}/runs` : run history (summaries only).
 - `GET /api/v1/geo-grid/runs/{run_id}` : one run with every grid point.

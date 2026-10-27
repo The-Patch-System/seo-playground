@@ -2157,10 +2157,16 @@ export function deleteGridSchedule(seriesId: string): void {
 
 /** Patch fork: removes a monitor entirely (every snapshot in the series plus its schedule). */
 export function deleteGridSeries(seriesId: string): void {
-  const db = getDb();
-  db.transaction(() => {
-    db.prepare('DELETE FROM grid_searches WHERE series_id = ?').run(seriesId);
-    db.prepare('DELETE FROM grid_schedules WHERE series_id = ?').run(seriesId);
+  deleteGridSeriesForProject(getActiveProject().id, seriesId);
+}
+
+/** Patch fork: same as deleteGridSeries for any project. Returns how many snapshots and schedules were removed. */
+export function deleteGridSeriesForProject(projectId: string, seriesId: string): number {
+  const db = getDbForProject(projectId);
+  return db.transaction(() => {
+    const runs = db.prepare('DELETE FROM grid_searches WHERE series_id = ?').run(seriesId).changes;
+    const schedules = db.prepare('DELETE FROM grid_schedules WHERE series_id = ?').run(seriesId).changes;
+    return runs + schedules;
   })();
 }
 
