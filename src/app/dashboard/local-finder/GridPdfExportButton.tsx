@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { radiusMiForSpacing } from '@/lib/grid-radius';
 import { Download, LoaderCircle } from 'lucide-react';
 import type { GridPoint } from '@/lib/db';
 import { computeCompetitors, computeGridSummary } from './grid-insights';
@@ -35,7 +36,8 @@ const palette = {
 };
 
 function rankColor(rank: number | null): [number, number, number] {
-  if (rank === null) return [203, 213, 225];
+  // Patch fork: not in the top 20 is red "20+", like Semrush MRT.
+  if (rank === null) return [239, 68, 68];
   if (rank === 1) return [5, 150, 105];
   if (rank <= 3) return [16, 185, 129];
   if (rank <= 7) return [20, 184, 166];
@@ -168,7 +170,7 @@ export default function GridPdfExportButton(props: Props) {
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(9);
       setColor(palette.muted);
-      text(`Target: ${props.target}  /  ${props.gridSize} x ${props.gridSize} points  /  ${props.spacingKm} km spacing  /  ${props.language}`, margin, 60);
+      text(`Target: ${props.target}  /  ${props.gridSize} x ${props.gridSize} points  /  ${radiusMiForSpacing(props.spacingKm, props.gridSize)} mi radius  /  ${props.language}`, margin, 60);
 
       const metrics = [
         ['ATO SCORE', `${summary.ato}%`, 'Local visibility'],
@@ -233,7 +235,7 @@ export default function GridPdfExportButton(props: Props) {
         for (let row = 0; row < props.gridSize; row += 1) {
           for (let col = 0; col < props.gridSize; col += 1) {
             const point = pointByCell.get(`${row}:${col}`);
-            const color = rankColor(point?.rank ?? null);
+            const color: [number, number, number] = point?.failed ? [203, 213, 225] : rankColor(point?.rank ?? null);
             const x = gridX + col * cell;
             const y = gridTop + row * cell;
             fill(color);
@@ -248,7 +250,7 @@ export default function GridPdfExportButton(props: Props) {
               pdf.setFont('helvetica', 'bold');
               pdf.setFontSize(Math.min(8, cell * 0.45));
               pdf.setTextColor(255, 255, 255);
-              text(point?.rank == null ? '-' : `#${point.rank}`, x + cell / 2, y + cell / 2 + 1.5, { align: 'center' });
+              text(point?.rank != null ? `#${point.rank}` : point?.failed ? '-' : '20+', x + cell / 2, y + cell / 2 + 1.5, { align: 'center' });
             }
           }
         }
@@ -258,7 +260,7 @@ export default function GridPdfExportButton(props: Props) {
       const legend = [
         ['#1', [5, 150, 105]], ['#2-3', [16, 185, 129]], ['#4-7', [20, 184, 166]],
         ['#8-10', [59, 130, 246]], ['#11-15', [245, 158, 11]], ['#16-20', [249, 115, 22]],
-        ['#21+', [239, 68, 68]], ['Not found', [203, 213, 225]],
+        ['20+', [239, 68, 68]], ['No data', [203, 213, 225]],
       ] as const;
       let legendX = margin;
       legend.forEach(([label, color]) => {

@@ -5,9 +5,9 @@
 import { getProjects, getDbForProject, entryFromGridRow, type GridPoint, type GridSearchEntry, type Project } from './db';
 import { parseTargetCid, reconcileGridPoints } from './grid-target';
 
-const COLUMNS = 'id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode';
+const COLUMNS = 'id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode, pinned';
 
-type GridRow = Parameters<typeof entryFromGridRow>[0];
+type GridRow = Parameters<typeof entryFromGridRow>[0] & { pinned?: number };
 type GridRowWithResults = GridRow & { results: string | null };
 
 interface ScheduleRow {
@@ -95,9 +95,11 @@ function topCompetitors(points: GridPoint[], limit = 10) {
     .slice(0, limit);
 }
 
-function runHeader(project: Project, entry: GridSearchEntry) {
+function runHeader(project: Project, entry: GridSearchEntry, pinned = false) {
   return {
     run_id: entry.id,
+    /** Patch fork: the monitor's starting-point scan, kept forever by retention. */
+    pinned,
     monitor_id: entry.series_id,
     run_at: new Date(entry.ts).toISOString(),
     status: entry.status,
@@ -121,8 +123,9 @@ export function listMonitors(filter: { q?: string; cid?: string; project?: strin
     if (filter.project && filter.project !== project.id) continue;
     const db = getDbForProject(project.id);
     const rows = db.prepare(`SELECT ${COLUMNS} FROM grid_searches ORDER BY ts DESC`).all() as GridRow[];
-    const schedules = new Map((db.prepare('SELECT series_id, frequency, weekday, time_of_day, time_zone, next_run_at FROM grid_schedules').all() as ScheduleRow[])
-      .map((row) => [row.series_id, row]));
+    const scheduleRows = db.prepare('SELECT series_id, keyword, target, center, grid_size, spacing_km, language, frequency, weekday, time_of_day, time_zone, next_run_at FROM grid_schedules')
+      .all() as Array<ScheduleRow & { keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string }>;
+    const schedules = new Map(scheduleRows.map((row) => [row.series_id, row]));
     const bySeries = new Map<string, GridSearchEntry[]>();
     for (const row of rows) {
       const entry = entryFromGridRow(row);
@@ -147,6 +150,29 @@ export function listMonitors(filter: { q?: string; cid?: string; project?: strin
         runs: runs.length,
         report_dates: runs.filter((run) => run.status === 'done').map((run) => new Date(run.ts).toISOString()).reverse(),
         latest_run: latestDone ? getRun(latestDone.id, project.id, { points: false }) : null,
+      });
+    }
+    // Patch fork: a monitor created through the API is scheduled before its first run.
+    for (const row of scheduleRows) {
+      if (bySeries.has(row.series_id)) continue;
+      if (q && !`${row.keyword} ${row.target}`.toLowerCase().includes(q)) continue;
+      if (filter.cid && parseTargetCid(row.target) !== filter.cid) continue;
+      const pseudo = { ...row, id: '', ts: 0, cost: null, status: 'done', queue_mode: 'standard' };
+      const entry = entryFromGridRow(pseudo);
+      monitors.push({
+        monitor_id: row.series_id,
+        project: { id: project.id, name: project.name },
+        keyword: row.keyword,
+        target: row.target,
+        business: businessOf(entry),
+        center: center(row.center),
+        grid_size: row.grid_size,
+        spacing_km: row.spacing_km,
+        language: row.language,
+        schedule: scheduleOf(row),
+        runs: 0,
+        report_dates: [],
+        latest_run: null,
       });
     }
   }
@@ -174,7 +200,7 @@ export function getRun(runId: string, projectId?: string, options: { points?: bo
   const found = findRow(runId, projectId);
   if (!found) return null;
   const entry = entryFromGridRow(found.row);
-  const header = runHeader(found.project, entry);
+  const header = runHeader(found.project, entry, found.row.pinned === 1);
   if (!includePoints) return header;
   const points = parsePoints(found.row.results, entry.target);
   const previous = previousDonePoints(found.project, entry);
@@ -212,7 +238,7 @@ export function getMonitorRuns(monitorId: string, projectId?: string) {
     if (projectId && projectId !== project.id) continue;
     const rows = getDbForProject(project.id).prepare(`SELECT ${COLUMNS}, results FROM grid_searches WHERE series_id = ? ORDER BY ts DESC`).all(monitorId) as GridRowWithResults[];
     if (!rows.length) continue;
-    const runs = rows.map((row) => runHeader(project, entryFromGridRow(row)));
+    const runs = rows.map((row) => runHeader(project, entryFromGridRow(row), row.pinned === 1));
     const done = runs.filter((run) => run.status === 'done' && run.summary).reverse();
     return {
       runs,

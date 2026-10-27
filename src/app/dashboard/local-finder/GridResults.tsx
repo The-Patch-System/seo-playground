@@ -27,7 +27,8 @@ interface Props {
 }
 
 function rankColor(rank: number | null): string {
-  if (rank === null) return '#94a3b8';
+  // Patch fork: not in the top 20 shows as a red "20+", like Semrush MRT.
+  if (rank === null) return '#ef4444';
   if (rank === 1)    return '#059669';
   if (rank <= 3)     return '#10b981';
   if (rank <= 7)     return '#14b8a6';
@@ -61,8 +62,8 @@ export default function GridResults({ results, gridSize, spacingKm, keyword, tar
     { color: '#3b82f6', label: '#8-10' },
     { color: '#f59e0b', label: '#11-15' },
     { color: '#f97316', label: '#16-20' },
-    { color: '#ef4444', label: '#21+' },
-    { color: '#94a3b8', label: 'Not found' },
+    { color: '#ef4444', label: '20+' },
+    ...(results.some((p) => p.failed) ? [{ color: '#94a3b8', label: 'No data' }] : []),
   ];
 
   return (
@@ -272,13 +273,13 @@ export default function GridResults({ results, gridSize, spacingKm, keyword, tar
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Distribution (grid without coordinates)</p>
           <div className="inline-grid gap-1" style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}>
             {results.map((p, i) => {
-              const color = rankColor(p.rank);
+              const color = p.failed ? '#94a3b8' : rankColor(p.rank);
               const half = Math.floor(gridSize / 2);
               const isCenter = p.row === half && p.col === half;
               return (
                 <div
                   key={i}
-                  title={p.rank != null ? `#${p.rank}` : 'Not found'}
+                  title={p.rank != null ? `#${p.rank}` : p.failed ? 'No data' : 'Not in the top 20'}
                   style={{
                     width: 36, height: 36,
                     background: color,
@@ -288,7 +289,7 @@ export default function GridResults({ results, gridSize, spacingKm, keyword, tar
                     fontSize: 11, fontWeight: 900, color: 'white',
                   }}
                 >
-                  {p.rank ?? '—'}
+                  {p.rank ?? (p.failed ? '—' : '20+')}
                 </div>
               );
             })}

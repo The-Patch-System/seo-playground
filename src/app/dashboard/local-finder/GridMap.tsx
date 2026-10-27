@@ -17,8 +17,12 @@ interface Props {
   captureId?: string;
 }
 
+// Patch fork: like Semrush MRT, "not in the top 20" is a red "20+". Grey "—" only means the
+// point has no data (DataForSEO failed there even after retries).
+const NO_DATA_COLOR = '#94a3b8';
+
 function rankColor(rank: number | null): string {
-  if (rank === null) return '#94a3b8';
+  if (rank === null) return '#ef4444';
   if (rank === 1)    return '#059669';
   if (rank <= 3)     return '#10b981';
   if (rank <= 7)     return '#14b8a6';
@@ -73,7 +77,7 @@ function buildPopupHtml(point: GridPoint, target: string, highlightKey?: string)
   }).join('');
 
   const emptyMsg = items.length === 0
-    ? '<p style="color:#94a3b8;font-size:12px;margin:8px 0">No results at this point.</p>'
+    ? `<p style="color:#94a3b8;font-size:12px;margin:8px 0">${point.failed ? 'No data at this point (the check failed after retries).' : 'No results at this point.'}</p>`
     : '';
 
   return `
@@ -199,8 +203,9 @@ export default function GridMap({ points, gridSize, target, highlightKey, highli
     geoPoints.forEach((point) => {
       const isCenter = point.row === half && point.col === half;
       const rank = pointRank(point, highlightKey);
-      const color = rankColor(rank);
-      const label = rank != null ? String(rank) : '—';
+      const noData = point.failed === true;
+      const color = noData ? NO_DATA_COLOR : rankColor(rank);
+      const label = rank != null ? String(rank) : noData ? '—' : '20+';
       const before = pointRank(previousByPoint.get(`${point.row}:${point.col}`) ?? { ...point, rank: null }, highlightKey);
       const movement = before === null && rank === null ? ''
         : before === null ? 'new'
