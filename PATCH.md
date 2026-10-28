@@ -13,13 +13,14 @@ Fork of [paulmassen/seo-playground](https://github.com/paulmassen/seo-playground
   - A point outside the top 20 shows as a red **20+** (like Semrush). A grey **—** / "No data" means DataForSEO failed at that point: failed tasks are re-posted up to 3 times before a point is marked `failed`.
   - The monitor list shows every monitor (upstream capped it at the newest 100 runs).
   - At most `GEO_GRID_MAX_CLAIMS_PER_PASS` (default 20) scheduled monitors start per worker pass (one pass a minute), so hundreds of monitors on the 15th start in waves; task polling is capped at 10 requests in flight per run.
-  - **Retention**: once a day, each monitor keeps its starting-point run (the `pinned` run, else its oldest run) plus the last ~6 months; older runs are deleted.
+  - **Retention is OFF by default** (changed Oct 28 2026): no map scans are deleted, so the imported Semrush history and every new client's history are kept. Code is in `pruneGridHistoryForProject` (`src/lib/db.ts`), called from `src/app/api/cron/geo-grid/route.ts`. Set `GRID_RETENTION_ENABLED=true` on the `app` service to turn it on; no code change needed. When on, it runs once a day and on the first worker pass after every app restart (the timer is in memory), and each monitor keeps its starting-point run (the `pinned` run, else its oldest finished run) plus the last ~6 months; older finished runs are deleted. Pending and failed runs are never touched. Before enabling, make sure each monitor's intended baseline scan is pinned (see `PATCH /runs/{run_id}` below), or the oldest finished scan becomes the protected start. Intended long-term plan was starting-point scan + last 6 months, so enable it if storage ever becomes a concern.
 
 ## Railway
 
-- `app` service: builds this repo's Dockerfile, volume at `/data`, vars `DB_PATH=/data/seo-playground.db`, `CRON_SECRET`, `SITE_PASSWORD`, `RAILWAY_RUN_UID=0` (volume is root-owned; the image runs as uid 1001).
+- `app` service: builds this repo's Dockerfile, volume at `/data`, vars `DB_PATH=/data/seo-playground.db`, `CRON_SECRET`, `SITE_PASSWORD`, `RAILWAY_RUN_UID=0` (volume is root-owned; the image runs as uid 1001). Optional: `GRID_RETENTION_ENABLED=true` (see Retention above).
 - `worker` service: same repo, start command `node scripts/geo-grid-worker.mjs`, vars `CRON_SECRET` (same value), `GEO_GRID_WORKER_URL=http://app.railway.internal:3000`. No volume, no public domain.
 - Volume backups are scheduled on the `app` volume.
+- Storage: the volume (`seo-playground-data`) is 50 GB. It sat near 0 until the Semrush history import (Oct 2026), then jumped to roughly 6 GB. Check Railway → project → volume card → Metrics. SQLite does not shrink its file after deletes, so turning retention on later will stop growth rather than free space. Volumes can be enlarged in Railway if needed.
 
 ## Reporting API
 
@@ -32,7 +33,7 @@ All requests need `x-api-key: <REPORTING_API_KEY>` (or `Authorization: Bearer <k
 
 - `GET /api/v1/geo-grid/monitors` : all monitors (including scheduled ones with no runs yet) with schedule and latest completed run summary. Filters: `?cid=`, `?q=` (keyword/target text), `?project=`.
 - `DELETE /api/v1/geo-grid/monitors/{monitor_id}` : removes a monitor (all snapshots and its schedule) from every project, or only `?project=`.
-- `PATCH /api/v1/geo-grid/runs/{run_id}` with `{ "pinned": true }` : makes that run the monitor's one starting-point map (other pins in the monitor are cleared); `{ "pinned": false }` unpins it.
+- `PATCH /api/v1/geo-grid/runs/{run_id}` with `{ "pinned": true }` : makes that run the monitor's one starting-point map (other pins in the monitor are cleared); `{ "pinned": false }` unpins it. The starting-point map should be the scan closest to the client's SEO start date, and it must match what the reporting agent has pinned. Find run IDs with `GET .../monitors/{monitor_id}/runs`.
 - `GET /api/v1/geo-grid/monitors/{monitor_id}/latest` : newest completed run with every grid point.
 - `GET /api/v1/geo-grid/monitors/{monitor_id}/runs` : run history (summaries only).
 - `GET /api/v1/geo-grid/runs/{run_id}` : one run with every grid point.
