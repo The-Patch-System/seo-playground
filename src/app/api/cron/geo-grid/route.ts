@@ -37,7 +37,8 @@ let passInProgress = false;
 // Patch fork: start at most this many scheduled monitors per pass (one pass a minute). Hundreds of
 // clinics share the 15th, so they start in waves instead of one burst against DataForSEO.
 const MAX_GRID_CLAIMS_PER_PASS = Math.max(1, Number.parseInt(process.env.GEO_GRID_MAX_CLAIMS_PER_PASS ?? '20', 10) || 20);
-// Patch fork: retention (starting-point scan + last ~6 months) runs at most once a day.
+// Patch fork: retention (starting-point scan + last ~6 months) is OFF by default so no map scans are deleted.
+// Set GRID_RETENTION_ENABLED=true on the app service to turn it back on. When on, it runs at most once a day.
 let lastPruneAt = 0;
 
 /**
@@ -170,7 +171,7 @@ async function runPass(credentials: { login: string; pass: string }) {
   }
 
   let gridRunsPruned = 0;
-  if (Date.now() - lastPruneAt > 86_400_000) {
+  if (process.env.GRID_RETENTION_ENABLED === 'true' && Date.now() - lastPruneAt > 86_400_000) {
     lastPruneAt = Date.now();
     for (const project of getProjects()) {
       try {
