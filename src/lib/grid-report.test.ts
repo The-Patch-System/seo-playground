@@ -59,6 +59,10 @@ describe('reporting API data', () => {
     const history = getMonitorRuns(seriesId);
     expect(history?.runs.map((r) => r.run_id)).toEqual(['run-new', 'run-old']);
     expect(Object.values(history?.metrics.average_positions ?? {})).toHaveLength(2);
+    // Semrush MRT counts every point, unranked as 21: (1 + 4*5 + 4*21) / 9 for the newest run.
+    expect(history?.runs[0].summary?.mrt_average_position).toBe(11.6667);
+    expect(Object.values(history?.metrics.mrt_average_positions ?? {})).toEqual([11.8889, 11.6667]);
+    expect(getRun('run-new', undefined, { points: false })?.summary?.mrt_average_position).toBe(11.6667);
     expect(getMonitorRuns('nope')).toBeNull();
   });
 });

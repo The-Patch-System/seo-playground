@@ -29,10 +29,24 @@ function businessOf(entry: GridSearchEntry) {
   };
 }
 
-function summaryOf(entry: GridSearchEntry) {
+/**
+ * Patch fork: Semrush MRT's average position. Every point counts and a point outside the
+ * top 20 counts as 21 (MRT's own rule), unlike average_rank which only averages found points.
+ * Failed points are left out. CS OS stores this so map pack history matches the Semrush era.
+ */
+function mrtAveragePosition(points: GridPoint[]): number | null {
+  const scanned = points.filter((p) => !p.failed);
+  if (!scanned.length) return null;
+  return Math.round((scanned.reduce((s, p) => s + Math.min(p.rank ?? 21, 21), 0) / scanned.length) * 10000) / 10000;
+}
+
+function summaryOf(entry: GridSearchEntry, points?: GridPoint[]) {
   const s = entry.summary;
   if (!s) return null;
-  return { visibility: s.ato, average_rank: s.avgRank, top3: s.top3Count, found: s.foundCount, total: s.totalPoints };
+  return {
+    visibility: s.ato, average_rank: s.avgRank, top3: s.top3Count, found: s.foundCount, total: s.totalPoints,
+    mrt_average_position: points ? mrtAveragePosition(points) : null,
+  };
 }
 
 function pointCoords(entry: GridSearchEntry, point: GridPoint) {
@@ -95,7 +109,7 @@ function topCompetitors(points: GridPoint[], limit = 10) {
     .slice(0, limit);
 }
 
-function runHeader(project: Project, entry: GridSearchEntry, pinned = false) {
+function runHeader(project: Project, entry: GridSearchEntry, pinned = false, points?: GridPoint[]) {
   return {
     run_id: entry.id,
     /** Patch fork: the monitor's starting-point scan, kept forever by retention. */
@@ -112,7 +126,7 @@ function runHeader(project: Project, entry: GridSearchEntry, pinned = false) {
     spacing_km: entry.spacing_km,
     language: entry.language,
     cost: entry.cost ?? null,
-    summary: summaryOf(entry),
+    summary: summaryOf(entry, points),
   };
 }
 
@@ -138,7 +152,7 @@ export function listMonitors(filter: { q?: string; cid?: string; project?: strin
       const latestDone = runs.find((run) => run.status === 'done');
       monitors.push({
         monitor_id: seriesId,
-        project: { id: project.id, name: project.name },
+        project: { id: project.id, name: project.name, domain: project.domain },
         keyword: first.keyword,
         target: first.target,
         business: businessOf(first),
@@ -161,7 +175,7 @@ export function listMonitors(filter: { q?: string; cid?: string; project?: strin
       const entry = entryFromGridRow(pseudo);
       monitors.push({
         monitor_id: row.series_id,
-        project: { id: project.id, name: project.name },
+        project: { id: project.id, name: project.name, domain: project.domain },
         keyword: row.keyword,
         target: row.target,
         business: businessOf(entry),
@@ -200,9 +214,9 @@ export function getRun(runId: string, projectId?: string, options: { points?: bo
   const found = findRow(runId, projectId);
   if (!found) return null;
   const entry = entryFromGridRow(found.row);
-  const header = runHeader(found.project, entry, found.row.pinned === 1);
-  if (!includePoints) return header;
   const points = parsePoints(found.row.results, entry.target);
+  const header = runHeader(found.project, entry, found.row.pinned === 1, points);
+  if (!includePoints) return header;
   const previous = previousDonePoints(found.project, entry);
   const previousRank = new Map((previous ?? []).map((p) => [`${p.row}:${p.col}`, p.rank]));
   return {
@@ -238,7 +252,7 @@ export function getMonitorRuns(monitorId: string, projectId?: string) {
     if (projectId && projectId !== project.id) continue;
     const rows = getDbForProject(project.id).prepare(`SELECT ${COLUMNS}, results FROM grid_searches WHERE series_id = ? ORDER BY ts DESC`).all(monitorId) as GridRowWithResults[];
     if (!rows.length) continue;
-    const runs = rows.map((row) => runHeader(project, entryFromGridRow(row), row.pinned === 1));
+    const runs = rows.map((row) => runHeader(project, entryFromGridRow(row), row.pinned === 1, parsePoints(row.results, row.target)));
     const done = runs.filter((run) => run.status === 'done' && run.summary).reverse();
     return {
       runs,
@@ -246,6 +260,8 @@ export function getMonitorRuns(monitorId: string, projectId?: string) {
       metrics: {
         average_positions: Object.fromEntries(done.map((run) => [run.run_at, run.summary!.average_rank])),
         share_of_voices: Object.fromEntries(done.map((run) => [run.run_at, run.summary!.visibility])),
+        // Patch fork: Semrush MRT-style average position (unranked = 21), used by the CS OS map pack sync.
+        mrt_average_positions: Object.fromEntries(done.map((run) => [run.run_at, run.summary!.mrt_average_position])),
       },
     };
   }

@@ -43,6 +43,6 @@ Run payload:
 - `points[]`: `row`, `col`, `lat`, `lng`, `rank` (null = not in top 20) and `results` (that point's top 20: rank, title, domain, cid, rating, reviews, is_target). `?competitors=false` drops `results`.
 - `positions[]`: Semrush MRT heatmap shape, `{ point: { id, coordinates: { lat, lng } }, position?, diff? }`; `position` is omitted when not in the top 20 and `diff` is vs the previous run (negative = improved).
 - `top_competitors[]`: business (cid, name, domain, rating, reviews), `average_position`, `share_of_voice`, `found_points`, `is_target`.
-- `business`: `{ cid, name, coordinates }` (the pin) and `summary`: `visibility` (0-100 share of voice), `average_rank`, `top3`, `found`, `total`.
+- `business`: `{ cid, name, coordinates }` (the pin) and `summary`: `visibility` (0-100 share of voice), `average_rank` (found points only), `top3`, `found`, `total`, and `mrt_average_position` (Semrush MRT's rule: every point counts, outside the top 20 = 21, failed points left out).
 
-Run history adds `metrics: { average_positions, share_of_voices }` keyed by ISO date, like Semrush MRT.
+Run history adds `metrics: { average_positions, share_of_voices, mrt_average_positions }` keyed by ISO date, like Semrush MRT. `mrt_average_positions` is what the CS OS map pack sync (n8n "CS OS — Sync SEO Playground Map Pack (Daily)") stores, so its numbers line up with the Semrush-era history. The monitor list's `project` also carries `domain`.
