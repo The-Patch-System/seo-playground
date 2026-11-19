@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, lazy, Suspense } from 'react';
-import { LANGUAGES } from '@/lib/geo-options';
+import { LANGUAGES, formatRadiusMiles, gridRadiusMiles, spacingKmForRadius } from '@/lib/geo-options';
 import { formatBusinessTarget } from '@/lib/grid-target';
 
 const MapPicker = lazy(() => import('./MapPicker'));
@@ -50,7 +50,7 @@ function formatLiveDuration(totalPoints: number) {
   return `~${Math.ceil(seconds / 60)} min`;
 }
 
-function GridPreview({ size, spacingKm }: { size: number; spacingKm: number }) {
+function GridPreview({ size, radiusMiles }: { size: number; radiusMiles: number }) {
   const half = Math.floor(size / 2);
   return (
     <div className="flex flex-col items-center gap-2 py-2">
@@ -72,7 +72,7 @@ function GridPreview({ size, spacingKm }: { size: number; spacingKm: number }) {
         })}
       </div>
       <p className="text-[10px] text-slate-400 font-medium">
-        {size}×{size} points · {spacingKm} km spacing · ~{((size - 1) * spacingKm).toFixed(1)} km coverage
+        {size}×{size} points · {formatRadiusMiles(radiusMiles)} radius
       </p>
     </div>
   );
@@ -85,7 +85,17 @@ export default function LocalFinderForm({ defaults }: Props) {
   const [coordinate, setCoordinate] = useState(defaults.locationCoordinate || defaults.defaultCenter);
   const [isLoading, setIsLoading] = useState(false);
   const [gridSize, setGridSize] = useState(parseInt(defaults.gridSize ?? '5', 10));
-  const [spacingKm, setSpacingKm] = useState(parseFloat(defaults.spacingKm ?? '1'));
+  // Users think in radius (mi); spacing_km stays the submitted/stored unit, derived from radius + grid size.
+  const [lastValidRadius, setLastValidRadius] = useState(() => {
+    const size = parseInt(defaults.gridSize ?? '5', 10);
+    const km = parseFloat(defaults.spacingKm ?? '');
+    return Number.isFinite(km) && km > 0 ? Math.round(gridRadiusMiles(size, km) * 10) / 10 : 5;
+  });
+  // Raw text so the field can be empty while typing; radiusMiles is always a valid positive number.
+  const [radiusText, setRadiusText] = useState(() => String(lastValidRadius));
+  const parsedRadius = parseFloat(radiusText);
+  const radiusMiles = Number.isFinite(parsedRadius) && parsedRadius > 0 ? parsedRadius : lastValidRadius;
+  const spacingKm = Math.round(spacingKmForRadius(gridSize, radiusMiles) * 1000) / 1000;
   const [queueMode, setQueueMode] = useState<QueueMode>((defaults.queueMode as QueueMode) || 'live');
   const [language, setLanguage] = useState(defaults.language || 'English');
   const [gridTarget, setGridTarget] = useState(defaults.gridTarget ?? '');
@@ -211,27 +221,29 @@ export default function LocalFinderForm({ defaults }: Props) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-1.5">Spacing (km)</label>
-              <select
-                name="spacing_km"
-                value={spacingKm}
-                onChange={(e) => setSpacingKm(parseFloat(e.target.value))}
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-1.5">Radius (mi)</label>
+              <input
+                type="number"
+                min="0.5"
+                max="50"
+                step="0.5"
+                value={radiusText}
+                onChange={(e) => {
+                  setRadiusText(e.target.value);
+                  const v = parseFloat(e.target.value);
+                  if (Number.isFinite(v) && v > 0) setLastValidRadius(v);
+                }}
+                onBlur={() => setRadiusText(String(radiusMiles))}
                 className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800"
-              >
-                <option value="0.5">0.5 km</option>
-                <option value="1">1 km</option>
-                <option value="2">2 km</option>
-                <option value="3">3 km</option>
-                <option value="5">5 km</option>
-                <option value="10">10 km</option>
-              </select>
+              />
+              <input type="hidden" name="spacing_km" value={spacingKm} />
             </div>
           </div>
 
           {/* Grid preview */}
           <div className="bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 text-center">Grid preview</p>
-            <GridPreview size={gridSize} spacingKm={spacingKm} />
+            <GridPreview size={gridSize} radiusMiles={radiusMiles} />
           </div>
 
           {/* Queue mode */}

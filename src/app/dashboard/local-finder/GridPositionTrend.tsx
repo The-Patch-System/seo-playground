@@ -17,7 +17,7 @@ const bands = [
   { key: 'top3', label: 'Top 3', color: '#059669' },
   { key: 'top4To7', label: '#4–7', color: '#14b8a6' },
   { key: 'top8To10', label: '#8–10', color: '#3b82f6' },
-  { key: 'top11Plus', label: '#11+', color: '#f59e0b' },
+  { key: 'top11Plus', label: '#11–20', color: '#f59e0b' },
 ] as const;
 
 function formatDate(ts: number) {
@@ -52,15 +52,11 @@ export default function GridPositionTrend({ points, selectedId }: Props) {
   const tickIndexes = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
 
   return (
-    <section className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-800">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-black text-slate-900 dark:text-white">Position distribution over time</h3>
-          <p className="mt-0.5 text-[11px] text-slate-400">Share of grid points in each ranking range. Newest snapshot is on the right.</p>
-        </div>
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold text-slate-500">
-          {bands.map((band) => <span key={band.key} className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm" style={{ backgroundColor: band.color }} />{band.label}</span>)}
-        </div>
+    <div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+        {bands.map((band) => <span key={band.key} className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: band.color }} />{band.label}</span>)}
+        {/* The unfilled share above the bands is the points outside the top 20. */}
+        <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm border border-slate-300 dark:border-slate-600" />20+</span>
       </div>
 
       <div className="mt-3 overflow-hidden rounded-xl bg-slate-50 p-2 dark:bg-slate-950/60">
@@ -73,12 +69,11 @@ export default function GridPositionTrend({ points, selectedId }: Props) {
           }) : bands.map((band) => <path key={band.key} d={areaPath(band.key)} fill={band.color} fillOpacity="0.86" stroke="#ffffff" strokeOpacity="0.45" strokeWidth="1"><title>{band.label}</title></path>)}
           {points.map((point, index) => {
             const active = point.id === selectedId;
-            return <g key={point.id}><line x1={positionX(index)} x2={positionX(index)} y1={top} y2={height - bottom} stroke={active ? '#1d4ed8' : 'currentColor'} strokeOpacity={active ? '0.6' : '0.08'} strokeDasharray={active ? '3 3' : undefined} /><circle cx={positionX(index)} cy={y(runningPercent(point, 0))} r={active ? 4.5 : 3} fill="#ffffff" stroke="#059669" strokeWidth="2"><title>{`${formatDate(point.ts)} — Top 3: ${point.top3}/${point.total}; #4–7: ${point.top4To7}/${point.total}; #8–10: ${point.top8To10}/${point.total}; #11+: ${point.top11Plus}/${point.total}`}</title></circle></g>;
+            return <g key={point.id}><line x1={positionX(index)} x2={positionX(index)} y1={top} y2={height - bottom} stroke={active ? '#1d4ed8' : 'currentColor'} strokeOpacity={active ? '0.6' : '0.08'} strokeDasharray={active ? '3 3' : undefined} /><circle cx={positionX(index)} cy={y(runningPercent(point, 0))} r={active ? 4.5 : 3} fill="#ffffff" stroke="#059669" strokeWidth="2"><title>{`${formatDate(point.ts)} — Top 3: ${point.top3}/${point.total}; #4–7: ${point.top4To7}/${point.total}; #8–10: ${point.top8To10}/${point.total}; #11–20: ${point.top11Plus}/${point.total}`}</title></circle></g>;
           })}
           {tickIndexes.map((index) => <text key={index} x={positionX(index)} y={height - 10} textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'} fontSize="9" fill="currentColor" opacity="0.55">{formatDate(points[index].ts)}</text>)}
         </svg>
       </div>
-      {points.length === 1 && <p className="mt-2 text-[10px] text-slate-400">Run this monitor again to draw its trend.</p>}
-    </section>
+    </div>
   );
 }

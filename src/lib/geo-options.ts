@@ -370,3 +370,22 @@ export function labsLanguagesFor(country: string): typeof LANGUAGES {
   const filtered = LANGUAGES.filter((l) => set.has(l.value));
   return filtered.length > 0 ? filtered : LANGUAGES;
 }
+
+const KM_PER_MILE = 1.609344;
+
+/** Distance from the grid center to its edge, in miles (spacing is km between adjacent points). */
+export function gridRadiusMiles(gridSize: number, spacingKm: number): number {
+  return (spacingKm * (gridSize - 1)) / 2 / KM_PER_MILE;
+}
+
+/** Inverse of gridRadiusMiles: the km spacing that makes a gridSize grid reach radiusMiles. */
+export function spacingKmForRadius(gridSize: number, radiusMiles: number): number {
+  if (gridSize < 2) return 0;
+  return (radiusMiles * KM_PER_MILE) / ((gridSize - 1) / 2);
+}
+
+/** Display form: whole numbers bare, otherwise one decimal ('5 mi', '2.5 mi'). */
+export function formatRadiusMiles(miles: number): string {
+  const rounded = Math.round(miles * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)} mi`;
+}

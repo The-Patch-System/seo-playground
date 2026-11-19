@@ -10,7 +10,35 @@ export interface GridSummary {
   ato: number;
 }
 
-/** Same stats shown in the results view (ATO score, avg rank, top 3/10 counts) — shared so history previews stay consistent. */
+/** Scans request depth 20, so a null rank always means "not in the top 20". */
+export const UNRANKED_LABEL = '20+';
+
+/** One-line explanation of the visibility score, shown wherever the score is labelled. */
+export const VISIBILITY_HELP = 'Share of visibility across the grid: #1 = 100%, #20 = 5%, not in the top 20 = 0, averaged over all points.';
+
+/** Marker colour for a rank on the map and in the legend. */
+export function rankColor(rank: number | null): string {
+  if (rank === null) return '#94a3b8';
+  if (rank === 1)    return '#059669';
+  if (rank <= 3)     return '#10b981';
+  if (rank <= 7)     return '#14b8a6';
+  if (rank <= 10)    return '#3b82f6';
+  if (rank <= 15)    return '#f59e0b';
+  // 16-20. Also the fallback should a deeper scan ever return a rank past 20 (not listed in the legend).
+  return '#f97316';
+}
+
+export const RANK_LEGEND: { color: string; label: string }[] = [
+  { color: rankColor(1), label: '#1' },
+  { color: rankColor(2), label: '#2-3' },
+  { color: rankColor(4), label: '#4-7' },
+  { color: rankColor(8), label: '#8-10' },
+  { color: rankColor(11), label: '#11-15' },
+  { color: rankColor(16), label: '#16-20' },
+  { color: rankColor(null), label: UNRANKED_LABEL },
+];
+
+/** Same stats shown in the results view (visibility, avg rank, top 3/10 counts) — shared so history previews stay consistent. */
 export function computeGridSummary(results: GridPoint[]): GridSummary {
   const totalPoints = results.length;
   const ranked = results.filter((p) => p.rank !== null);
@@ -42,7 +70,7 @@ export interface CompetitorSummary {
   bestRank: number;
   top3Count: number;
   avgRating: number | null;
-  /** Same weighted-visibility formula as the target's ATO score, so the two are directly comparable. */
+  /** Same weighted-visibility formula as the target's visibility score, so the two are directly comparable. */
   visibilityScore: number;
 }
 

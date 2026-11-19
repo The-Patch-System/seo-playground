@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { GridPoint } from '@/lib/db';
-import { competitorKey } from './grid-insights';
+import { competitorKey, rankColor, UNRANKED_LABEL } from './grid-insights';
 
 interface Props {
   points: GridPoint[];
@@ -10,22 +10,12 @@ interface Props {
   target: string;
   /** When set, markers show this competitor's rank at each point instead of the target's. */
   highlightKey?: string;
-  highlightName?: string;
+  /** Dims ranked pins and rings the "20+" (not in the top 20) pins so they stand out. */
+  emphasizeUnranked?: boolean;
   /** Previous snapshot, used to show the per-marker movement in timeline mode. */
   previousPoints?: GridPoint[] | null;
   /** A stable DOM id allows the PDF export to capture this exact map. */
   captureId?: string;
-}
-
-function rankColor(rank: number | null): string {
-  if (rank === null) return '#94a3b8';
-  if (rank === 1)    return '#059669';
-  if (rank <= 3)     return '#10b981';
-  if (rank <= 7)     return '#14b8a6';
-  if (rank <= 10)    return '#3b82f6';
-  if (rank <= 15)    return '#f59e0b';
-  if (rank <= 20)    return '#f97316';
-  return '#ef4444';
 }
 
 function rankTextColor(rank: number): string {
@@ -133,7 +123,7 @@ function pointRank(point: GridPoint, highlightKey?: string): number | null {
   return match ? match.rank_group : null;
 }
 
-export default function GridMap({ points, gridSize, target, highlightKey, highlightName, previousPoints, captureId }: Props) {
+export default function GridMap({ points, gridSize, target, highlightKey, emphasizeUnranked = false, previousPoints, captureId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import('leaflet').Map | null>(null);
   const leafletRef = useRef<typeof import('leaflet') | null>(null);
@@ -159,7 +149,10 @@ export default function GridMap({ points, gridSize, target, highlightKey, highli
 
       // The basemap is intentionally initialized only once. Snapshot changes use
       // the marker layer below, keeping the exact same geographic context in view.
-      const map = L.map(containerRef.current!, { zoomControl: true }).setView([0, 0], 2);
+      const map = L.map(containerRef.current!, { zoomControl: true, scrollWheelZoom: false }).setView([0, 0], 2);
+      // Wheel zoom would hijack page scrolling; only allow it once the user has clicked into the map.
+      map.on('click focus', () => map.scrollWheelZoom.enable());
+      map.getContainer().addEventListener('mouseleave', () => map.scrollWheelZoom.disable());
       mapRef.current = map;
       leafletRef.current = L;
 
@@ -200,7 +193,8 @@ export default function GridMap({ points, gridSize, target, highlightKey, highli
       const isCenter = point.row === half && point.col === half;
       const rank = pointRank(point, highlightKey);
       const color = rankColor(rank);
-      const label = rank != null ? String(rank) : '—';
+      const label = rank != null ? String(rank) : UNRANKED_LABEL;
+      const labelSize = rank != null ? fontSize : fontSize - 2;
       const before = pointRank(previousByPoint.get(`${point.row}:${point.col}`) ?? { ...point, rank: null }, highlightKey);
       const movement = before === null && rank === null ? ''
         : before === null ? 'new'
@@ -209,10 +203,13 @@ export default function GridMap({ points, gridSize, target, highlightKey, highli
               : `${before - rank > 0 ? '+' : ''}${before - rank}`;
       const movementColor = before === null || (rank !== null && before > rank) ? '#065f46' : '#991b1b';
       const border = isCenter ? 'border: 3px dashed rgba(255,255,255,0.85);' : 'border: 2px solid rgba(255,255,255,0.4);';
+      const ring = emphasizeUnranked && rank === null ? 'outline:3px solid #0f172a;outline-offset:2px;' : '';
+      const dimmed = emphasizeUnranked && rank !== null;
       const markerPx = rank === 1 ? Math.round(cellPx * 1.3) : cellPx;
-      const html = rank === 1
+      const markerHtml = rank === 1
         ? starMarkerHtml(markerPx, fontSize, color, label, isCenter, movement, movementColor)
-        : `<div style="position:relative;width:${cellPx}px;height:${cellPx}px;background:${color};border-radius:${Math.round(cellPx * 0.22)}px;display:flex;align-items:center;justify-content:center;font-size:${fontSize}px;font-weight:900;color:white;font-family:system-ui,sans-serif;${border}box-shadow:0 2px 8px rgba(0,0,0,0.35);cursor:pointer;transition:transform 0.1s" onmouseenter="this.style.transform='scale(1.12)'" onmouseleave="this.style.transform='scale(1)'"><span>${label}</span>${movement ? `<span style="position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);border-radius:99px;background:rgba(255,255,255,0.96);padding:1px 3px;font-size:9px;line-height:11px;font-weight:900;color:${movementColor};box-shadow:0 1px 2px rgba(15,23,42,0.22)">${movement}</span>` : ''}</div>`;
+        : `<div style="position:relative;width:${cellPx}px;height:${cellPx}px;background:${color};border-radius:${Math.round(cellPx * 0.22)}px;display:flex;align-items:center;justify-content:center;font-size:${labelSize}px;font-weight:900;color:white;font-family:system-ui,sans-serif;${border}${ring}box-shadow:0 2px 8px rgba(0,0,0,0.35);cursor:pointer;transition:transform 0.1s" onmouseenter="this.style.transform='scale(1.12)'" onmouseleave="this.style.transform='scale(1)'"><span>${label}</span>${movement ? `<span style="position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);border-radius:99px;background:rgba(255,255,255,0.96);padding:1px 3px;font-size:9px;line-height:11px;font-weight:900;color:${movementColor};box-shadow:0 1px 2px rgba(15,23,42,0.22)">${movement}</span>` : ''}</div>`;
+      const html = dimmed ? `<div style="opacity:0.25">${markerHtml}</div>` : markerHtml;
       const icon = L.divIcon({ html, className: '', iconSize: [markerPx, markerPx], iconAnchor: [markerPx / 2, markerPx / 2] });
       const marker = L.marker([point.lat!, point.lng!], { icon }).addTo(markerLayer);
       marker.bindPopup(buildPopupHtml(point, target, highlightKey), {
@@ -226,7 +223,7 @@ export default function GridMap({ points, gridSize, target, highlightKey, highli
       boundsSignatureRef.current = signature;
       map.fitBounds(L.latLngBounds(geoPoints.map((point) => [point.lat!, point.lng!] as [number, number])), { padding: [48, 48] });
     }
-  }, [mapReady, points, gridSize, target, highlightKey, previousPoints]);
+  }, [mapReady, points, gridSize, target, highlightKey, emphasizeUnranked, previousPoints]);
 
   return (
     <>
@@ -255,11 +252,6 @@ export default function GridMap({ points, gridSize, target, highlightKey, highli
         }
       `}</style>
       <div id={captureId} className="relative bg-slate-100">
-        {highlightKey && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-blue-600 text-white text-[11px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg">
-            Showing: {highlightName ?? 'competitor'}
-          </div>
-        )}
         <div
           ref={containerRef}
           className="w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800"

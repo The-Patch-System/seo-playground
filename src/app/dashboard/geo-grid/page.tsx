@@ -8,7 +8,9 @@ import LocalFinderForm from '../local-finder/LocalFinderForm';
 import GridPending from '../local-finder/GridPending';
 import GridTimeline from '../local-finder/GridTimeline';
 import type { GridPositionTrendPoint } from '../local-finder/GridPositionTrend';
-import type { GridMapSnapshot } from '../local-finder/GridSnapshotMapPanel';
+import type { GridMapSnapshot } from '../local-finder/GridMonitorView';
+import { latestRunPerSeries } from '@/lib/grid-latest';
+import { formatRadiusMiles, gridRadiusMiles } from '@/lib/geo-options';
 import HistorySidebar from '@/components/HistorySidebar';
 import DeleteMonitorButton from '../local-finder/DeleteMonitorButton';
 import { fetchGridSearch, postGridTasksQueue, stableGridId } from '../local-finder/grid-api';
@@ -29,6 +31,21 @@ function formatDate(ts: number) {
     day: 'numeric', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: false,
   });
+}
+
+function radiusLabel(entry: { grid_size: number; spacing_km: number }) {
+  return `${formatRadiusMiles(gridRadiusMiles(entry.grid_size, entry.spacing_km))} radius`;
+}
+
+/** Visibility change vs the previous scan, next to a monitor card's visibility %. */
+function VisibilityDelta({ delta }: { delta?: number }) {
+  if (delta === undefined) return null;
+  const tone = delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-600' : 'text-slate-400';
+  return (
+    <span className={`ml-1.5 text-xs font-bold ${tone}`} title="Change vs the previous scan">
+      {delta === 0 ? 'no change' : `${delta > 0 ? '+' : ''}${delta}`}
+    </span>
+  );
 }
 
 function gridRerunUrl(entry: { keyword: string; center: string; grid_size: number; spacing_km: number; target: string; language: string; queue_mode: string }, basePath = '/dashboard/geo-grid') {
@@ -179,7 +196,18 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
         top11Plus: points.filter((point) => point.rank !== null && point.rank >= 11).length,
       }];
     });
-  const latestBySeries = Array.from(new Map(gridHistory.map((entry) => [entry.series_id, entry])).values());
+  const latestBySeries = latestRunPerSeries(gridHistory);
+  // Visibility change vs the previous completed run of each series, derived from the history already
+  // loaded (no extra queries). getGridHistory() is capped, so a series whose older runs fell outside
+  // that window simply shows no change.
+  const visibilityDeltaBySeries = new Map<string, number>();
+  for (const latest of latestBySeries) {
+    if (!latest.summary) continue;
+    const previous = gridHistory
+      .filter((run) => run.series_id === latest.series_id && run.ts < latest.ts && run.summary)
+      .sort((a, b) => b.ts - a.ts)[0];
+    if (previous?.summary) visibilityDeltaBySeries.set(latest.series_id, latest.summary.ato - previous.summary.ato);
+  }
 
   const formDefaults = {
     keyword: (params.keyword ?? gridEntry?.keyword ?? '').toString(),
@@ -210,13 +238,13 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
             <p className={`text-sm font-bold truncate ${isActive ? 'text-blue-700' : 'text-slate-800 dark:text-slate-200'}`}>
               {entry.keyword}
             </p>
-            <span className="text-[10px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">{entry.grid_size}×{entry.grid_size}</span>
+            <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400 px-1.5 py-0.5 rounded shrink-0">{entry.grid_size}×{entry.grid_size}</span>
             {isPending && (
-              <span className="text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded shrink-0">Pending</span>
+              <span className="text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded shrink-0">Pending</span>
             )}
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-            {entry.target} · {entry.spacing_km} km spacing
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+            {entry.target} · {radiusLabel(entry)}
             {entry.cost !== undefined ? ` · $${entry.cost.toFixed(4)}` : ''}
           </p>
           {entry.summary && (
@@ -224,20 +252,20 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
               <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500" style={{ width: `${entry.summary.ato}%` }} />
               </div>
-              <span className="text-[10px] font-black text-emerald-600 tabular-nums shrink-0">{entry.summary.ato}%</span>
-              <span className="text-[10px] text-slate-400 shrink-0">
-                {entry.summary.avgRank !== null ? `avg #${entry.summary.avgRank}` : 'not found'} · {entry.summary.foundCount}/{entry.summary.totalPoints}
+              <span className="text-xs font-black text-emerald-600 tabular-nums shrink-0">{entry.summary.ato}%</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">
+                {entry.summary.avgRank !== null ? `avg #${entry.summary.avgRank}` : 'avg 20+'} · {entry.summary.foundCount}/{entry.summary.totalPoints}
               </span>
             </div>
           )}
         </a>
         <div className="flex items-center justify-between gap-3 mt-1.5">
-          <span className="text-[11px] text-slate-400">{formatDate(entry.ts)}</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">{formatDate(entry.ts)}</span>
           <div className="flex items-center gap-3">
           <DeleteMonitorButton runId={entry.id} compact />
           <a
             href={gridRerunUrl(entry)}
-            className="text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-800 transition-colors"
+            className="text-xs font-bold text-emerald-600 hover:text-emerald-800 transition-colors"
             title="Run this monitor now"
           >
             Run now ↻
@@ -248,33 +276,42 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
     );
   });
 
+  const addMonitorForm = (
+    <details className="group rounded-2xl border border-dashed border-blue-200 bg-blue-50/40 p-5 dark:border-blue-900/70 dark:bg-blue-950/20" open={latestBySeries.length === 0 || !!gridError}>
+      <summary className="cursor-pointer list-none">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-black text-slate-900 dark:text-white">Add a location and keyword to monitor</p>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Choose the map center, keyword, and target domain or business.</p>
+          </div>
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-600 text-lg font-medium text-white transition-transform group-open:rotate-45">+</span>
+        </div>
+      </summary>
+      <div className="mt-5 border-t border-blue-100 pt-5 dark:border-blue-900/60"><LocalFinderForm defaults={formDefaults} /></div>
+    </details>
+  );
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Geo-grid monitors</h1>
-        <p className="text-sm text-slate-400 mt-1">Track a keyword and target domain across a location, then revisit its map over time.</p>
+        {gridEntry ? (
+          <a href="/dashboard/geo-grid" className="mt-1 inline-block text-sm font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400">← All monitors</a>
+        ) : (
+          <p className="text-sm text-slate-400 mt-1">Track a keyword and target domain across a location, then revisit its map over time.</p>
+        )}
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         <div className="flex-1 min-w-0 space-y-6">
-          <details className="group rounded-2xl border border-dashed border-blue-200 bg-blue-50/40 p-5 dark:border-blue-900/70 dark:bg-blue-950/20" open={latestBySeries.length === 0 || !!gridError}>
-            <summary className="cursor-pointer list-none">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-black text-slate-900 dark:text-white">Add a location and keyword to monitor</p>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Choose the map center, keyword, and target domain or business.</p>
-                </div>
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-600 text-lg font-medium text-white transition-transform group-open:rotate-45">+</span>
-              </div>
-            </summary>
-            <div className="mt-5 border-t border-blue-100 pt-5 dark:border-blue-900/60"><LocalFinderForm defaults={formDefaults} /></div>
-          </details>
+          {/* With a monitor open, the add form moves below it so the latest map stays above the fold. */}
+          {!gridEntry && addMonitorForm}
 
           {!gridEntry && !gridError && latestBySeries.length > 0 && (
             <section aria-labelledby="monitor-list-title">
               <div className="flex items-end justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Your monitoring</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">Your monitoring</p>
                   <h2 id="monitor-list-title" className="mt-1 text-xl font-black tracking-tight text-slate-900 dark:text-white">Keyword &amp; location pairs</h2>
                 </div>
                 <span className="text-xs font-bold tabular-nums text-slate-400">{latestBySeries.length} active</span>
@@ -283,14 +320,22 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
                 {latestBySeries.map((entry) => (
                   <a key={entry.id} href={`/dashboard/geo-grid?grid_history_id=${entry.id}#results`} className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0"><p className="truncate text-base font-black text-slate-900 dark:text-white">{entry.keyword}</p><p className="mt-1 truncate text-xs font-semibold text-blue-600 dark:text-blue-400">{entry.target}</p></div>
-                      <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-[10px] font-black tabular-nums text-slate-500 dark:bg-slate-800 dark:text-slate-400">{entry.grid_size}×{entry.grid_size}</span>
+                      <div className="min-w-0"><p className="truncate text-base font-black text-slate-900 dark:text-white">{entry.keyword}</p><p className="mt-1 truncate text-xs font-semibold text-blue-600 dark:text-blue-400">{entry.target} · {radiusLabel(entry)}</p></div>
+                      <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-bold tabular-nums text-slate-500 dark:bg-slate-800 dark:text-slate-400">{entry.grid_size}×{entry.grid_size}</span>
                     </div>
                     <div className="mt-5 flex items-end justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-                      <div className="text-[11px] text-slate-400"><p>{entry.center}</p><p className="mt-0.5">Last run {formatDate(entry.ts)}</p></div>
-                      {entry.summary ? <div className="text-right"><p className="text-lg font-black tabular-nums text-emerald-600">{entry.summary.ato}%</p><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">visibility</p></div> : <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Processing</p>}
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Last run {formatDate(entry.ts)}</p>
+                      {entry.summary ? (
+                        <div className="text-right">
+                          <p className="text-lg font-black tabular-nums text-emerald-600">
+                            {entry.summary.ato}%
+                            <VisibilityDelta delta={visibilityDeltaBySeries.get(entry.series_id)} />
+                          </p>
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Visibility</p>
+                        </div>
+                      ) : <p className="text-xs font-bold text-amber-600">Processing</p>}
                     </div>
-                    <span className="mt-4 block text-[10px] font-black uppercase tracking-widest text-slate-400 transition-colors group-hover:text-blue-600">Open monitor →</span>
+                    <span className="mt-4 block text-xs font-bold text-slate-400 transition-colors group-hover:text-blue-600">Open monitor →</span>
                   </a>
                 ))}
               </div>
@@ -331,6 +376,8 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
               </>
             )}
           </div>
+
+          {gridEntry && addMonitorForm}
         </div>
 
         {gridEntry && latestBySeries.length > 0 && (
