@@ -455,28 +455,35 @@ function normalizeSchedule(input: LocationScheduleInput): LocationScheduleInput 
 
 export interface ScheduleUpdateResult {
   updated: number;
+  /** Always 0: one-time scans (keywords with no schedule) are never turned into scheduled monitors. */
   created: number;
+  /** One-time scans left alone. */
+  oneTime: number;
   /** Rows whose due slot was recalculated (frequency, day or time changed). */
   rescheduled: number;
 }
 
 /**
- * Sets every keyword's schedule at a location in one transaction. next_run_at is recalculated only
- * when frequency, day or time changes; a queue-only or no-op save keeps the due slot. Keywords without
- * a schedule get one, in the clinic's time zone. A scan the worker already claimed keeps its settings.
+ * Sets every scheduled keyword's schedule at a location in one transaction. next_run_at is recalculated
+ * only when frequency, day or time changes; a queue-only or no-op save keeps the due slot. A scan the
+ * worker already claimed keeps its settings.
+ *
+ * Keywords without a schedule are one-time scans (e.g. a sales demo) and are left alone: scheduling one
+ * would make the demo the client's history and starting point. A client's tracking starts from a new
+ * location added at SEO setup.
  */
 export function updateLocationSchedule(projectId: string, locationId: string, raw: LocationScheduleInput, now = Date.now()): ScheduleUpdateResult {
   const input = normalizeSchedule(raw);
   const location = requireLocation(projectId, locationId);
+  if (!location.monitors.some((m) => m.schedule)) {
+    throw new LocationError('invalid', 'This location only has one-time scans, which can\'t be scheduled. Add the location again from the client page to start tracking.');
+  }
   const db = getDbForProject(projectId);
   const select = db.prepare(`SELECT series_id, keyword, target, center, grid_size, spacing_km, language, queue_mode, frequency,
     weekday, time_of_day, time_zone, next_run_at, created_at, updated_at FROM grid_schedules WHERE series_id = ?`);
   const update = db.prepare(`UPDATE grid_schedules SET queue_mode = ?, frequency = ?, weekday = ?, time_of_day = ?, next_run_at = ?, updated_at = ?
     WHERE series_id = ?`);
-  const insert = db.prepare(`INSERT INTO grid_schedules
-    (series_id, keyword, target, center, grid_size, spacing_km, language, queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-  const result: ScheduleUpdateResult = { updated: 0, created: 0, rescheduled: 0 };
+  const result: ScheduleUpdateResult = { updated: 0, created: 0, oneTime: 0, rescheduled: 0 };
   db.transaction(() => {
     for (const monitor of location.monitors) {
       const row = select.get(monitor.series_id) as ScheduleRow | undefined;
@@ -491,11 +498,7 @@ export function updateLocationSchedule(projectId: string, locationId: string, ra
         result.updated += 1;
         if (timingChanged) result.rescheduled += 1;
       } else {
-        const timeZone = timeZoneForCenter(monitor.center) ?? 'America/New_York';
-        const next = nextGridScheduleRun({ frequency: input.frequency, weekday: input.day, time_of_day: input.time_of_day, time_zone: timeZone }, now);
-        insert.run(monitor.series_id, monitor.keyword, monitor.target, monitor.center, monitor.grid_size, monitor.spacing_km, monitor.language,
-          input.queue_mode, input.frequency, input.day, input.time_of_day, timeZone, next, now, now);
-        result.created += 1;
+        result.oneTime += 1;
       }
     }
   })();
@@ -522,7 +525,7 @@ export function requestRunNow(projectId: string, locationId: string, seriesId: s
     for (const monitor of monitors) {
       const schedule = db.prepare('SELECT next_run_at FROM grid_schedules WHERE series_id = ?').get(monitor.series_id) as { next_run_at: number } | undefined;
       if (!schedule) {
-        result.skipped.push({ series_id: monitor.series_id, keyword: monitor.keyword, reason: 'Not scheduled. Schedule it to run.' });
+        result.skipped.push({ series_id: monitor.series_id, keyword: monitor.keyword, reason: 'Not scheduled (one-time scan).' });
         continue;
       }
       const busy = scanActivity(db, monitor, now);
@@ -589,7 +592,10 @@ export function addKeywordToLocation(projectId: string, locationId: string, rawK
   const keyword = normalizeKeyword(rawKeyword);
   const location = requireLocation(projectId, locationId);
   if (location.monitors.length === 0) throw new LocationError('not_found', 'Location not found for this client.');
-  const base = mostCommonConfigMonitor(location.monitors);
+  if (!location.monitors.some((m) => m.schedule)) {
+    throw new LocationError('invalid', 'This location only has one-time scans. Add the location again from the client page to start tracking it.');
+  }
+  const base = mostCommonConfigMonitor(location.monitors.filter((m) => m.schedule));
   const db = getDbForProject(projectId);
   const seriesId = gridSeriesId(keyword, base.center, base.grid_size, base.spacing_km, base.target, base.language);
   if (location.monitors.some((m) => m.keyword.trim().toLowerCase() === keyword.toLowerCase()) || seriesExists(db, seriesId)) {

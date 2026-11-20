@@ -5,7 +5,7 @@ import {
   getClient, getLocation, getRunsForLocation, listRunHeaders, LocationError, type LocationGroup, type RunWithPoints,
 } from '@/lib/grid-locations-db';
 import {
-  compareKpis, computeCompetitorRows, describeSchedule, formatScanDate, keywordState, locationStatus, mapsUrl, pickRunsForDay,
+  compareKpis, computeCompetitorRows, deltaHigher, describeSchedule, formatScanDate, keywordState, locationStatus, mapsUrl, pickRunsForDay,
   scanDateOptions, sharedGridConfig, sharedSchedule, type CompetitorRow,
 } from '@/lib/grid-locations';
 import { radiusMiForSpacing } from '@/lib/grid-radius';
@@ -51,9 +51,13 @@ interface RivalLine {
   average: number;
 }
 
+/** The leading competitor (not you) per keyword, for the gap on your row. */
+type TopBySeries = Map<string, { name: string; visibility: number }>;
+
 /** Businesses across every keyword at the location: visibility per keyword on the shown scans. */
-function locationCompetitors(location: LocationGroup, current: Map<string, RunWithPoints>): RivalLine[] {
+function locationCompetitors(location: LocationGroup, current: Map<string, RunWithPoints>): { lines: RivalLine[]; top: TopBySeries } {
   const lines = new Map<string, RivalLine>();
+  const top: TopBySeries = new Map();
   for (const monitor of location.monitors) {
     const run = current.get(monitor.series_id);
     if (!run) continue;
@@ -62,11 +66,16 @@ function locationCompetitors(location: LocationGroup, current: Map<string, RunWi
       const line = lines.get(key) ?? { row, bySeries: new Map(), average: 0 };
       line.bySeries.set(monitor.series_id, row.visibility);
       lines.set(key, line);
+      const leader = top.get(monitor.series_id);
+      if (!row.isTarget && (!leader || row.visibility > leader.visibility)) top.set(monitor.series_id, { name: row.name, visibility: row.visibility });
     }
   }
   const withData = location.monitors.filter((m) => current.has(m.series_id)).length || 1;
   for (const line of lines.values()) line.average = [...line.bySeries.values()].reduce((s, v) => s + v, 0) / withData;
-  return [...lines.values()].sort((a, b) => Number(b.row.isTarget) - Number(a.row.isTarget) || b.average - a.average);
+  return {
+    lines: [...lines.values()].sort((a, b) => Number(b.row.isTarget) - Number(a.row.isTarget) || b.average - a.average),
+    top,
+  };
 }
 
 export default async function LocationPage({ params, searchParams }: { params: Params; searchParams: Promise<{ scan?: string }> }) {
@@ -91,7 +100,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
   const status = locationStatus(location.monitors);
   const grid = sharedGridConfig(location.monitors);
   const schedule = sharedSchedule(location.monitors);
-  const rivals = locationCompetitors(location, current);
+  const { lines: rivals, top: topBySeries } = locationCompetitors(location, current);
   const anyListings = rivals.length > 0;
   const anyScanning = location.monitors.some((m) => m.pendingRun);
   const latestDay = options[0]?.day;
@@ -124,7 +133,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
           <div className="flex flex-wrap items-center gap-2">
             <span className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-[13px] font-bold ${schedule.schedule ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300'}`}>
               <i className={`h-2 w-2 rounded-full ${schedule.schedule ? 'bg-emerald-600' : 'bg-amber-500'}`} aria-hidden="true" />
-              {schedule.schedule ? describeSchedule(schedule.schedule) : 'Not scheduled'}
+              {schedule.schedule ? describeSchedule(schedule.schedule) : status.status === 'one_time' ? 'One-time scan · not tracked' : 'Not scheduled'}
               {schedule.nextRunAt != null && ` · Next ${formatScanDate(schedule.nextRunAt, tz)}`}
               {(schedule.mixed || (schedule.schedule && schedule.unscheduled > 0)) && ' · Mixed'}
             </span>
@@ -180,7 +189,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
                   ) : monitor.schedule ? (
                     <><b className="text-slate-900">Waiting for its first scan</b><span>Next scan {formatScanDate(monitor.schedule.next_run_at, tz)}</span></>
                   ) : (
-                    <><b className="text-slate-900">No scans yet</b><span>Schedule it to run.</span></>
+                    <><b className="text-slate-900">No scans yet</b><span>Not scheduled.</span></>
                   )}
                 </div>
               )}
@@ -204,7 +213,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
                     {location.monitors.map((m) => <th key={m.series_id} scope="col" className="px-3 py-2 normal-case">{m.keyword}</th>)}
                   </tr>
                 </thead>
-                <RivalRows rivals={rivals.slice(0, 11)} location={location} />
+                <RivalRows rivals={rivals.slice(0, 11)} location={location} top={topBySeries} />
               </table>
             </div>
             {rivals.length > 11 && (
@@ -213,12 +222,12 @@ export default async function LocationPage({ params, searchParams }: { params: P
                 <div className="mt-2 overflow-x-auto">
                   <table className="w-full min-w-[640px] text-[13px]">
                     <caption className="sr-only">Remaining businesses</caption>
-                    <RivalRows rivals={rivals.slice(11)} location={location} />
+                    <RivalRows rivals={rivals.slice(11)} location={location} top={topBySeries} />
                   </table>
                 </div>
               </details>
             )}
-            <p className="mt-2.5 text-xs text-slate-500">Visibility per keyword on the scans shown above.</p>
+            <p className="mt-2.5 text-xs text-slate-500">Visibility per keyword on the scans shown above. On your row, the arrow is the gap to that keyword&apos;s top competitor, in visibility points (hover it for their name).</p>
           </>
         ) : (
           <p className="mt-3 text-sm text-slate-600">No competitor data on these scans yet. Scans imported from Semrush don&apos;t include it; it appears after the first scan run here.</p>
@@ -231,7 +240,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
   );
 }
 
-function RivalRows({ rivals, location }: { rivals: RivalLine[]; location: LocationGroup }) {
+function RivalRows({ rivals, location, top }: { rivals: RivalLine[]; location: LocationGroup; top: TopBySeries }) {
   return (
     <tbody>
       {rivals.map((line) => (
@@ -239,11 +248,24 @@ function RivalRows({ rivals, location }: { rivals: RivalLine[]; location: Locati
           <th scope="row" className="px-3 py-2.5 text-left font-bold">
             {line.row.isTarget ? `${location.name} (you)` : line.row.name}
           </th>
-          {location.monitors.map((m) => (
-            <td key={m.series_id} className="px-3 py-2.5 tabular-nums text-slate-700">
-              {line.bySeries.has(m.series_id) ? `${line.bySeries.get(m.series_id)}%` : '—'}
-            </td>
-          ))}
+          {location.monitors.map((m) => {
+            const value = line.bySeries.get(m.series_id);
+            const leader = top.get(m.series_id);
+            const gap = line.row.isTarget && value != null && leader ? deltaHigher(value, leader.visibility) : null;
+            return (
+              <td key={m.series_id} className="px-3 py-2.5 tabular-nums text-slate-700">
+                {value != null ? `${value}%` : '—'}
+                {gap && leader && (
+                  <span title={`Top competitor: ${leader.name} (${leader.visibility}%)`} className="ml-2 text-xs">
+                    {gap.tone === 'same'
+                      ? <span className="font-bold text-slate-500">Tied</span>
+                      : <DeltaText delta={gap} />}
+                    <span className="sr-only">{` vs top competitor ${leader.name} at ${leader.visibility}%`}</span>
+                  </span>
+                )}
+              </td>
+            );
+          })}
         </tr>
       ))}
     </tbody>

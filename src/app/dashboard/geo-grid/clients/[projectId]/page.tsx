@@ -76,7 +76,7 @@ export default async function ClientPage({ params }: { params: Params }) {
                     {location.cid ? 'View on Google Maps' : 'Search on Google Maps'}
                   </a>
                   {' · '}{grid.mixed ? 'Mixed grids' : `${grid.gridSize}×${grid.gridSize} · ${grid.radiusMi} mi`}
-                  {' · '}{schedule.schedule ? describeSchedule(schedule.schedule) : 'Not scheduled'}
+                  {' · '}{schedule.schedule ? describeSchedule(schedule.schedule) : status.status === 'one_time' ? 'Not tracked' : 'Not scheduled'}
                 </p>
               </div>
               <Link href={locationUrl(projectId, location.id)} className="inline-flex min-h-9 items-center rounded-[10px] border border-slate-300 bg-white px-3 text-xs font-bold text-slate-900 hover:border-blue-300">
@@ -125,6 +125,7 @@ export default async function ClientPage({ params }: { params: Params }) {
                         <td className="px-3 py-3 text-xs">
                           {k.state === 'scanning' ? <span className="font-bold text-blue-700">Running</span>
                             : k.state === 'waiting' ? <span className="font-bold text-slate-500">{k.scheduled ? 'Queued' : 'Not scheduled'}</span>
+                              : !k.scheduled ? <span className="font-bold text-slate-500">One-time</span>
                               : k.state === 'first_scan' ? <span className="font-bold text-slate-500">First scan</span>
                                 : <DeltaText delta={k.visibilityDelta} fallback="—" />}
                         </td>

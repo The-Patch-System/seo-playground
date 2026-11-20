@@ -7,6 +7,7 @@ const STYLES: Record<LocationStatus, string> = {
   first_scan_done: 'text-violet-700 bg-violet-50 dark:bg-violet-950 dark:text-violet-300',
   waiting: 'text-slate-600 bg-slate-100',
   not_scheduled: 'text-amber-800 bg-amber-50 dark:bg-amber-950 dark:text-amber-300',
+  one_time: 'text-slate-700 bg-slate-100',
 };
 
 export default function StatusPill({ status, label }: { status: LocationStatus; label: string }) {

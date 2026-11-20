@@ -351,17 +351,18 @@ export function keywordState(monitor: Pick<MonitorInfo, 'doneRuns' | 'pendingRun
   return monitor.pendingRun ? 'scanning' : 'waiting';
 }
 
-export type LocationStatus = 'tracking' | 'scanning' | 'first_scan_running' | 'first_scan_done' | 'waiting' | 'not_scheduled';
+export type LocationStatus = 'tracking' | 'scanning' | 'first_scan_running' | 'first_scan_done' | 'waiting' | 'not_scheduled' | 'one_time';
 
 export function locationStatus(monitors: Array<Pick<MonitorInfo, 'doneRuns' | 'pendingRun' | 'schedule'>>): { status: LocationStatus; label: string } {
   const anyDone = monitors.some((m) => m.doneRuns > 0);
   const anyPending = monitors.some((m) => m.pendingRun);
   if (anyPending) return anyDone ? { status: 'scanning', label: 'Scanning' } : { status: 'first_scan_running', label: 'First scan running' };
+  // Scans but no schedule anywhere: one-time scans, e.g. a sales demo. They never become tracking.
+  if (anyDone && monitors.every((m) => !m.schedule)) return { status: 'one_time', label: 'One-time scan' };
   if (!anyDone) {
     return monitors.some((m) => m.schedule) ? { status: 'waiting', label: 'Waiting for first scan' } : { status: 'not_scheduled', label: 'Not scheduled' };
   }
   if (monitors.every((m) => m.doneRuns <= 1)) return { status: 'first_scan_done', label: 'First scan done' };
-  if (monitors.every((m) => !m.schedule)) return { status: 'not_scheduled', label: 'Not scheduled' };
   return { status: 'tracking', label: 'Tracking' };
 }
 
