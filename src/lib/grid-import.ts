@@ -8,6 +8,7 @@ import {
 import { formatBusinessTarget } from './grid-target';
 import { DEFAULT_GRID_SIZE, DEFAULT_RADIUS_MI, DEFAULT_SCHEDULE_DAY, DEFAULT_SCHEDULE_TIME, spacingKmForRadius } from './grid-radius';
 import { timeZoneForCenter } from './grid-timezone';
+import { isOneTimeOnlyProject, ONE_TIME_ONLY_MESSAGE } from './grid-guardrails';
 
 export interface ImportRunInput {
   run_at: string;
@@ -84,6 +85,8 @@ export function createMonitor(input: CreateMonitorInput) {
   if (!Number.isFinite(spacingKm) || spacingKm <= 0 || spacingKm > 50) fail('radius_mi / spacing_km is out of range.');
 
   const projectId = resolveProjectId(input.project, { lat, lng });
+  // Patch fork: refuse before any write, so the caller gets a clear 400, not a half-done import.
+  if (isOneTimeOnlyProject(projectId) && input.schedule !== false) fail(ONE_TIME_ONLY_MESSAGE);
   const language = input.language?.trim() || 'English';
   const centerText = `${lat.toFixed(6)},${lng.toFixed(6)}`;
   const target = cid ? formatBusinessTarget(name, cid) : name;

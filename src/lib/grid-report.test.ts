@@ -6,10 +6,16 @@ import path from 'path';
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'grid-report-test-'));
 process.env.DB_PATH = path.join(tmpDir, 'test.db');
 
-import { gridSeriesId, saveGridSearch, saveGridSchedule, type GridSearchEntry } from './db';
+import { createProject, gridSeriesId, saveGridSearch, saveGridSchedule, setActiveProject, type GridSearchEntry } from './db';
 import { getMonitorRuns, getRun, listMonitors } from './grid-report';
 
 afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+// Schedules can't live in the Default Project (sales demos), so these monitors sit in a client project.
+setActiveProject(createProject({
+  name: 'Elevation Athletics', domain: 'elevation-athletics.example', defaultLocation: 'United States',
+  defaultLanguage: 'English', defaultCoordinates: '', rankTrackerDepth: '100',
+}).id);
 
 const target = 'Elevation Athletics (cid:9715887968687677574)';
 const center = '32.894142,-97.269100';

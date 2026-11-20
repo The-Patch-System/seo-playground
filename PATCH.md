@@ -9,7 +9,9 @@ Fork of [paulmassen/seo-playground](https://github.com/paulmassen/seo-playground
 - **Daily upstream sync** (`.github/workflows/sync-upstream.yml`): merges upstream `main` into this fork; Railway redeploys on the push.
 - **Semrush MRT parity for maps**:
   - Radius in miles (`Radius (miles)`, 5 mi default, 10 mi for rural), stored as km between points. New monitors default to 9x9, Standard queue.
-  - Scheduled scans run in the **clinic's** time zone (looked up from the map center), defaulting to the 15th at 12:00. "Scan monthly" is ticked on the setup form, so a new monitor is scheduled when it's created.
+  - Scheduled scans run in the **clinic's** time zone (looked up from the map center), defaulting to the 15th at 12:00. "Scan monthly" on the setup form is **unticked** by default (changed Nov 20 2026), so a scan is only scheduled when someone ticks it.
+- **Default Project = one-time scans only** (sales demos; added Nov 20 2026). Project ID `default` can never hold a schedule: the old Geo-Grid screen hides the monthly box and the schedule control there, `saveGridSchedule` (`src/lib/db.ts`) refuses it, and the worker skips any schedule found there. Rule lives in `src/lib/grid-guardrails.ts`.
+- **Project check on the old Geo-Grid screen** (`/dashboard/geo-grid`): the active project is one server-wide setting, so the form shows "Saving to: <project>" and posts the project it was opened with. If the active project changed since, the scan is refused ("The selected project changed to …") before any DataForSEO call. Scan links without `project_id` are refused too.
   - A point outside the top 20 shows as a red **20+** (like Semrush). A grey **—** / "No data" means DataForSEO failed at that point: failed tasks are re-posted up to 3 times before a point is marked `failed`.
   - The monitor list shows every monitor (upstream capped it at the newest 100 runs).
   - At most `GEO_GRID_MAX_CLAIMS_PER_PASS` (default 20) scheduled monitors start per worker pass (one pass a minute), so hundreds of monitors on the 15th start in waves; task polling is capped at 10 requests in flight per run.
@@ -29,6 +31,7 @@ All requests need `x-api-key: <REPORTING_API_KEY>` (or `Authorization: Bearer <k
 - `POST /api/v1/geo-grid/monitors` : creates a monitor **without running a scan** (no DataForSEO cost). Body:
   `{ keyword, business: { name, cid }, center: { lat, lng }, grid_size?: 9, radius_mi?: 5 | spacing_km?, language?: "English", project?: "<project id>" | { name, domain }, schedule?: { day_of_month?: 15, time_of_day?: "12:00" } | false, runs?: [{ run_at, pinned?, points: [{ row, col, lat?, lng?, rank }] }] }`.
   A `project` object files the monitor under that client's project, matched by website domain and created on first use (one project per clinic website, so multi-location clinics share one).
+  With no `project`, the monitor goes to the first project, usually the Default Project, which only takes one-time monitors: send `schedule: false` there, or the call returns 400 and writes nothing.
   `runs[]` imports past scans (e.g. from Semrush MRT); ranks above 20 are stored as "20+". `pinned: true` marks the starting-point scan. Repeating the call for the same location and scan dates does not create duplicates.
 
 - `GET /api/v1/geo-grid/monitors` : all monitors (including scheduled ones with no runs yet) with schedule and latest completed run summary. Filters: `?cid=`, `?q=` (keyword/target text), `?project=`.

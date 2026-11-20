@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
 import { getBrandSettings } from '@/lib/brand-server';
 import {
-  getActiveProject, getCredentials, getSetting, getGridMonitorsLatest, getGridEntry, saveGridSearch,
-  saveGridSearchPending, getGridResults, getGridSeriesHistory, getGridSchedule, saveGridSchedule, gridSeriesId, type GridSearchEntry, type GridPoint, type GridQueueMode,
+  getActiveProject, getCredentials, getSetting, getGridMonitorsLatest, getGridEntry, getGridEntryForProject, saveGridSearchForProject,
+  saveGridSearchPendingForProject, getGridResults, getGridSeriesHistory, getGridSchedule, getGridScheduleForProject, saveGridSchedule, gridSeriesId,
+  type GridSearchEntry, type GridPoint, type GridQueueMode,
 } from '@/lib/db';
+import { gridRunProjectError, isOneTimeOnlyProject } from '@/lib/grid-guardrails';
 import { DEFAULT_GRID_SIZE, DEFAULT_RADIUS_MI, DEFAULT_SCHEDULE_DAY, DEFAULT_SCHEDULE_TIME, radiusMiForSpacing, spacingKmForRadius } from '@/lib/grid-radius';
 import { timeZoneForCenter } from '@/lib/grid-timezone';
 import LocalFinderForm from '../local-finder/LocalFinderForm';
@@ -25,6 +27,10 @@ interface SearchParams {
   grid_history_id?: string;
   queue_mode?: string;
   schedule_monthly?: string;
+  /** Patch fork: the project the form (or Run now link) was rendered with. */
+  project_id?: string;
+  /** Patch fork: set by updateGridSchedule to the project the schedule control was rendered with, when it no longer matches. */
+  schedule_error?: string;
 }
 
 function formatDate(ts: number) {
@@ -34,7 +40,7 @@ function formatDate(ts: number) {
   });
 }
 
-function gridRerunUrl(entry: { keyword: string; center: string; grid_size: number; spacing_km: number; target: string; language: string; queue_mode: string }, basePath = '/dashboard/geo-grid') {
+function gridRerunUrl(entry: { keyword: string; center: string; grid_size: number; spacing_km: number; target: string; language: string; queue_mode: string }, projectId: string, basePath = '/dashboard/geo-grid') {
   const p = new URLSearchParams({
     keyword: entry.keyword,
     location_coordinate: entry.center,
@@ -44,6 +50,7 @@ function gridRerunUrl(entry: { keyword: string; center: string; grid_size: numbe
     language: entry.language,
     queue_mode: entry.queue_mode,
     mode: 'grid',
+    project_id: projectId,
   });
   return `${basePath}?${p.toString()}`;
 }
@@ -52,6 +59,8 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
   const creds = getCredentials();
   const params = await searchParams;
   const gridHistoryId = params.grid_history_id;
+  const project = getActiveProject();
+  const oneTimeOnly = isOneTimeOnlyProject(project.id);
 
   const defaultLanguage = getSetting('default_language') ?? 'English';
   const defaultCoordinates = getSetting('default_coordinates') ?? '';
@@ -63,7 +72,7 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
   let gridResults: GridPoint[] | null = null;
   let gridEntry: GridSearchEntry | null = null;
   let gridPending: { id: string; totalPoints: number; queueMode: GridQueueMode } | null = null;
-  let gridError: string | null = null;
+  let gridError: string | null = params.schedule_error ? gridRunProjectError(params.schedule_error, project, 'save') : null;
 
   // Load from history
   if (gridHistoryId) {
@@ -81,7 +90,12 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
 
   // Fresh grid search
   if (!gridHistoryId && params.keyword?.trim() && params.location_coordinate && params.grid_target) {
-    if (!creds) {
+    // Patch fork: refuse before the dedupe check and before any DataForSEO call when the scan
+    // wasn't started from a form showing the project it would be saved to.
+    const projectError = gridRunProjectError(params.project_id, project);
+    if (projectError) {
+      gridError = projectError;
+    } else if (!creds) {
       gridError = 'DataForSEO credentials missing. Configure them in Settings.';
     } else {
       const gridSize = Math.min(Math.max(parseInt(params.grid_size ?? String(DEFAULT_GRID_SIZE), 10), 3), 11);
@@ -97,7 +111,9 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
         params.keyword, params.location_coordinate, gridSize, spacingKm, params.grid_target, queueMode,
       );
 
-      if (!getGridEntry(id)) {
+      // Patch fork: every read and write below names project.id, so a project switch during a
+      // long live scan can't file the billed results under another project.
+      if (!getGridEntryForProject(project.id, id)) {
         const baseEntry: GridSearchEntry = {
           id, ts: Date.now(),
           series_id: seriesId,
@@ -120,7 +136,7 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
           if (result.error) {
             gridError = result.error;
           } else {
-            saveGridSearch({ ...baseEntry, cost: result.cost }, result.results);
+            saveGridSearchForProject(project.id, { ...baseEntry, cost: result.cost }, result.results);
           }
         } else {
           const result = await postGridTasksQueue(
@@ -131,19 +147,21 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
           if (result.error) gridError = result.error;
           // A failure after some chunks were posted still leaves billed tasks to collect.
           if (result.taskPoints.length > 0) {
-            saveGridSearchPending({ ...baseEntry, status: 'pending', cost: result.cost }, result.taskPoints);
+            saveGridSearchPendingForProject(project.id, { ...baseEntry, status: 'pending', cost: result.cost }, result.taskPoints);
           }
         }
+      }
 
-        // Patch fork: schedule the monthly scan at setup, at noon in the clinic's time zone.
-        if (!gridError && params.schedule_monthly === '1' && !getGridSchedule(seriesId)) {
-          saveGridSchedule({
-            series_id: seriesId, keyword: params.keyword, target: params.grid_target, center: params.location_coordinate,
-            grid_size: gridSize, spacing_km: spacingKm, language, queue_mode: 'standard', frequency: 'monthly',
-            weekday: DEFAULT_SCHEDULE_DAY, time_of_day: DEFAULT_SCHEDULE_TIME,
-            time_zone: timeZoneForCenter(params.location_coordinate) ?? 'America/New_York',
-          });
-        }
+      // Patch fork: schedule the monthly scan at setup, at noon in the clinic's time zone. Outside the
+      // new-entry block so ticking monthly on a re-run inside the dedupe window still schedules it.
+      // Never in a one-time-only project (saveGridSchedule refuses those too).
+      if (!gridError && params.schedule_monthly === '1' && !oneTimeOnly && !getGridScheduleForProject(project.id, seriesId)) {
+        saveGridSchedule({
+          series_id: seriesId, keyword: params.keyword, target: params.grid_target, center: params.location_coordinate,
+          grid_size: gridSize, spacing_km: spacingKm, language, queue_mode: 'standard', frequency: 'monthly',
+          weekday: DEFAULT_SCHEDULE_DAY, time_of_day: DEFAULT_SCHEDULE_TIME,
+          time_zone: timeZoneForCenter(params.location_coordinate) ?? 'America/New_York',
+        }, project.id);
       }
 
       // Redirect to a stable history-id URL so every subsequent poll / router.refresh() looks up
@@ -250,7 +268,7 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
           <div className="flex items-center gap-3">
           <DeleteMonitorButton runId={entry.id} compact />
           <a
-            href={gridRerunUrl(entry)}
+            href={gridRerunUrl(entry, project.id)}
             className="text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-800 transition-colors"
             title="Run this monitor now"
           >
@@ -281,7 +299,7 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-600 text-lg font-medium text-white transition-transform group-open:rotate-45">+</span>
               </div>
             </summary>
-            <div className="mt-5 border-t border-blue-100 pt-5 dark:border-blue-900/60"><LocalFinderForm defaults={formDefaults} /></div>
+            <div className="mt-5 border-t border-blue-100 pt-5 dark:border-blue-900/60"><LocalFinderForm defaults={formDefaults} projectId={project.id} projectName={project.name} oneTimeOnly={oneTimeOnly} /></div>
           </details>
 
           {!gridEntry && !gridError && latestBySeries.length > 0 && (
@@ -318,7 +336,7 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
             {gridPending && gridEntry && (
               <GridPending
                 searchId={gridPending.id}
-                projectId={getActiveProject().id}
+                projectId={project.id}
                 totalPoints={gridPending.totalPoints}
                 queueMode={gridPending.queueMode}
                 keyword={gridEntry.keyword}
@@ -342,6 +360,8 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
                   brandStyle={brand}
                   trend={trend}
                   clinicTimeZone={timeZoneForCenter(gridEntry.center)}
+                  projectId={project.id}
+                  oneTimeOnly={oneTimeOnly}
                 />
               </>
             )}

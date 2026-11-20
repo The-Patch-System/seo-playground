@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { reconcileGridPoints } from './grid-target';
+import { isOneTimeOnlyProject } from './grid-guardrails';
 import type { RankTopResult } from './rank-serp';
 
 const dataDbs = new Map<string, Database.Database>();
@@ -1965,7 +1966,16 @@ export function getGridEntryForProject(projectId: string, id: string): (GridSear
 }
 
 export function saveGridSearch(entry: GridSearchEntry, results: GridPoint[]): void {
-  getDb()
+  saveGridSearchToDb(getDb(), entry, results);
+}
+
+/** Patch fork: saves a finished scan to a named project, whatever the active project is now. */
+export function saveGridSearchForProject(projectId: string, entry: GridSearchEntry, results: GridPoint[]): void {
+  saveGridSearchToDb(getDbForProject(projectId), entry, results);
+}
+
+function saveGridSearchToDb(db: Database.Database, entry: GridSearchEntry, results: GridPoint[]): void {
+  db
     .prepare('INSERT OR REPLACE INTO grid_searches (id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, results, status, queue_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .run(entry.id, entry.ts, entry.series_id, entry.keyword, entry.target, entry.center, entry.grid_size, entry.spacing_km, entry.language, entry.cost ?? null, JSON.stringify(results), entry.status, entry.queue_mode);
 }
@@ -2124,12 +2134,21 @@ function nextGridScheduleRun(schedule: Pick<GridSchedule, 'frequency' | 'weekday
 }
 
 export function getGridSchedule(seriesId: string): GridSchedule | null {
-  const row = getDb().prepare(`SELECT series_id, keyword, target, center, grid_size, spacing_km, language,
+  return getGridScheduleForProject(getActiveProject().id, seriesId);
+}
+
+export function getGridScheduleForProject(projectId: string, seriesId: string): GridSchedule | null {
+  const row = getDbForProject(projectId).prepare(`SELECT series_id, keyword, target, center, grid_size, spacing_km, language,
     queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at FROM grid_schedules WHERE series_id = ?`).get(seriesId) as Parameters<typeof parseScheduleRow>[0] | undefined;
   return row ? parseScheduleRow(row) : null;
 }
 
 export function saveGridSchedule(input: Omit<GridSchedule, 'next_run_at'>, projectId?: string): GridSchedule {
+  const targetProjectId = projectId ?? getActiveProject().id;
+  // Patch fork: the one choke point for every path (form, schedule control, Reporting API import).
+  if (isOneTimeOnlyProject(targetProjectId)) {
+    throw new Error('The Default Project is for one-time scans; it cannot have a schedule.');
+  }
   const now = Date.now();
   const frequency: GridScheduleFrequency = input.frequency === 'weekly' || input.frequency === 'monthly' ? input.frequency : 'daily';
   const time_of_day = validTimeOfDay(input.time_of_day);
@@ -2140,7 +2159,7 @@ export function saveGridSchedule(input: Omit<GridSchedule, 'next_run_at'>, proje
       ? (input.weekday != null && Number.isInteger(input.weekday) && input.weekday >= 1 && input.weekday <= 28 ? input.weekday : 15)
       : null;
   const next_run_at = nextGridScheduleRun({ frequency, weekday, time_of_day, time_zone }, now);
-  (projectId ? getDbForProject(projectId) : getDb()).prepare(`INSERT INTO grid_schedules
+  getDbForProject(targetProjectId).prepare(`INSERT INTO grid_schedules
     (series_id, keyword, target, center, grid_size, spacing_km, language, queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(series_id) DO UPDATE SET
@@ -2179,6 +2198,8 @@ export function claimDueGridSchedules(now = Date.now(), maxClaims = Number.POSIT
   const due: DueGridSchedule[] = [];
   for (const project of getProjects()) {
     if (due.length >= maxClaims) break;
+    // Patch fork: backstop so the cron never bills a schedule in a one-time-only project.
+    if (isOneTimeOnlyProject(project.id)) continue;
     const db = getDbForProject(project.id);
     const rows = db.prepare(`SELECT series_id, keyword, target, center, grid_size, spacing_km, language,
       queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at FROM grid_schedules WHERE next_run_at <= ? ORDER BY next_run_at ASC`).all(now) as Parameters<typeof parseScheduleRow>[0][];
