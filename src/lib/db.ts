@@ -2104,7 +2104,7 @@ function nextDailyRun(timeOfDay: string, timeZone: string, after: number): numbe
   return after + 86_400_000;
 }
 
-function nextGridScheduleRun(schedule: Pick<GridSchedule, 'frequency' | 'weekday' | 'time_of_day' | 'time_zone'>, after: number): number {
+export function nextGridScheduleRun(schedule: Pick<GridSchedule, 'frequency' | 'weekday' | 'time_of_day' | 'time_zone'>, after: number): number {
   const timeZone = validTimeZone(schedule.time_zone);
   const [hour, minute] = validTimeOfDay(schedule.time_of_day).split(':').map(Number);
   const local = zonedParts(after, timeZone);

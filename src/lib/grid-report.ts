@@ -34,7 +34,7 @@ function businessOf(entry: GridSearchEntry) {
  * top 20 counts as 21 (MRT's own rule), unlike average_rank which only averages found points.
  * Failed points are left out. CS OS stores this so map pack history matches the Semrush era.
  */
-function mrtAveragePosition(points: GridPoint[]): number | null {
+export function mrtAveragePosition(points: GridPoint[]): number | null {
   const scanned = points.filter((p) => !p.failed);
   if (!scanned.length) return null;
   return Math.round((scanned.reduce((s, p) => s + Math.min(p.rank ?? 21, 21), 0) / scanned.length) * 10000) / 10000;
