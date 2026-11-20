@@ -19,7 +19,7 @@ import {
 } from './grid-locations-db';
 import {
   compareKpis, computeCompetitorRows, computeKpis, computeRings, deltaLower, describeSchedule, formatScanDate,
-  locationStatus, rankLabel, resolveCompare, sharedGridConfig,
+  locationStatus, rankLabel, resolveCompare, sharedGridConfig, competitorPoints, pointMoves, trendBars,
 } from './grid-locations';
 
 afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
@@ -488,5 +488,43 @@ describe('location scan dates', () => {
     const oct = pickRunsForDay(headers, '2026-10-15', tz);
     expect(oct.get('a')).toMatchObject({ current: { id: 'a2' }, previous: { id: 'a1' } });
     expect(oct.get('b')).toEqual({ current: null, previous: null });
+  });
+});
+
+describe('keyword page helpers', () => {
+  const item = (rank_group: number, cid: string, is_target = false) => ({ rank_group, title: `Biz ${cid}`, cid, is_target });
+  const now = [
+    { row: 0, col: 0, rank: 2, items: [item(1, '9'), item(2, '1', true)] },
+    { row: 0, col: 1, rank: null, items: [item(4, '9')] },
+    { row: 1, col: 0, rank: 5, items: [] },
+    { row: 1, col: 1, rank: null, failed: true, items: [] },
+  ];
+  const before = [
+    { row: 0, col: 0, rank: 4, items: [] },
+    { row: 0, col: 1, rank: 7, items: [] },
+    { row: 1, col: 0, rank: null, items: [] },
+    { row: 1, col: 1, rank: 3, items: [] },
+  ];
+
+  it('shows a competitor\'s own ranks on the grid, keeping failed points', () => {
+    const pts = competitorPoints(now, 'cid:9');
+    expect(pts.map((p) => p.rank)).toEqual([1, 4, null, null]);
+    expect(pts[3].failed).toBe(true);
+  });
+
+  it('labels each point\'s movement against the compared scan', () => {
+    const moves = pointMoves(now, before);
+    expect(moves.get('0:0')).toEqual({ label: '+2', tone: 'better' });
+    expect(moves.get('0:1')).toEqual({ label: 'lost', tone: 'worse' });
+    expect(moves.get('1:0')).toEqual({ label: 'new', tone: 'better' });
+    expect(moves.has('1:1')).toBe(false);
+    expect(pointMoves(now, null).size).toBe(0);
+  });
+
+  it('buckets each scan for the trend chart, oldest first', () => {
+    const run = (id: string, ts: number, points: typeof now) => ({ id, series_id: 's', ts, status: 'done' as const, pinned: false, points });
+    const bars = trendBars([run('b', 2, now), run('a', 1, before)]);
+    expect(bars.map((b) => b.runId)).toEqual(['a', 'b']);
+    expect(bars[1]).toMatchObject({ total: 4, top3: 1, top4to10: 1, top11to20: 0, rest: 2 });
   });
 });

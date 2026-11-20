@@ -17,7 +17,7 @@ import DeltaText from '../../../../_components/DeltaText';
 import MiniGrid from '../../../../_components/MiniGrid';
 import RankLegend from '../../../../_components/RankLegend';
 import NavSelect from '../../../../_components/NavSelect';
-import { CLIENTS_URL, clientUrl, locationUrl } from '../../../../_components/routes';
+import { CLIENTS_URL, clientUrl, keywordUrl, locationUrl } from '../../../../_components/routes';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,7 +159,9 @@ export default async function LocationPage({ params, searchParams }: { params: P
           return (
             <article key={monitor.series_id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-baseline justify-between gap-2">
-                <h2 className="text-[15px] font-black">{monitor.keyword}</h2>
+                <h2 className="text-[15px] font-black">
+                  <Link href={keywordUrl(projectId, locationId, monitor.series_id)} className="text-slate-900 hover:text-blue-700">{monitor.keyword} <span aria-hidden="true" className="text-blue-600">→</span></Link>
+                </h2>
                 {cmp ? <DeltaText delta={cmp.visibility} fallback={state === 'first_scan' ? 'First scan' : ''} className="text-xs" />
                   : state === 'scanning' ? <span className="text-xs font-bold text-blue-700">Running</span> : null}
               </div>

@@ -8,7 +8,7 @@ import AutoRefresh from '@/components/AutoRefresh';
 import Breadcrumbs from '../../_components/Breadcrumbs';
 import StatusPill from '../../_components/StatusPill';
 import DeltaText from '../../_components/DeltaText';
-import { CLIENTS_URL, locationUrl } from '../../_components/routes';
+import { CLIENTS_URL, keywordUrl, locationUrl } from '../../_components/routes';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,7 +101,7 @@ export default async function ClientPage({ params }: { params: Params }) {
                     return (
                       <tr key={k.seriesId} className="border-t border-slate-100">
                         <td className="px-5 py-3">
-                          <span className="font-bold">{k.keyword}</span>
+                          <Link href={keywordUrl(projectId, location.id, k.seriesId)} className="font-bold text-blue-700 hover:text-blue-900">{k.keyword}</Link>
                           {(grid.mixed) && <span className="ml-2 text-xs text-slate-500">{k.gridSize}×{k.gridSize} · {k.radiusMi} mi</span>}
                         </td>
                         <td className="px-3 py-3">
