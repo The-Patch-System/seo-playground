@@ -23,6 +23,10 @@ type Props = {
   trend: GridPositionTrendPoint[];
   /** Patch fork: the clinic's time zone, read from the grid center. */
   clinicTimeZone?: string | null;
+  /** Patch fork: the project this page was rendered with; Run now and the schedule control post it back. */
+  projectId: string;
+  /** Patch fork: one-time-only project (sales demos): no schedule control. */
+  oneTimeOnly?: boolean;
 };
 
 function metricDelta(current: number | null, previous: number | null, inverse = false) {
@@ -33,7 +37,7 @@ function metricDelta(current: number | null, previous: number | null, inverse = 
   return `${value > 0 ? '+' : ''}${value}`;
 }
 
-export default function GridTimeline({ entry, results, previousResults, snapshots, schedule, brandName, brandLogoUrl, brandColor, brandFooter, brandStyle, trend, clinicTimeZone }: Props) {
+export default function GridTimeline({ entry, results, previousResults, snapshots, schedule, brandName, brandLogoUrl, brandColor, brandFooter, brandStyle, trend, clinicTimeZone, projectId, oneTimeOnly = false }: Props) {
   const current = computeGridSummary(results);
   const previous = previousResults ? computeGridSummary(previousResults) : null;
   const mapId = `geo-grid-report-map-${entry.id}`;
@@ -55,7 +59,7 @@ export default function GridTimeline({ entry, results, previousResults, snapshot
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{entry.target} · {entry.grid_size}×{entry.grid_size} points · {radiusMiForSpacing(entry.spacing_km, entry.grid_size)} mi radius</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <a href={`/dashboard/geo-grid?keyword=${encodeURIComponent(entry.keyword)}&location_coordinate=${encodeURIComponent(entry.center)}&grid_size=${entry.grid_size}&spacing_km=${entry.spacing_km}&grid_target=${encodeURIComponent(entry.target)}&language=${encodeURIComponent(entry.language)}&queue_mode=${entry.queue_mode}&mode=grid`} className="inline-flex items-center rounded-xl border border-blue-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-700 transition-colors hover:bg-blue-50 dark:border-blue-900 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-950">
+            <a href={`/dashboard/geo-grid?keyword=${encodeURIComponent(entry.keyword)}&location_coordinate=${encodeURIComponent(entry.center)}&grid_size=${entry.grid_size}&spacing_km=${entry.spacing_km}&grid_target=${encodeURIComponent(entry.target)}&language=${encodeURIComponent(entry.language)}&queue_mode=${entry.queue_mode}&mode=grid&project_id=${encodeURIComponent(projectId)}`} className="inline-flex items-center rounded-xl border border-blue-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-700 transition-colors hover:bg-blue-50 dark:border-blue-900 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-950">
               Run now
             </a>
             <GridSelectedSnapshotExportButton snapshots={snapshots} fallbackResults={results} fallbackTs={entry.ts} gridSize={entry.grid_size} spacingKm={entry.spacing_km} keyword={entry.keyword} target={entry.target} language={entry.language} brandName={brandName} brandLogoUrl={brandLogoUrl} brandColor={brandColor} brandFooter={brandFooter} brandStyle={brandStyle} mapElementId={mapId} />
@@ -74,9 +78,11 @@ export default function GridTimeline({ entry, results, previousResults, snapshot
           ))}
         </div>
 
-        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/50 px-5 dark:border-slate-800 dark:bg-slate-950/20">
-          <GridScheduleControl runId={entry.id} schedule={schedule} clinicTimeZone={clinicTimeZone ?? null} />
-        </div>
+        {!oneTimeOnly && (
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/50 px-5 dark:border-slate-800 dark:bg-slate-950/20">
+            <GridScheduleControl runId={entry.id} projectId={projectId} schedule={schedule} clinicTimeZone={clinicTimeZone ?? null} />
+          </div>
+        )}
 
         <div className="mt-6">
           <GridAnalysisPanel

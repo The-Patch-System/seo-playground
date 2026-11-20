@@ -26,6 +26,11 @@ interface Props {
     gridTarget?: string;
     queueMode?: string;
   };
+  /** Patch fork (geo-grid only): the project the scan will be saved to, posted back and checked on submit. */
+  projectId?: string;
+  projectName?: string;
+  /** Patch fork: one-time-only project (sales demos): no monthly schedule option. */
+  oneTimeOnly?: boolean;
 }
 
 // DataForSEO Local Finder SERP API pricing (checked against their pricing page — they revise this periodically).
@@ -79,8 +84,12 @@ function GridPreview({ size, spacingKm, radiusMi }: { size: number; spacingKm: n
   );
 }
 
-export default function LocalFinderForm({ defaults }: Props) {
+export default function LocalFinderForm({ defaults, projectId, projectName, oneTimeOnly }: Props) {
   const isGrid = defaults.forceGridMode === true;
+  // Patch fork: keep the project this form was opened with. ProjectSync calls router.refresh() after a
+  // switch in another tab, which would otherwise update these props under the rep's unchanged draft.
+  // The server compares the posted ID with the active project and refuses on a mismatch.
+  const [formProject] = useState(() => ({ id: projectId, name: projectName, oneTimeOnly: oneTimeOnly === true }));
 
   const [device, setDevice] = useState(defaults.device || 'desktop');
   const [coordinate, setCoordinate] = useState(defaults.locationCoordinate || defaults.defaultCenter);
@@ -94,7 +103,7 @@ export default function LocalFinderForm({ defaults }: Props) {
   const spacingKm = spacingKmForRadius(radiusMi, gridSize);
   const radiusOptions = Array.from(new Set<number>([...RADIUS_OPTIONS_MI, radiusMi])).sort((a, b) => a - b);
   const [queueMode, setQueueMode] = useState<QueueMode>((defaults.queueMode as QueueMode) || 'standard');
-  const [scheduleMonthly, setScheduleMonthly] = useState(true);
+  const [scheduleMonthly, setScheduleMonthly] = useState(false);
   const [language, setLanguage] = useState(defaults.language || 'English');
   const [gridTarget, setGridTarget] = useState(defaults.gridTarget ?? '');
 
@@ -239,7 +248,13 @@ export default function LocalFinderForm({ defaults }: Props) {
             <GridPreview size={gridSize} spacingKm={spacingKm} radiusMi={radiusMi} />
           </div>
 
-          {/* Patch fork: schedule the monthly scan when the monitor is created */}
+          {/* Patch fork: schedule the monthly scan when the monitor is created (never in a one-time-only project) */}
+          {formProject.oneTimeOnly ? (
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3">
+              <span className="block text-xs font-bold text-slate-800 dark:text-slate-100">One-time scan</span>
+              <span className="block text-[11px] text-slate-400 mt-0.5">This project is for sales demos, so scans here run once and are never scheduled. To track a client monthly, switch to their project.</span>
+            </div>
+          ) : (
           <label className="flex items-start gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 cursor-pointer">
             <input
               type="checkbox"
@@ -254,6 +269,7 @@ export default function LocalFinderForm({ defaults }: Props) {
               <span className="block text-[11px] text-slate-400 mt-0.5">Runs during business hours in the clinic&apos;s own time zone. You can change it later on the monitor.</span>
             </span>
           </label>
+          )}
 
           {/* Queue mode */}
           <div>
@@ -366,6 +382,15 @@ export default function LocalFinderForm({ defaults }: Props) {
               </select>
             </div>
           </div>
+        </>
+      )}
+
+      {formProject.id && (
+        <>
+          <input type="hidden" name="project_id" value={formProject.id} />
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Saving to: <span className="font-bold text-slate-900 dark:text-white">{formProject.name ?? formProject.id}</span>
+          </p>
         </>
       )}
 

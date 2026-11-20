@@ -8,7 +8,7 @@ const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'grid-patch-test-'));
 process.env.DB_PATH = path.join(tmpDir, 'test.db');
 
 import {
-  claimDueGridSchedules, deleteGridSeriesForProject, getGridMonitorsLatest, pinGridRunForProject, getGridSchedule, gridSeriesId, pruneGridHistoryForProject,
+  claimDueGridSchedules, createProject, deleteGridSeriesForProject, getProjects, setActiveProject, getGridMonitorsLatest, pinGridRunForProject, getGridSchedule, gridSeriesId, pruneGridHistoryForProject,
   saveGridSchedule, saveGridSearch, type GridSearchEntry,
 } from './db';
 import { createMonitor, MonitorInputError } from './grid-import';
@@ -19,11 +19,18 @@ afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 const DAY = 86_400_000;
 const NOW = Date.UTC(2026, 9, 27, 12);
 const iso = (ts: number) => new Date(ts).toISOString();
+// Schedules can't live in the Default Project (sales demos), so monitors here sit in a client project.
+const clinic = createProject({
+  name: 'Elevation Athletics', domain: 'elevation-athletics.example', defaultLocation: 'United States',
+  defaultLanguage: 'English', defaultCoordinates: '', rankTrackerDepth: '100',
+});
+setActiveProject(clinic.id);
 const grid = (rank: number | null) => Array.from({ length: 81 }, (_, i) => ({ row: Math.floor(i / 9), col: i % 9, rank: i === 40 ? rank : 25 }));
 
 describe('monitor import', () => {
   it('creates a scheduled monitor at noon clinic time and imports runs without duplicates', () => {
     const body = {
+      project: clinic.id,
       keyword: 'physical therapy',
       business: { name: 'Elevation Athletics', cid: '9715887968687677574' },
       center: { lat: 32.894142, lng: -97.269099 },
@@ -53,7 +60,7 @@ describe('monitor import', () => {
   });
 
   it('lists a monitor that is scheduled but has no runs yet', () => {
-    const created = createMonitor({ keyword: 'chiropractor', business: { name: 'Spine Co', cid: '42' }, center: { lat: 40.7128, lng: -74.006 } });
+    const created = createMonitor({ project: clinic.id, keyword: 'chiropractor', business: { name: 'Spine Co', cid: '42' }, center: { lat: 40.7128, lng: -74.006 } });
     const [monitor] = listMonitors({ cid: '42' });
     expect(monitor).toMatchObject({ monitor_id: created.monitor_id, runs: 0, latest_run: null, schedule: { day_of_month: 15, time_zone: 'America/New_York' } });
   });
@@ -94,6 +101,20 @@ describe('monitor import', () => {
     expect(pinGridRunForProject(created.project, 'missing')).toBe(false);
   });
 
+  it('refuses a scheduled monitor in the Default Project before writing anything', () => {
+    const demo = { keyword: 'demo pt', business: { name: 'Demo PT', cid: '505' }, center: { lat: 33.4, lng: -112.1 }, runs: [{ run_at: iso(NOW - DAY), points: grid(2) }] };
+    const projectsBefore = getProjects().length;
+    // No project resolves to the first project, which is the Default Project.
+    expect(() => createMonitor(demo)).toThrow(MonitorInputError);
+    expect(() => createMonitor({ ...demo, project: 'default', schedule: { day_of_month: 1 } })).toThrow(/one-time scans; pass schedule:false/);
+    expect(listMonitors({ cid: '505' })).toEqual([]);
+    expect(getProjects().length).toBe(projectsBefore);
+    // A one-time import is still allowed there.
+    const created = createMonitor({ ...demo, project: 'default', schedule: false });
+    expect(created).toMatchObject({ project: 'default', schedule: null, imported_runs: [expect.any(String)] });
+    expect(deleteGridSeriesForProject('default', created.monitor_id)).toBe(1);
+  });
+
   it('rejects bad input', () => {
     expect(() => createMonitor({ keyword: '', business: { name: 'x' }, center: { lat: 1, lng: 1 } })).toThrow(MonitorInputError);
     expect(() => createMonitor({ keyword: 'pt', business: { name: 'x', cid: 'abc' }, center: { lat: 1, lng: 1 } })).toThrow(/CID/);
@@ -113,7 +134,7 @@ describe('retention', () => {
       saveGridSearch({ ...base, id, ts: NOW - age * DAY }, pts);
     }
     const before = getMonitorRuns(seriesId)!.runs.length;
-    pruneGridHistoryForProject('default', NOW);
+    pruneGridHistoryForProject(clinic.id, NOW);
     const kept = getMonitorRuns(seriesId)!.runs.map((r) => r.run_id);
     expect(before).toBe(5);
     expect(kept).toEqual(['r-new', 'r-recent', 'r-first']);
@@ -121,7 +142,7 @@ describe('retention', () => {
 
   it('keeps a pinned starting point instead of the oldest run', () => {
     const imported = listMonitors({ cid: '9715887968687677574' })[0];
-    pruneGridHistoryForProject('default', NOW);
+    pruneGridHistoryForProject(clinic.id, NOW);
     const runs = getMonitorRuns(imported.monitor_id)!.runs;
     expect(runs.map((r) => r.pinned)).toEqual([false, true]);
   });
