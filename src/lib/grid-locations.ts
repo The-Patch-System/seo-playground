@@ -430,3 +430,52 @@ export function mapsUrl(cid: string | null, name: string, center?: string): stri
   const q = encodeURIComponent(name);
   return center ? `https://www.google.com/maps/search/${q}/@${center},14z` : `https://www.google.com/maps/search/${q}`;
 }
+
+// --- Location page: "Showing" scan dates ---
+
+/** YYYY-MM-DD in the clinic's time zone. */
+export function dayKey(ts: number, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone }).format(new Date(ts));
+  } catch {
+    return new Date(ts).toISOString().slice(0, 10);
+  }
+}
+
+export interface ScanDateOption {
+  /** YYYY-MM-DD (clinic time). */
+  day: string;
+  ts: number;
+  /** True when any keyword's pinned starting-point scan falls on this day. */
+  startingPoint: boolean;
+}
+
+/** The distinct days any keyword at the location finished a scan, newest first. */
+export function scanDateOptions(headersBySeries: Map<string, RunHeader[]>, timeZone: string): ScanDateOption[] {
+  const byDay = new Map<string, ScanDateOption>();
+  for (const headers of headersBySeries.values()) {
+    for (const h of headers) {
+      if (h.status !== 'done') continue;
+      const day = dayKey(h.ts, timeZone);
+      const current = byDay.get(day) ?? { day, ts: h.ts, startingPoint: false };
+      current.ts = Math.max(current.ts, h.ts);
+      current.startingPoint ||= h.pinned;
+      byDay.set(day, current);
+    }
+  }
+  return [...byDay.values()].sort((a, b) => b.ts - a.ts);
+}
+
+/**
+ * For each keyword, the newest finished scan on or before the chosen day (clinic time) and the one
+ * before it. With no day, the latest scan. Keywords with no scan by then get nulls.
+ */
+export function pickRunsForDay(headersBySeries: Map<string, RunHeader[]>, day: string | null, timeZone: string): Map<string, { current: RunHeader | null; previous: RunHeader | null }> {
+  const out = new Map<string, { current: RunHeader | null; previous: RunHeader | null }>();
+  for (const [seriesId, headers] of headersBySeries) {
+    const done = headers.filter((h) => h.status === 'done').sort((a, b) => b.ts - a.ts);
+    const index = day ? done.findIndex((h) => dayKey(h.ts, timeZone) <= day) : (done.length ? 0 : -1);
+    out.set(seriesId, index < 0 ? { current: null, previous: null } : { current: done[index], previous: done[index + 1] ?? null });
+  }
+  return out;
+}

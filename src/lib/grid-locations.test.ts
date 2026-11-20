@@ -446,3 +446,25 @@ describe('legacy saveGridSearch rows', () => {
     expect(location.monitors).toHaveLength(1);
   });
 });
+
+describe('location scan dates', () => {
+  it('lists distinct days and picks each keyword scan on or before the day', async () => {
+    const { scanDateOptions, pickRunsForDay } = await import('./grid-locations');
+    const tz = 'America/New_York';
+    const h = (id: string, ts: number, pinned = false) => ({ id, series_id: id[0], ts, status: 'done' as const, pinned });
+    const headers = new Map([
+      ['a', [h('a3', Date.UTC(2026, 10, 15, 17)), h('a2', Date.UTC(2026, 9, 15, 16)), h('a1', Date.UTC(2026, 4, 15, 16), true)]],
+      ['b', [h('b2', Date.UTC(2026, 10, 15, 18)), h('b1', Date.UTC(2026, 10, 1, 16))]],
+      ['c', []],
+    ]);
+    const options = scanDateOptions(headers, tz);
+    expect(options.map((o) => o.day)).toEqual(['2026-11-15', '2026-11-01', '2026-10-15', '2026-05-15']);
+    expect(options.find((o) => o.day === '2026-05-15')!.startingPoint).toBe(true);
+    const latest = pickRunsForDay(headers, null, tz);
+    expect(latest.get('a')).toMatchObject({ current: { id: 'a3' }, previous: { id: 'a2' } });
+    expect(latest.get('c')).toEqual({ current: null, previous: null });
+    const oct = pickRunsForDay(headers, '2026-10-15', tz);
+    expect(oct.get('a')).toMatchObject({ current: { id: 'a2' }, previous: { id: 'a1' } });
+    expect(oct.get('b')).toEqual({ current: null, previous: null });
+  });
+});
