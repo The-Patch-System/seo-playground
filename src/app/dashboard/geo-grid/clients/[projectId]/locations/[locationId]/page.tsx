@@ -19,7 +19,7 @@ import RankLegend from '../../../../_components/RankLegend';
 import NavSelect from '../../../../_components/NavSelect';
 import { CLIENTS_URL, clientUrl, keywordUrl, locationUrl } from '../../../../_components/routes';
 import { AddKeywordButton, LocationSettingsButton, RunNowButton } from '../../../../_components/Actions';
-import { locationSettingsProps } from '../../../../_components/settings-props';
+import { addKeywordSummary, locationSettingsProps } from '../../../../_components/settings-props';
 import { DEMO_PROJECT_ID } from '@/lib/grid-locations-db';
 
 export const dynamic = 'force-dynamic';
@@ -143,7 +143,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
             </span>
             {schedule.schedule && <RunNowButton projectId={projectId} locationId={locationId} seriesId={null} label="Run all now" />}
             {schedule.schedule && projectId !== DEMO_PROJECT_ID && (
-              <AddKeywordButton projectId={projectId} locationId={locationId} locationLabel={`Location ${location.number}`} />
+              <AddKeywordButton projectId={projectId} locationId={locationId} locationLabel={`Location ${location.number}`} summary={addKeywordSummary(location)} />
             )}
             <LocationSettingsButton {...locationSettingsProps(projectId, location)} />
           </div>

@@ -15,10 +15,10 @@ export default function DemoScanPage() {
         <h1 className="text-[28px] font-black tracking-tight">Sales demo scan</h1>
         <p className="max-w-2xl text-sm text-slate-600">
           A one-time scan for a prospect. It runs right away, is saved under Sales demos, and is never scheduled or billed again.
-          For a signed client, add the client and a location instead.
+          If the prospect signs on, the SEO team will add their full project for their SEO reporting and deliverables.
         </p>
       </div>
-      <LocationForm mode="demo" action={demoScanAction} submitLabel="Run demo scan" pendingLabel="Starting scan…" />
+      <LocationForm mode="demo" action={demoScanAction} submitLabel="Run demo scan now" pendingLabel="Starting scan…" reviewTitle="Run this one-time demo scan?" />
     </div>
   );
 }

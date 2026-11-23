@@ -709,6 +709,27 @@ export function addLocation(
 }
 
 /**
+ * Deletes one keyword from a location: its runs (the starting point too) and its schedule. Refuses
+ * while its scan is running, queued, or possibly just claimed by the worker.
+ */
+export function deleteKeyword(projectId: string, locationId: string, seriesId: string, now = Date.now()): { runs: number; schedules: number } {
+  const location = requireLocation(projectId, locationId);
+  const monitor = requireMonitor(location, seriesId);
+  const db = getDbForProject(projectId);
+  const busy = scanActivity(db, monitor, now);
+  if (busy) throw new LocationError('scan_in_progress', `Can't delete while a scan is in progress (${busy}) Try again in a few minutes.`);
+  return db.transaction(() => {
+    if (db.prepare(`SELECT 1 FROM grid_searches WHERE series_id = ? AND status = 'pending' LIMIT 1`).get(seriesId)) {
+      throw new LocationError('scan_in_progress', "Can't delete while a scan is in progress. Try again in a few minutes.");
+    }
+    return {
+      runs: db.prepare('DELETE FROM grid_searches WHERE series_id = ?').run(seriesId).changes,
+      schedules: db.prepare('DELETE FROM grid_schedules WHERE series_id = ?').run(seriesId).changes,
+    };
+  })();
+}
+
+/**
  * Deletes a location: every keyword's runs (pins included) and schedules. Refuses while any keyword
  * has a scan running, queued, or possibly just claimed by the worker.
  */

@@ -28,7 +28,9 @@ export default async function NewLocationPage({ params }: { params: Promise<{ pr
         <h1 className="text-[28px] font-black tracking-tight">Add location {count + 1}</h1>
         <p className="text-sm text-slate-600">For <strong>{client.name}</strong> ({client.domain}). Check the client name before saving.</p>
       </div>
-      <LocationForm mode="location" action={addLocationAction.bind(null, projectId)} submitLabel="Add location and start first scans" pendingLabel="Adding…" />
+      <LocationForm mode="location" action={addLocationAction.bind(null, projectId)} submitLabel="Add location and start first scans" pendingLabel="Adding…"
+        reviewTitle={`Add Location ${count + 1} for ${client.name} (${client.domain})?`}
+      />
     </div>
   );
 }

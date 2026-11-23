@@ -14,7 +14,7 @@ import {
 import { createMonitor } from './grid-import';
 import { getMonitorRuns, listMonitors } from './grid-report';
 import {
-  addClient, addKeywordToLocation, addLocation, centerKey, DEMO_PROJECT_ID, deleteLocation, getKeywordData, getLocation, listClients, listLocations,
+  addClient, addKeywordToLocation, addLocation, centerKey, DEMO_PROJECT_ID, deleteKeyword, deleteLocation, getKeywordData, getLocation, listClients, listLocations,
   listLocationsWithLatest, locationIdFor, LocationError, MAX_KEYWORD_RUNS, requestRunNow, updateLocationSchedule,
 } from './grid-locations-db';
 import {
@@ -364,6 +364,25 @@ describe('first scan, clients and the sales demo project', () => {
     expect(() => addClient('No domain', 'not a domain')).toThrow(/domain/);
     expect(() => addClient('   ', 'ok-pt.com')).toThrow(/name/);
     expect(listClients().some((c) => c.project.id === DEMO_PROJECT_ID)).toBe(false);
+  });
+});
+
+describe('delete keyword', () => {
+  it('deletes one keyword (runs, pin, schedule) and leaves the others, refusing while its scan is due', () => {
+    const p = project();
+    const target = 'Two KW (cid:70)';
+    const keep = seedRun(p, { keyword: 'keep', target, center: '40,-75', ts: NOW - 40 * DAY, scheduled: true, pinned: true });
+    const drop = seedRun(p, { keyword: 'drop', target, center: '40,-75', ts: NOW - 40 * DAY, scheduled: true, pinned: true });
+    getDbForProject(p).prepare('UPDATE grid_schedules SET created_at = ?, updated_at = ?').run(NOW - 10 * DAY, NOW - 10 * DAY);
+    const [location] = listLocations(p);
+    getDbForProject(p).prepare('UPDATE grid_schedules SET next_run_at = ? WHERE series_id = ?').run(NOW - 1000, drop.series);
+    expect(() => deleteKeyword(p, location.id, drop.series, NOW)).toThrow(/in progress/);
+    getDbForProject(p).prepare('UPDATE grid_schedules SET next_run_at = ? WHERE series_id = ?').run(NOW + 10 * DAY, drop.series);
+    expect(deleteKeyword(p, location.id, drop.series, NOW)).toEqual({ runs: 1, schedules: 1 });
+    const after = listLocations(p);
+    expect(after).toHaveLength(1);
+    expect(after[0].monitors.map((m) => m.series_id)).toEqual([keep.series]);
+    expect(() => deleteKeyword(p, location.id, drop.series, NOW)).toThrow(LocationError);
   });
 });
 

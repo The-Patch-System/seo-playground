@@ -7,7 +7,7 @@ import { randomUUID } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import {
-  addClient, addKeywordToLocation, addLocation, deleteLocation, DEMO_PROJECT_ID, getLocation, LocationError, locationIdFor, requestRunNow,
+  addClient, addKeywordToLocation, addLocation, deleteKeyword, deleteLocation, DEMO_PROJECT_ID, getLocation, LocationError, locationIdFor, requestRunNow,
   updateLocationSchedule, type LocationScheduleInput,
 } from '@/lib/grid-locations-db';
 import { getCredentials, gridSeriesId, saveGridSearchPendingForProject, type GridQueueMode, type GridScheduleFrequency, type GridSearchEntry } from '@/lib/db';
@@ -127,6 +127,25 @@ export async function deleteLocationAction(projectId: string, locationId: string
   }
   revalidatePath(clientUrl(projectId));
   redirect(clientUrl(projectId));
+}
+
+export async function deleteKeywordAction(projectId: string, locationId: string, seriesId: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
+  let locationLeft = true;
+  try {
+    const location = getLocation(projectId, locationId);
+    const monitor = location?.monitors.find((m) => m.series_id === seriesId);
+    if (!location || !monitor) return { error: 'Keyword not found.' };
+    if (text(formData, 'confirm').trim().toLowerCase() !== monitor.keyword.trim().toLowerCase()) {
+      return { error: `Type "${monitor.keyword}" to confirm.` };
+    }
+    deleteKeyword(projectId, locationId, seriesId);
+    locationLeft = location.monitors.length > 1;
+  } catch (error) {
+    return failure(error);
+  }
+  revalidatePath(clientUrl(projectId), 'layout');
+  // Deleting a location's last keyword removes the location too.
+  redirect(locationLeft ? locationUrl(projectId, locationId) : clientUrl(projectId));
 }
 
 /**
