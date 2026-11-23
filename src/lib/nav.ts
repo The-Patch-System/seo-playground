@@ -92,7 +92,9 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { name: 'SERP Checker', href: '/dashboard/serp', icon: Globe, desc: 'Live Google organic results' },
       { name: 'Local Finder', href: '/dashboard/local-finder', icon: MapPin, desc: 'Local pack results for any location' },
-      { name: 'Geo-Grid Ranking', href: '/dashboard/geo-grid', icon: Grid3X3, desc: 'Ranking heatmap across a grid of points' },
+      // Patch fork: the menu opens the location-based pages (All clients). The old one-off screen at
+      // /dashboard/geo-grid is out of the menu but its URL, and every deep link to a scan result, still works.
+      { name: 'Geo-Grid Ranking', href: '/dashboard/geo-grid/clients', icon: Grid3X3, desc: 'Map rank tracking for every client location' },
     ],
   },
   {

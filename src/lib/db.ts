@@ -878,8 +878,8 @@ function parseLocationsCsvLine(line: string): string[] {
 }
 
 function seedLocations(db: Database.Database): void {
-  const { count } = db.prepare('SELECT COUNT(*) as count FROM dfs_locations').get() as { count: number };
-  if (count > 0) return;
+  // An existence check, not COUNT(*): counting this table's rows took ~70 ms per project DB on first open.
+  if (db.prepare('SELECT 1 FROM dfs_locations LIMIT 1').get()) return;
 
   const csvPath = path.join(process.cwd(), 'data', 'dfs-locations.csv');
   if (!fs.existsSync(csvPath)) return;
@@ -894,8 +894,7 @@ function seedLocations(db: Database.Database): void {
 }
 
 function seedCategories(db: Database.Database): void {
-  const { count } = db.prepare('SELECT COUNT(*) as count FROM dfs_categories').get() as { count: number };
-  if (count > 0) return;
+  if (db.prepare('SELECT 1 FROM dfs_categories LIMIT 1').get()) return;
 
   const csvPath = path.join(process.cwd(), 'data', 'dfs-categories.csv');
   if (!fs.existsSync(csvPath)) return;
@@ -2114,7 +2113,7 @@ function nextDailyRun(timeOfDay: string, timeZone: string, after: number): numbe
   return after + 86_400_000;
 }
 
-function nextGridScheduleRun(schedule: Pick<GridSchedule, 'frequency' | 'weekday' | 'time_of_day' | 'time_zone'>, after: number): number {
+export function nextGridScheduleRun(schedule: Pick<GridSchedule, 'frequency' | 'weekday' | 'time_of_day' | 'time_zone'>, after: number): number {
   const timeZone = validTimeZone(schedule.time_zone);
   const [hour, minute] = validTimeOfDay(schedule.time_of_day).split(':').map(Number);
   const local = zonedParts(after, timeZone);
