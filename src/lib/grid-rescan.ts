@@ -13,7 +13,7 @@
 //   Otherwise it is held with a reason and flagged not safe to report.
 import { createHash, randomUUID } from 'crypto';
 import {
-  getControlDb, getDbForProject, getProjects, type GridPoint, type GridTaskPoint, type Project,
+  getControlDb, getDbForProject, getProjects, type GridPoint, type GridRecheck, type GridTaskPoint, type Project,
 } from '@/lib/db';
 import { postGridTaskChunk, type GridTaskRequest } from '@/app/dashboard/local-finder/grid-api';
 import {
@@ -745,6 +745,9 @@ export function rescanStatus(filter: { label?: string; state?: string; unsafe?: 
       // Before = the points the run had when this attempt swapped (or the live points if not swapped yet).
       const before = parsePoints(r.state === 'swapped' || r.state === 'undone' ? r.results_before : r.live_results);
       const after = parsePoints(r.new_results);
+      // Points still in flight: their discarded tasks (e.g. wrong-city, waiting for the +5/+30 min re-post)
+      // count as detections now, not only once the point settles.
+      const inFlight = r.task_points ? (JSON.parse(r.task_points) as GridTaskPoint[]) : [];
       const attemptCost = Math.round((r.cost ?? 0) * 10000) / 10000;
       cost += attemptCost;
       for (const p of after) {
@@ -753,21 +756,31 @@ export function rescanStatus(filter: { label?: string; state?: string; unsafe?: 
           detections.push({ run_id: r.run_id, row: p.row, col: p.col, task_id: rc.task_id, check_url: rc.check_url ?? null, far: rc.far ?? [], resolved: !p.failed });
         }
       }
+      for (const t of inFlight) {
+        for (const rc of t.rechecks ?? []) {
+          if (rc.reason !== 'wrong_city') continue;
+          detections.push({ run_id: r.run_id, row: t.row, col: t.col, task_id: rc.task_id, check_url: rc.check_url ?? null, far: rc.far ?? [], resolved: null });
+        }
+      }
+      const wrongCityRechecks = (list: Array<{ rechecks?: GridRecheck[] }>) => list.reduce((s, p) => s + (p.rechecks ?? []).filter((x) => x.reason === 'wrong_city').length, 0);
       runs.push({
         run_id: r.run_id, monitor_id: r.series_id, project: { id: project.id, name: project.name }, keyword: r.keyword, target: r.target,
         run_at: r.ts ? new Date(r.ts).toISOString() : null, label: r.label, manifest_id: r.manifest_id,
         state: r.state, hold_reason: r.hold_reason, attempt: r.attempt,
         queued_at: new Date(r.queued_at).toISOString(), started_at: r.started_at ? new Date(r.started_at).toISOString() : null,
         swapped_at: r.swapped_at ? new Date(r.swapped_at).toISOString() : null,
-        points_collected: after.length, points_pending: r.task_points ? (JSON.parse(r.task_points) as unknown[]).length : 0,
+        points_collected: after.length, points_pending: inFlight.length,
+        points_awaiting_retry: inFlight.filter((t) => t.awaiting_retry).length,
         // Old points can't be re-checked (descriptions weren't stored), so "before" is the detections this
         // re-scan made (tasks that came back wrong-city and were re-posted) and "after" what's left.
         wrong_city: {
-          detected: after.reduce((s, p) => s + (p.rechecks ?? []).filter((x) => x.reason === 'wrong_city').length, 0),
+          detected: wrongCityRechecks(after) + wrongCityRechecks(inFlight),
           points_left: after.filter((p) => p.failed_reason === 'wrong_city').length,
+          points_rechecking: inFlight.filter((t) => (t.rechecks ?? []).some((x) => x.reason === 'wrong_city')).length,
         },
         failed_points: after.filter((p) => p.failed).length,
-        mrt_average_position: { before: mrtAverage(before), after: after.length ? mrtAverage(after) : null },
+        // "after" only once every point is in: a partial average (e.g. clean points first) misleads.
+        mrt_average_position: { before: mrtAverage(before), after: after.length && !inFlight.length ? mrtAverage(after) : null },
         accepted_searches: r.accepted_searches ?? 0, rejected_submissions: r.rejected_submissions ?? 0, cost: attemptCost,
       });
     }

@@ -124,7 +124,8 @@ function qualityOf(points: GridPoint[]) {
 }
 
 function runHeader(project: Project, entry: GridSearchEntry, pinned = false, points?: GridPoint[]) {
-  const safety = points ? runSafety(project.id, entry.id, points) : null;
+  // Patch fork: only a finished run has a verdict; pending/failed runs report null, not a provisional true.
+  const safety = points && entry.status === 'done' ? runSafety(project.id, entry.id, points) : null;
   return {
     run_id: entry.id,
     /** Patch fork: the monitor's starting-point scan, kept forever by retention. */

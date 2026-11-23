@@ -62,16 +62,18 @@ export async function checkGridTask(
 ): Promise<GridTaskCheck> {
   const stillProcessing = new Set([40602, 40601]);
   const timedOut = () => task.submitted_at !== undefined && ctx.now - task.submitted_at > TASK_PENDING_TIMEOUT_MS;
+  // Patch fork: a task_get that keeps failing (HTTP error, network error, bad JSON) is waited on like a
+  // queued task, then re-posted as a timeout. Scheduled runs have no run deadline, so without this a
+  // point could stay pending forever.
+  const waitOrTimeout = (): GridTaskCheck => (timedOut() ? { kind: 'bad', recheck: { task_id: task.task_id, reason: 'timeout' } } : { kind: 'pending' });
   try {
     const response = await fetch(`${dataForSeoBaseUrl()}/v3/serp/google/local_finder/task_get/advanced/${task.task_id}`, {
       headers: { Authorization: `Basic ${ctx.auth}` }, signal: AbortSignal.timeout(15_000),
     });
-    if (!response.ok) return { kind: 'pending' };
+    if (!response.ok) return waitOrTimeout();
     const data = await response.json() as DFSTaskGetResponse;
     const dfsTask = data.tasks?.[0];
-    if (!dfsTask || stillProcessing.has(dfsTask.status_code ?? 0)) {
-      return timedOut() ? { kind: 'bad', recheck: { task_id: task.task_id, reason: 'timeout' } } : { kind: 'pending' };
-    }
+    if (!dfsTask || stillProcessing.has(dfsTask.status_code ?? 0)) return waitOrTimeout();
     const result = dfsTask.result?.[0];
     // Patch fork: the task failed, or "succeeded" without a result object. Upstream stored these as an
     // empty point, which showed as "not found" even though Google was never checked there.
@@ -84,7 +86,7 @@ export async function checkGridTask(
     }
     return { kind: 'ready', built };
   } catch {
-    return { kind: 'pending' };
+    return waitOrTimeout();
   }
 }
 

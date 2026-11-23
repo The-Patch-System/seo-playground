@@ -211,6 +211,30 @@ describe('collectGridProgress wrong-city and error retries', () => {
     expect(progress().pendingTasks[0]).toMatchObject({ task_id: 'new-1', attempts: 2, rechecks: [{ task_id: 'p1', reason: 'timeout' }] });
   });
 
+  it.each([
+    ['an HTTP 500', () => new Response('{"status_code":50000}', { status: 500 })],
+    ['a network error', () => { throw new Error('socket hang up'); }],
+    ['a body that is not JSON', () => new Response('<html>bad gateway</html>')],
+  ])('times out a task whose task_get keeps failing with %s', async (_label, fail) => {
+    saveGridSearchPendingForProject('default', kgEntry, [task()]);
+    const posts: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes('task_post')) {
+        posts.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ tasks: [{ id: 'new-1', status_code: 20100, cost: 0.0018 }] }));
+      }
+      return fail();
+    }));
+    vi.setSystemTime(t0 + 29 * MIN);
+    await collect();
+    expect(posts).toHaveLength(0);
+    expect(progress().pendingTasks[0]).toMatchObject({ task_id: 'p1' });
+    vi.setSystemTime(t0 + 31 * MIN);
+    await collect();
+    expect(posts).toHaveLength(1);
+    expect(progress().pendingTasks[0]).toMatchObject({ task_id: 'new-1', attempts: 2, rechecks: [{ task_id: 'p1', reason: 'timeout' }] });
+  });
+
   it('backs off 60 s after a rejected re-post and fails the point after 3 rejections', async () => {
     saveGridSearchPendingForProject('default', kgEntry, [task()]);
     const dfs = stubDfs({ p1: 40501 }, { status: 40501 });

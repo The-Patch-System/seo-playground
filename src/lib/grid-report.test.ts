@@ -131,7 +131,7 @@ describe('reporting API data quality', () => {
     quality('pt latest', 'q-latest-pending', [], base.ts + 5 * 86_400_000);
     getDbForProject('default').prepare("UPDATE grid_searches SET status = 'pending' WHERE id = 'q-latest-pending'").run();
     const history = getMonitorRuns(series);
-    expect(history?.runs.map((r) => [r.run_id, r.report_safe])).toEqual([['q-latest-pending', true], ['q-latest-new', true], ['q-latest-old', false]]);
+    expect(history?.runs.map((r) => [r.run_id, r.report_safe])).toEqual([['q-latest-pending', null], ['q-latest-new', true], ['q-latest-old', false]]);
     expect(history).toMatchObject({ report_safe: true, report_safe_reason: null });
     expect(listMonitors({ q: 'pt latest' })[0]).toMatchObject({ report_safe: true, latest_run: { run_id: 'q-latest-new' } });
   });

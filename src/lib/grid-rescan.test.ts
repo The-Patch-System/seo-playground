@@ -241,6 +241,13 @@ describe('re-scan worker', () => {
     await pass();
     const [waiting] = JSON.parse(attemptRows('default', 'run-swap')[0].task_points);
     expect(waiting).toMatchObject({ awaiting_retry: true, retry_due_at: t + 5 * MIN, rechecks: [{ reason: 'wrong_city' }] });
+    // Mid-scan status counts the in-flight detection and gives no partial "after" average.
+    const midScan = rescanStatus({ manifest_id: preview.manifest_id });
+    expect(midScan.runs![0]).toMatchObject({
+      state: 'scanning', points_collected: 0, points_pending: 1, points_awaiting_retry: 1,
+      wrong_city: { detected: 1, points_left: 0, points_rechecking: 1 }, mrt_average_position: { before: 21, after: null },
+    });
+    expect(midScan.wrong_city_detections).toEqual([expect.objectContaining({ run_id: 'run-swap', row: 0, col: 0, resolved: null })]);
     setNow(t + 4 * MIN);
     const postsBefore = postedTags.length;
     await pass();
@@ -268,7 +275,7 @@ describe('re-scan worker', () => {
     if (!status.runs) throw new Error('expected runs');
     expect(status.counts).toEqual({ swapped: 1 });
     expect(status.runs[0]).toMatchObject({
-      run_id: 'run-swap', state: 'swapped', accepted_searches: 2, cost: 0.0036, wrong_city: { detected: 1, points_left: 0 },
+      run_id: 'run-swap', state: 'swapped', accepted_searches: 2, cost: 0.0036, wrong_city: { detected: 1, points_left: 0, points_rechecking: 0 },
       mrt_average_position: { before: 21, after: 2 },
     });
     expect(status.wrong_city_detections).toEqual([expect.objectContaining({ run_id: 'run-swap', resolved: true })]);
