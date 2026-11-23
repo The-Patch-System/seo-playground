@@ -1,0 +1,319 @@
+{
+ "tasks": [
+  {
+   "id": "11151707-2638-0066-0000-110ad9d42ab2",
+   "status_code": 20000,
+   "data": {
+    "keyword": "physical therapy clinic",
+    "location_coordinate": "38.351143,-77.235468"
+   },
+   "result": [
+    {
+     "check_url": "https://www.google.com/search?q=physical+therapy+clinic&uule=j+WzEsMTIsMTc5NDc2MjQ1NzI1MjAwMCxudWxsLFszODM1MTE0MzAsLTc3MjM1NDY4MF0sbnVsbCw5MzAwMCxudWxsLDZd&hl=en&gl=US&udm=1",
+     "items": [
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "title": "Mary Washington Physical Therapy",
+       "description": "King George, VA · (540) 625-2311 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.marywashingtonhealthcare.com",
+       "url": "https://www.marywashingtonhealthcare.com/our-services/physical-therapy/",
+       "is_paid": false,
+       "cid": "17919064668159341237",
+       "rating": {
+        "value": 5,
+        "votes_count": 39
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 2,
+       "rank_absolute": 2,
+       "title": "Fusion Rehab and Wellness - King George",
+       "description": "King George, VA · (540) 227-4902 \nClosed · Opens 7 AM Mon ",
+       "domain": "fusionpta.com",
+       "url": "https://fusionpta.com/",
+       "is_paid": false,
+       "cid": "12488871316087760724",
+       "rating": {
+        "value": 5,
+        "votes_count": 77
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 3,
+       "rank_absolute": 3,
+       "title": "La Plata Physical Therapy & Wellness Center",
+       "description": "La Plata, MD · (301) 392-3700 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.laplatapt.com",
+       "url": "http://www.laplatapt.com/",
+       "is_paid": false,
+       "cid": "9388000020131924588",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 139
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 4,
+       "rank_absolute": 4,
+       "title": "Fusion Rehab and Wellness - Fredericksburg",
+       "description": "Fredericksburg, VA · (540) 710-0130 \nClosed · Opens 7 AM Mon ",
+       "domain": "fusionpta.com",
+       "url": "https://fusionpta.com/",
+       "is_paid": false,
+       "cid": "9128249946239941937",
+       "rating": {
+        "value": 5,
+        "votes_count": 381
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 5,
+       "rank_absolute": 5,
+       "title": "Orthopedic & Sports Physical Therapy Associates",
+       "description": "Fredericksburg, VA · (540) 373-3031 \nClosed · Opens 7 AM Mon ",
+       "domain": "ospta.com",
+       "url": "https://ospta.com/",
+       "is_paid": false,
+       "cid": "4955400159706101102",
+       "rating": {
+        "value": 5,
+        "votes_count": 15
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 6,
+       "rank_absolute": 6,
+       "title": "Mary Washington Physical Therapy",
+       "description": "Fredericksburg, VA · (540) 361-1833 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.marywashingtonhealthcare.com",
+       "url": "https://www.marywashingtonhealthcare.com/locations/physical-therapy-wellford-fredericksburg/",
+       "is_paid": false,
+       "cid": "8898531464567420158",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 111
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 7,
+       "rank_absolute": 7,
+       "title": "Potomac Physical Therapy",
+       "description": "King George, VA · (540) 709-1147 \nClosed · Opens 7:30 AM Mon ",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "8002598007407780955",
+       "rating": {
+        "value": 4.6,
+        "votes_count": 9
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 8,
+       "rank_absolute": 8,
+       "title": "Fusion Rehab and Wellness - South Stafford",
+       "description": "Falmouth, VA · (540) 710-5144 \nClosed · Opens 7 AM Mon ",
+       "domain": "fusionpta.com",
+       "url": "https://fusionpta.com/",
+       "is_paid": false,
+       "cid": "8676954164106594406",
+       "rating": {
+        "value": 5,
+        "votes_count": 312
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 9,
+       "rank_absolute": 9,
+       "title": "Peterson Physical Therapy",
+       "description": "La Plata, MD · (301) 539-3807 \nClosed · Opens 6 AM Mon ",
+       "domain": "www.petersonptmd.com",
+       "url": "http://www.petersonptmd.com/",
+       "is_paid": false,
+       "cid": "7776028086116309822",
+       "rating": {
+        "value": 5,
+        "votes_count": 160
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 10,
+       "rank_absolute": 10,
+       "title": "Active Physical Therapy",
+       "description": "La Plata, MD · (301) 392-1100 \nClosed · Opens 11 AM Mon ",
+       "domain": "www.active-physicaltherapy.com",
+       "url": "https://www.active-physicaltherapy.com/Active-Physical-Therapy-In-La-Plata-Maryland.aspx",
+       "is_paid": false,
+       "cid": "9906577365605691969",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 85
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 11,
+       "rank_absolute": 11,
+       "title": "Pivot PT - Fredericksburg (Eagle Village), an Athletico company",
+       "description": "Fredericksburg, VA · (540) 322-2518 \nClosed · Opens 6 AM Mon ",
+       "domain": "www.athletico.com",
+       "url": "https://www.athletico.com/locations/fredericksburg-va-eagle-village/?utm_source=google-eagle-village&utm_medium=pvt-web&utm_campaign=google-listings",
+       "is_paid": false,
+       "cid": "9858374506792707221",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 118
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 12,
+       "rank_absolute": 12,
+       "title": "Changing Paces PC",
+       "description": "King George, VA · (540) 903-7298 \nClosed · Opens 8 AM Tue ",
+       "domain": "www.changingpacestherapy.com",
+       "url": "http://www.changingpacestherapy.com/",
+       "is_paid": false,
+       "cid": "7984410333854124068",
+       "rating": {
+        "value": 5,
+        "votes_count": 4
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 13,
+       "rank_absolute": 13,
+       "title": "Mary Washington Physical Therapy",
+       "description": "Stafford, VA · (540) 657-2925 \nClosed · Opens 7 AM Mon ",
+       "domain": "marywashingtonhealthcare.com",
+       "url": "https://marywashingtonhealthcare.com/locations/physical-therapy-stafford/",
+       "is_paid": false,
+       "cid": "9808459619425605201",
+       "rating": {
+        "value": 4.7,
+        "votes_count": 35
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 14,
+       "rank_absolute": 14,
+       "title": "Dominion Physical Therapy- Stafford",
+       "description": "Stafford, VA · (571) 427-4378 \nClosed · Opens 8 AM Mon ",
+       "domain": "dominionpt.com",
+       "url": "http://dominionpt.com/",
+       "is_paid": false,
+       "cid": "1709747273561279527",
+       "rating": {
+        "value": 5,
+        "votes_count": 25
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 15,
+       "rank_absolute": 15,
+       "title": "ATI Physical Therapy",
+       "description": "La Plata, MD · (240) 776-6900 \nClosed · Opens 7 AM Mon ",
+       "domain": "locations.atipt.com",
+       "url": "https://locations.atipt.com/maryland/la-plata/212-rosewick-rd/",
+       "is_paid": false,
+       "cid": "5080040211698020628",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 155
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 16,
+       "rank_absolute": 16,
+       "title": "Mary Washington Physical Therapy",
+       "description": "Fredericksburg, VA · (540) 737-6150 \nClosed · Opens 7 AM Mon ",
+       "domain": "marywashingtonhealthcare.com",
+       "url": "https://marywashingtonhealthcare.com/locations/physical-therapy-fredericksburg-stafford-lakes-p/",
+       "is_paid": false,
+       "cid": "11744285843979761640",
+       "rating": {
+        "value": 5,
+        "votes_count": 123
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 17,
+       "rank_absolute": 17,
+       "title": "Stafford Physical Therapy",
+       "description": "Stafford, VA · (540) 659-6408 \nClosed · Opens 8 AM Mon ",
+       "domain": "staffordphysicaltherapy.com",
+       "url": "http://staffordphysicaltherapy.com/",
+       "is_paid": false,
+       "cid": "7739441400035530120",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 67
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 18,
+       "rank_absolute": 18,
+       "title": "Mary Washington Physical Therapy",
+       "description": "Fredericksburg, VA · (540) 735-0401 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.marywashingtonhealthcare.com",
+       "url": "https://www.marywashingtonhealthcare.com/locations/physical-therapy-cosner-dr-spotsy/",
+       "is_paid": false,
+       "cid": "16681801032895444506",
+       "rating": {
+        "value": 5,
+        "votes_count": 224
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 19,
+       "rank_absolute": 19,
+       "title": "Heritage Hall King George",
+       "description": "King George, VA · (540) 775-4000 \nOpen · Closes 5 PM ",
+       "domain": "www.heritage-hall.org",
+       "url": "https://www.heritage-hall.org/king-george",
+       "is_paid": false,
+       "cid": "15334258768441179447",
+       "rating": {
+        "value": 4.4,
+        "votes_count": 77
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 20,
+       "rank_absolute": 20,
+       "title": "ProFlex Physical Therapy - Aquia",
+       "description": "Stafford, VA · (540) 318-8615 \nClosed · Opens 7 AM Mon ",
+       "domain": "proflexpt.com",
+       "url": "https://proflexpt.com/",
+       "is_paid": false,
+       "cid": "9088131869364176362",
+       "rating": {
+        "value": 5,
+        "votes_count": 123
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,316 @@
+{
+ "tasks": [
+  {
+   "id": "11151712-2638-0066-0000-5c75f0fd8929",
+   "status_code": 20000,
+   "data": {
+    "keyword": "physical therapy",
+    "location_coordinate": "39.953486,-75.119159"
+   },
+   "result": [
+    {
+     "check_url": "https://www.google.com/search?q=physical+therapy&uule=j+WzEsMTIsMTc5NDc2Mjc2MjIwMzAwMCxudWxsLFszOTk1MzQ4NjAsLTc1MTE5MTU5MF0sbnVsbCw5MzAwMCxudWxsLDZd&hl=en&gl=US&udm=1",
+     "items": [
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "title": "Virtua Physical Therapy & Rehabilitation - Camden",
+       "description": "1000 Atlantic Ave · (856) 246-3645 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.virtua.org",
+       "url": "https://www.virtua.org/locations/physical-therapy-and-rehabilitation-camden?utm_campaign=gmb&utm_medium=organic&utm_source=local",
+       "is_paid": false,
+       "cid": "4387384429526732789",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 53
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 2,
+       "rank_absolute": 2,
+       "title": "Breakthru Physical Therapy + Fitness",
+       "description": "Pennsauken, NJ · (856) 420-6441 \nClosed · Opens 8 AM Mon ",
+       "domain": "breakthruptfitness.com",
+       "url": "https://breakthruptfitness.com/your-road-to-recovery.html?loc=pennsauken&utm_source=google&utm_medium=organic&utm_campaign=GMB-Pennsauken&utm_content=listing",
+       "is_paid": false,
+       "cid": "13771280967094386002",
+       "rating": {
+        "value": 5,
+        "votes_count": 144
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 3,
+       "rank_absolute": 3,
+       "title": "TheraSport Physical Therapy",
+       "description": "Merchantville, NJ · (856) 210-8017 \nClosed · Opens 7:30 AM Mon ",
+       "domain": "therasport.org",
+       "url": "https://therasport.org/physical-therapy-clinics/merchantville-nj/",
+       "is_paid": false,
+       "cid": "15509982215201473937",
+       "rating": {
+        "value": 5,
+        "votes_count": 164
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 4,
+       "rank_absolute": 4,
+       "title": "Philly Performance & Rehab",
+       "description": "Philadelphia, PA \nOpen · Closes 8 PM ",
+       "domain": "www.phillyperformanceandrehab.com",
+       "url": "http://www.phillyperformanceandrehab.com/",
+       "is_paid": false,
+       "cid": "5636852256421952262",
+       "rating": {
+        "value": 5,
+        "votes_count": 13
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 5,
+       "rank_absolute": 5,
+       "title": "Ivy Rehab Physical Therapy",
+       "description": "Philadelphia, PA · (267) 529-0080 \nClosed · Opens 8 AM Mon ",
+       "domain": "ivyrehab.com",
+       "url": "https://ivyrehab.com/physical-therapy-location/philadelphia-northern-liberties/?utm_source=GMB&utm_medium=organic&utm_campaign=google-business",
+       "is_paid": false,
+       "cid": "14996922585464267024",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 77
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 6,
+       "rank_absolute": 6,
+       "title": "ATI Physical Therapy",
+       "description": "Philadelphia, PA · (267) 592-4033 \nClosed · Opens 7 AM Mon ",
+       "domain": "locations.atipt.com",
+       "url": "https://locations.atipt.com/pennsylvania/philadelphia/180-w-girard-ave/",
+       "is_paid": false,
+       "cid": "15206517120951779051",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 250
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 7,
+       "rank_absolute": 7,
+       "title": "Ivy Rehab Physical Therapy",
+       "description": "Philadelphia, PA · (267) 519-3328 \nClosed · Opens 7:30 AM Mon ",
+       "domain": "ivyrehab.com",
+       "url": "https://ivyrehab.com/physical-therapy-location/philadelphia-delaware-ave-pa/?utm_source=GMB&utm_medium=organic&utm_campaign=google-business",
+       "is_paid": false,
+       "cid": "15784570240178614877",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 113
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 8,
+       "rank_absolute": 8,
+       "title": "Cooper Norcross Physical Therapy at Cherry Hill Campus",
+       "description": "Cherry Hill Township, NJ · (856) 406-4080 \n",
+       "domain": "www.cooperhealth.org",
+       "url": "https://www.cooperhealth.org/locations/cooper-specialty-care-cherry-hill",
+       "is_paid": false,
+       "cid": "6755075267593850309",
+       "rating": {
+        "value": 4.2,
+        "votes_count": 5
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 9,
+       "rank_absolute": 9,
+       "title": "Ivy Rehab Physical Therapy",
+       "description": "Philadelphia, PA · (267) 236-1025 \nClosed · Opens 7 AM Mon ",
+       "domain": "ivyrehab.com",
+       "url": "https://ivyrehab.com/physical-therapy-location/oldcity-pa/?utm_source=GMB&utm_medium=organic&utm_campaign=google-business",
+       "is_paid": false,
+       "cid": "1266266801255662441",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 119
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 10,
+       "rank_absolute": 10,
+       "title": "Virtua Physical Medicine & Rehabilitation - Camden",
+       "description": "1600 Haddon Ave · (856) 757-3872 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.virtua.org",
+       "url": "https://www.virtua.org/locations/physical-medicine-and-rehabilitation-camden?utm_campaign=gmb&utm_medium=organic&utm_source=local",
+       "is_paid": false,
+       "cid": "7461051337183951924",
+       "rating": {
+        "value": 5,
+        "votes_count": 3
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 11,
+       "rank_absolute": 11,
+       "title": "Cooper University Health Care -Physical Occupational Therapy",
+       "description": "1 Cooper Plaza \nClosed · Opens 12 AM Mon ",
+       "domain": "www.cooperhealth.org",
+       "url": "http://www.cooperhealth.org/",
+       "is_paid": false,
+       "cid": "16595354760441661876",
+       "rating": {
+        "value": 1,
+        "votes_count": 2
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 12,
+       "rank_absolute": 12,
+       "title": "Pelvio Physical Therapy",
+       "description": "Philadelphia, PA · (267) 570-3603 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.pelviopt.com",
+       "url": "http://www.pelviopt.com/",
+       "is_paid": false,
+       "cid": "1694501384557691700",
+       "rating": {
+        "value": 5,
+        "votes_count": 110
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 13,
+       "rank_absolute": 13,
+       "title": "Cloudline Physical Therapy",
+       "description": "Philadelphia, PA · (267) 639-3215 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.cloudlinept.com",
+       "url": "http://www.cloudlinept.com/",
+       "is_paid": false,
+       "cid": "17354027016930101358",
+       "rating": {
+        "value": 5,
+        "votes_count": 437
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 14,
+       "rank_absolute": 14,
+       "title": "NovaCare Rehabilitation - Philadelphia - Fishtown",
+       "description": "Philadelphia, PA · (215) 427-6024 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.novacare.com",
+       "url": "https://www.novacare.com/contact/find-a-location/pa/philadelphia/philadelphia-fishtown/?ty=xt",
+       "is_paid": false,
+       "cid": "9827052718012018812",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 91
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 15,
+       "rank_absolute": 15,
+       "title": "ATI Physical Therapy",
+       "description": "Philadelphia, PA · (267) 592-4508 \nClosed · Opens 7 AM Mon ",
+       "domain": "locations.atipt.com",
+       "url": "https://locations.atipt.com/pennsylvania/philadelphia/1100-s-christopher-columbus-blvd/",
+       "is_paid": false,
+       "cid": "2749276703307356817",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 120
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 16,
+       "rank_absolute": 16,
+       "title": "Cooper Physical Medicine And Rehabilitation",
+       "description": "No reviews · Physical therapy clinic \n3 Cooper Plaza Unit 104 · (856) 414-6110 ",
+       "domain": "www.cooperhealth.org",
+       "url": "http://www.cooperhealth.org/",
+       "is_paid": false,
+       "cid": "4722181065104370842",
+       "rating": null
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 17,
+       "rank_absolute": 17,
+       "title": "Virtua Physical Therapy & Rehabilitation - Cherry Hill at Haddonfield Road",
+       "description": "Cherry Hill Township, NJ · (856) 488-1177 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.virtua.org",
+       "url": "http://www.virtua.org/locations/physical-therapy-and-rehabilitation-cherry-hill?utm_campaign=gmb&utm_medium=organic&utm_source=local",
+       "is_paid": false,
+       "cid": "14610349969651834395",
+       "rating": {
+        "value": 5,
+        "votes_count": 127
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 18,
+       "rank_absolute": 18,
+       "title": "3DPT Haddon Township - 3 Dimensional Physical Therapy",
+       "description": "Haddonfield, NJ · (856) 240-7609 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.3dpt.com",
+       "url": "http://www.3dpt.com/",
+       "is_paid": false,
+       "cid": "16350567702166735433",
+       "rating": {
+        "value": 5,
+        "votes_count": 210
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 19,
+       "rank_absolute": 19,
+       "title": "PT in Philly",
+       "description": "Philadelphia, PA · (267) 201-0986 \nOpen 24 hours ",
+       "domain": "www.ptinphilly.com",
+       "url": "https://www.ptinphilly.com/",
+       "is_paid": false,
+       "cid": "9620064200817119403",
+       "rating": {
+        "value": 4,
+        "votes_count": 4
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 20,
+       "rank_absolute": 20,
+       "title": "NovaCare Rehabilitation - Philadelphia - Northern Liberties",
+       "description": "Philadelphia, PA · (215) 925-2339 \nClosed · Opens 10 AM Mon ",
+       "domain": "www.novacare.com",
+       "url": "https://www.novacare.com/contact/find-a-location/pa/philadelphia/philadelphia-northern-liberties/?ty=xt",
+       "is_paid": false,
+       "cid": "2902197359675848426",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 87
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

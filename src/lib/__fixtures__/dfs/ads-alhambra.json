@@ -1,0 +1,364 @@
+{
+ "tasks": [
+  {
+   "id": "11152000-2638-0066-0000-5a0b0c8a96fa",
+   "status_code": 20000,
+   "data": {
+    "keyword": "physical therapy",
+    "location_coordinate": "34.058457,-118.144055"
+   },
+   "result": [
+    {
+     "check_url": "https://www.google.com/search?q=physical+therapy&uule=j+WzEsMTIsMTc5NDc3MjgxMzcwMTAwMCxudWxsLFszNDA1ODQ1NzAsLTExODE0NDA1NTBdLG51bGwsOTMwMDAsbnVsbCw2XQ==&hl=en&gl=US&udm=1",
+     "items": [
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "title": "Total Potential: Integrative & Holistic Physical Therapy",
+       "description": "Sponsored \n2060 Huntington Drive · (424) 254-9273 ",
+       "domain": null,
+       "url": null,
+       "is_paid": true,
+       "cid": "10534861496082133597",
+       "rating": {
+        "value": 5,
+        "votes_count": 81
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 2,
+       "rank_absolute": 2,
+       "title": "Elevated Physical Therapy",
+       "description": "Sponsored \n188 South De Lacey Avenue · (626) 360-2717 ",
+       "domain": null,
+       "url": null,
+       "is_paid": true,
+       "cid": "1870677044343398323",
+       "rating": {
+        "value": 5,
+        "votes_count": 54
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 3,
+       "rank_absolute": 3,
+       "title": "Dang Physical Therapy",
+       "description": "Sponsored \n1325 Palmetto Street · (213) 802-7208 ",
+       "domain": null,
+       "url": null,
+       "is_paid": true,
+       "cid": "12617085364271263719",
+       "rating": {
+        "value": 5,
+        "votes_count": 272
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 4,
+       "rank_absolute": 4,
+       "title": "M.A.S. Performance Physio",
+       "description": "Alhambra, CA · (626) 366-6441 \nClosed · Opens 8:30 AM Mon ",
+       "domain": "www.masperformancephysio.com",
+       "url": "http://www.masperformancephysio.com/",
+       "is_paid": false,
+       "cid": "6160402603725569915",
+       "rating": {
+        "value": 5,
+        "votes_count": 102
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 5,
+       "rank_absolute": 5,
+       "title": "Bleu Physical Therapy",
+       "description": "Alhambra, CA · (626) 988-6211 \nClosed · Opens 7:30 AM Mon ",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "11636134624799189618",
+       "rating": {
+        "value": 4.5,
+        "votes_count": 16
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 6,
+       "rank_absolute": 6,
+       "title": "Beverly Orthopedic Physical Therapy Center Inc | Montebello",
+       "description": "Montebello, CA · (323) 477-1176 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.beverlyorthopedicptcenter.com",
+       "url": "http://www.beverlyorthopedicptcenter.com/",
+       "is_paid": false,
+       "cid": "12206626925388997758",
+       "rating": {
+        "value": 5,
+        "votes_count": 86
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 7,
+       "rank_absolute": 7,
+       "title": "Associated Sports Therapy",
+       "description": "Los Angeles, CA · (626) 282-3577 \nClosed · Opens 7 AM Mon ",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "6758975116783218770",
+       "rating": {
+        "value": 5,
+        "votes_count": 3
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 8,
+       "rank_absolute": 8,
+       "title": "B & C Physical Therapy",
+       "description": "Alhambra, CA · (626) 782-7611 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.bcphysicaltherapy.com",
+       "url": "http://www.bcphysicaltherapy.com/",
+       "is_paid": false,
+       "cid": "17148272778793514021",
+       "rating": {
+        "value": 5,
+        "votes_count": 51
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 9,
+       "rank_absolute": 9,
+       "title": "Manale Physical & Occupational Therapy",
+       "description": "East Los Angeles, CA · (323) 895-7872 \nClosed · Opens 8 AM Mon ",
+       "domain": "manaleotpt.com",
+       "url": "http://manaleotpt.com/",
+       "is_paid": false,
+       "cid": "18343340946682457735",
+       "rating": {
+        "value": 4.2,
+        "votes_count": 24
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 10,
+       "rank_absolute": 10,
+       "title": "MOTI Physiotherapy",
+       "description": "Los Angeles, CA · (323) 503-1414 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.motipt.com",
+       "url": "http://www.motipt.com/",
+       "is_paid": false,
+       "cid": "11855796503260676214",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 276
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 11,
+       "rank_absolute": 11,
+       "title": "Hyena Rehab LA (Doctors of Physical Therapy)",
+       "description": "Los Angeles, CA · (213) 275-0755 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.hyenarehab.com",
+       "url": "https://www.hyenarehab.com/physical-therapy-los-angeles",
+       "is_paid": false,
+       "cid": "15436805846266179277",
+       "rating": {
+        "value": 5,
+        "votes_count": 81
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 12,
+       "rank_absolute": 12,
+       "title": "Wellness Physical Therapy",
+       "description": "Alhambra, CA · (626) 282-6268 \nClosed · Opens 8 AM Mon ",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "7486376615036695355",
+       "rating": {
+        "value": 3.7,
+        "votes_count": 13
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 13,
+       "rank_absolute": 13,
+       "title": "Ashwinikumar N. Patel, Physical",
+       "description": "Alhambra, CA · (562) 229-2361 \n",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "7917035775268751122",
+       "rating": {
+        "value": 5,
+        "votes_count": 2
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 14,
+       "rank_absolute": 14,
+       "title": "Garfield Medical Center",
+       "description": "525 N Garfield Ave · (626) 573-2222 \nOpen 24 hours ",
+       "domain": "garfieldmedicalcenter.com",
+       "url": "http://garfieldmedicalcenter.com/",
+       "is_paid": false,
+       "cid": "13875203703542846452",
+       "rating": {
+        "value": 3.4,
+        "votes_count": 228
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 15,
+       "rank_absolute": 15,
+       "title": "San Gabriel Valley Physical Therapy",
+       "description": "Alhambra, CA · (626) 451-9903 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.sgvpt.com",
+       "url": "http://www.sgvpt.com/",
+       "is_paid": false,
+       "cid": "5041949849099606965",
+       "rating": {
+        "value": 3.2,
+        "votes_count": 18
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 16,
+       "rank_absolute": 16,
+       "title": "Caring Rehabilitation And Pain Clinic",
+       "description": "223 N Garfield Ave Ste 105 · (626) 307-9500 \n",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "5491266536080880343",
+       "rating": {
+        "value": 4.5,
+        "votes_count": 2
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 17,
+       "rank_absolute": 17,
+       "title": "Yonemoto Physical Therapy Services",
+       "description": "Alhambra, CA · (626) 576-0591 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.yonemoto.com",
+       "url": "http://www.yonemoto.com/",
+       "is_paid": false,
+       "cid": "1515993962097904011",
+       "rating": {
+        "value": 5,
+        "votes_count": 4
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 18,
+       "rank_absolute": 18,
+       "title": "Monterey Park Convalescent Hospital",
+       "description": "416 N Garfield Ave · (626) 280-0280 \nOpen · Closes 5 PM ",
+       "domain": "www.montereyparkcare.com",
+       "url": "https://www.montereyparkcare.com/",
+       "is_paid": false,
+       "cid": "11511864300457543977",
+       "rating": {
+        "value": 4.1,
+        "votes_count": 25
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 19,
+       "rank_absolute": 19,
+       "title": "Physical Therapy 1st Rehab & Wellness (Aquatic Therapy) - Montebello",
+       "description": "Montebello, CA · (818) 561-7707 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.startpt1st.com",
+       "url": "https://www.startpt1st.com/",
+       "is_paid": false,
+       "cid": "914355065207408593",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 48
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 20,
+       "rank_absolute": 20,
+       "title": "Joyful Therapy Center",
+       "description": "Alhambra, CA \n",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "781352772362089561",
+       "rating": {
+        "value": 5,
+        "votes_count": 1
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 21,
+       "rank_absolute": 21,
+       "title": "Kindness Physical Therapy (Alhambra)",
+       "description": "Alhambra, CA · (626) 300-8341 \nClosed · Opens 9 AM Mon ",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "3421126984932227783",
+       "rating": {
+        "value": 5,
+        "votes_count": 7
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 22,
+       "rank_absolute": 22,
+       "title": "Select Physical Therapy - Pasadena - North Lake",
+       "description": "Pasadena, CA · (626) 568-9115 \nClosed · Opens 6 AM Mon ",
+       "domain": "www.selectphysicaltherapy.com",
+       "url": "https://www.selectphysicaltherapy.com/contact/find-a-location/ca/pasadena/pasadena-north-lake/?ty=xt",
+       "is_paid": false,
+       "cid": "3283751337904345560",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 293
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 23,
+       "rank_absolute": 23,
+       "title": "AdaptivMVMT Physical Therapy & Performance, Inc.",
+       "description": "Alhambra, CA · (626) 888-5771 \nClosed · Opens 10 AM Mon ",
+       "domain": "www.adaptivmvmt.com",
+       "url": "https://www.adaptivmvmt.com/",
+       "is_paid": false,
+       "cid": "16285380740864718962",
+       "rating": {
+        "value": 5,
+        "votes_count": 5
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

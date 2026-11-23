@@ -1,0 +1,316 @@
+{
+ "tasks": [
+  {
+   "id": "11151709-2638-0066-0000-99d7ebad89d0",
+   "status_code": 20000,
+   "data": {
+    "keyword": "vestibular physical therapy",
+    "location_coordinate": "39.010569,-84.446631"
+   },
+   "result": [
+    {
+     "check_url": "https://www.google.com/search?q=vestibular+physical+therapy&uule=j+WzEsMTIsMTc5NDc2MjU0ODE5MTAwMCxudWxsLFszOTAxMDU2ODksLTg0NDQ2NjMxMF0sbnVsbCw5MzAwMCxudWxsLDZd&hl=en&gl=US&udm=1",
+     "items": [
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "title": "NovaCare Rehabilitation - Highland Heights",
+       "description": "Highland Heights, KY · (859) 572-0710 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.novacare.com",
+       "url": "https://www.novacare.com/contact/find-a-location/ky/highland-heights/highland-heights/?ty=xt",
+       "is_paid": false,
+       "cid": "9516148199692687128",
+       "rating": {
+        "value": 5,
+        "votes_count": 142
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 2,
+       "rank_absolute": 2,
+       "title": "GMS Therapy and Fitness LLC",
+       "description": "Fort Thomas, KY · (859) 592-0140 \nClosed · Opens 8:30 AM Mon ",
+       "domain": "gmstherapyandfitness.com",
+       "url": "http://gmstherapyandfitness.com/",
+       "is_paid": false,
+       "cid": "31936770153681471",
+       "rating": {
+        "value": 5,
+        "votes_count": 98
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 3,
+       "rank_absolute": 3,
+       "title": "Wilder Physical Therapy - St. Elizabeth",
+       "description": "Wilder, KY · (859) 572-2360 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.stelizabeth.com",
+       "url": "https://www.stelizabeth.com/location/details/st-elizabeth-physical-therapy-wilder",
+       "is_paid": false,
+       "cid": "3095799081379014779",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 5
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 4,
+       "rank_absolute": 4,
+       "title": "Rehabilitation & Performance Institute Fort Thomas",
+       "description": "Fort Thomas, KY · (859) 814-5148 \nClosed · Opens 8 AM Mon ",
+       "domain": "rehabilitationperformance.com",
+       "url": "https://rehabilitationperformance.com/fort-thomas/",
+       "is_paid": false,
+       "cid": "16925977627209509866",
+       "rating": {
+        "value": 5,
+        "votes_count": 65
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 5,
+       "rank_absolute": 5,
+       "title": "The Center For Balance",
+       "description": "Cincinnati, OH · (513) 231-2700 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.centerforbalancecincinnati.com",
+       "url": "https://www.centerforbalancecincinnati.com/",
+       "is_paid": false,
+       "cid": "14067173842971620921",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 15
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 6,
+       "rank_absolute": 6,
+       "title": "H2 Health Physical Therapy- Alexandria, KY",
+       "description": "Alexandria, KY · (859) 635-6500 \nClosed · Opens 7:30 AM Mon ",
+       "domain": "www.h2health.com",
+       "url": "https://www.h2health.com/locations/h2-health/alexandria-ky/",
+       "is_paid": false,
+       "cid": "6466052904945714591",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 156
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 7,
+       "rank_absolute": 7,
+       "title": "St. Elizabeth Healthcare Physical Therapy - Crestview Hills",
+       "description": "Crestview Hills, KY · (859) 301-2168 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.stelizabeth.com",
+       "url": "https://www.stelizabeth.com/location/details/st-elizabeth-physical-therapy-edgewood",
+       "is_paid": false,
+       "cid": "2302785638923932219",
+       "rating": {
+        "value": 4.1,
+        "votes_count": 9
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 8,
+       "rank_absolute": 8,
+       "title": "Fortified Rehab and Run Coaching",
+       "description": "4135 Alexandria Pike SUITE 106 · (859) 412-2071 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.fortifiedrrc.com",
+       "url": "https://www.fortifiedrrc.com/",
+       "is_paid": false,
+       "cid": "17385405574412624724",
+       "rating": {
+        "value": 5,
+        "votes_count": 2
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 9,
+       "rank_absolute": 9,
+       "title": "FYZICAL Therapy & Balance Centers West Florence",
+       "description": "Florence, KY · (859) 918-1025 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.fyzical.com",
+       "url": "https://www.fyzical.com/west-florence-ky",
+       "is_paid": false,
+       "cid": "5202548187881218913",
+       "rating": {
+        "value": 5,
+        "votes_count": 96
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 10,
+       "rank_absolute": 10,
+       "title": "The Center for Balance",
+       "description": "Cincinnati, OH · (513) 891-0934 \nClosed · Opens 8 AM Mon ",
+       "domain": "centerforbalancecincinnati.com",
+       "url": "http://centerforbalancecincinnati.com/",
+       "is_paid": false,
+       "cid": "333368982107431122",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 59
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 11,
+       "rank_absolute": 11,
+       "title": "Alexandria Physical Therapy - St Elizabeth",
+       "description": "Alexandria, KY · (859) 572-3700 \n\"Dr. Bill Blackburn was very easy to work with.\" ",
+       "domain": "www.stelizabeth.com",
+       "url": "https://www.stelizabeth.com/location/details/st-elizabeth-physical-therapy-alexandria",
+       "is_paid": false,
+       "cid": "12496158278264757392",
+       "rating": {
+        "value": 5,
+        "votes_count": 1
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 12,
+       "rank_absolute": 12,
+       "title": "Physical Therapy - Ft. Thomas - St. Elizabeth Healthcare",
+       "description": "Fort Thomas, KY · (859) 572-3120 \nClosed · Opens 7:30 AM Mon ",
+       "domain": "www.stelizabeth.com",
+       "url": "https://www.stelizabeth.com/location/details/st-elizabeth-physical-therapy-ft-thomas",
+       "is_paid": false,
+       "cid": "4474358448340528110",
+       "rating": {
+        "value": 4.4,
+        "votes_count": 13
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 13,
+       "rank_absolute": 13,
+       "title": "FYZICAL Therapy & Balance Center Red Bank",
+       "description": "Cincinnati, OH · (513) 618-7878 \nClosed · Opens 7:30 AM Mon ",
+       "domain": "www.fyzical.com",
+       "url": "https://www.fyzical.com/red-bank-oh",
+       "is_paid": false,
+       "cid": "10978796940817558591",
+       "rating": {
+        "value": 5,
+        "votes_count": 24
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 14,
+       "rank_absolute": 14,
+       "title": "KTL, Physical, Occupational & Speech Therapy",
+       "description": "Fort Thomas, KY · (859) 441-0139 \nClosed · Opens 8 AM Mon ",
+       "domain": "ktltherapy.com",
+       "url": "http://ktltherapy.com/",
+       "is_paid": false,
+       "cid": "11425200198816223431",
+       "rating": {
+        "value": 5,
+        "votes_count": 11
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 15,
+       "rank_absolute": 15,
+       "title": "Oxford Physical Therapy Centers",
+       "description": "Crestview Hills, KY · (859) 331-2233 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.oxfordphysicaltherapy.com",
+       "url": "https://www.oxfordphysicaltherapy.com/",
+       "is_paid": false,
+       "cid": "159314963519458808",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 297
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 16,
+       "rank_absolute": 16,
+       "title": "NovaCare Rehabilitation - Crescent Springs",
+       "description": "Crescent Springs, KY · (859) 341-6654 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.novacare.com",
+       "url": "https://www.novacare.com/contact/find-a-location/ky/crescent-springs/crescent-springs/?ty=xt",
+       "is_paid": false,
+       "cid": "1517803947578839426",
+       "rating": {
+        "value": 5,
+        "votes_count": 72
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 17,
+       "rank_absolute": 17,
+       "title": "Active Physical Therapy",
+       "description": "Newport, KY · (614) 850-0500 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.theactivept.com",
+       "url": "http://www.theactivept.com/",
+       "is_paid": false,
+       "cid": "7629553048446656823",
+       "rating": {
+        "value": 5,
+        "votes_count": 14
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 18,
+       "rank_absolute": 18,
+       "title": "SEH Physical Therapy Wilder",
+       "description": "No reviews · Physical therapist \nWilder, KY · (859) 572-2360 ",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "1466767718828236510",
+       "rating": null
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 19,
+       "rank_absolute": 19,
+       "title": "Covington Physical Therapy - St. Elizabeth",
+       "description": "Covington, KY · (859) 655-4268 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.stelizabeth.com",
+       "url": "https://www.stelizabeth.com/location/details/st-elizabeth-physical-therapy-covington",
+       "is_paid": false,
+       "cid": "6043138993354572021",
+       "rating": {
+        "value": 4,
+        "votes_count": 1
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 20,
+       "rank_absolute": 20,
+       "title": "Oxford Physical Therapy Centers",
+       "description": "Florence, KY · (859) 538-1165 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.oxfordphysicaltherapy.com",
+       "url": "https://www.oxfordphysicaltherapy.com/",
+       "is_paid": false,
+       "cid": "11264606990232653971",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 307
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

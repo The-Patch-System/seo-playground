@@ -4,6 +4,7 @@
 // so the reporting agent can swap sources with a thin adapter.
 import { getProjects, getDbForProject, entryFromGridRow, type GridPoint, type GridSearchEntry, type Project } from './db';
 import { parseTargetCid, reconcileGridPoints } from './grid-target';
+import { rescannedAt, runSafety } from './grid-rescan';
 
 const COLUMNS = 'id, ts, series_id, keyword, target, center, grid_size, spacing_km, language, cost, status, queue_mode, pinned';
 
@@ -35,7 +36,8 @@ function businessOf(entry: GridSearchEntry) {
  * Failed points are left out. CS OS stores this so map pack history matches the Semrush era.
  */
 export function mrtAveragePosition(points: GridPoint[]): number | null {
-  const scanned = points.filter((p) => !p.failed);
+  // Patch fork: a truncated point where the target's rank is unknown is left out like a failed point.
+  const scanned = points.filter((p) => !p.failed && !p.rank_unresolved);
   if (!scanned.length) return null;
   return Math.round((scanned.reduce((s, p) => s + Math.min(p.rank ?? 21, 21), 0) / scanned.length) * 10000) / 10000;
 }
@@ -109,7 +111,20 @@ function topCompetitors(points: GridPoint[], limit = 10) {
     .slice(0, limit);
 }
 
+/** Patch fork: point-level data quality for a run (see PATCH.md, "Wrong-city check"). */
+function qualityOf(points: GridPoint[]) {
+  return {
+    points: points.length,
+    failed_points: points.filter((p) => p.failed).length,
+    wrong_city_failed: points.filter((p) => p.failed && p.failed_reason === 'wrong_city').length,
+    unresolved_points: points.filter((p) => p.location_status === 'unresolved').length,
+    rank_unresolved_points: points.filter((p) => p.rank_unresolved).length,
+    wrong_city_rechecks: points.reduce((s, p) => s + (p.rechecks ?? []).filter((r) => r.reason === 'wrong_city').length, 0),
+  };
+}
+
 function runHeader(project: Project, entry: GridSearchEntry, pinned = false, points?: GridPoint[]) {
+  const safety = points ? runSafety(project.id, entry.id, points) : null;
   return {
     run_id: entry.id,
     /** Patch fork: the monitor's starting-point scan, kept forever by retention. */
@@ -127,6 +142,12 @@ function runHeader(project: Project, entry: GridSearchEntry, pinned = false, poi
     language: entry.language,
     cost: entry.cost ?? null,
     summary: summaryOf(entry, points),
+    /** Patch fork: when this run's points were replaced by an in-place re-scan (its date is unchanged). */
+    rescanned_at: rescannedAt(project.id, entry.id),
+    /** Patch fork: false when the run's numbers shouldn't be reported (see report_safe_reason). */
+    report_safe: safety ? safety.report_safe : null,
+    report_safe_reason: safety ? safety.reason : null,
+    quality: points ? qualityOf(points) : null,
   };
 }
 
@@ -150,6 +171,7 @@ export function listMonitors(filter: { q?: string; cid?: string; project?: strin
       if (q && !`${first.keyword} ${first.target}`.toLowerCase().includes(q)) continue;
       if (filter.cid && parseTargetCid(first.target) !== filter.cid) continue;
       const latestDone = runs.find((run) => run.status === 'done');
+      const latestRun = latestDone ? getRun(latestDone.id, project.id, { points: false }) : null;
       monitors.push({
         monitor_id: seriesId,
         project: { id: project.id, name: project.name, domain: project.domain },
@@ -163,7 +185,10 @@ export function listMonitors(filter: { q?: string; cid?: string; project?: strin
         schedule: scheduleOf(schedules.get(seriesId)),
         runs: runs.length,
         report_dates: runs.filter((run) => run.status === 'done').map((run) => new Date(run.ts).toISOString()).reverse(),
-        latest_run: latestDone ? getRun(latestDone.id, project.id, { points: false }) : null,
+        latest_run: latestRun,
+        /** Patch fork: the monitor's flag is its latest finished run's. */
+        report_safe: latestRun ? latestRun.report_safe : null,
+        report_safe_reason: latestRun ? latestRun.report_safe_reason : null,
       });
     }
     // Patch fork: a monitor created through the API is scheduled before its first run.
@@ -187,6 +212,8 @@ export function listMonitors(filter: { q?: string; cid?: string; project?: strin
         runs: 0,
         report_dates: [],
         latest_run: null,
+        report_safe: null,
+        report_safe_reason: null,
       });
     }
   }
@@ -227,6 +254,12 @@ export function getRun(runId: string, projectId?: string, options: { points?: bo
       col: point.col,
       ...pointCoords(entry, point),
       rank: point.rank,
+      // Patch fork: provenance and data-quality fields (additive).
+      task_id: point.task_id ?? null,
+      check_url: point.check_url ?? null,
+      failed: point.failed ?? false,
+      failed_reason: point.failed_reason ?? null,
+      rank_unresolved: point.rank_unresolved ?? false,
       ...(includeCompetitors ? {
         results: (point.items ?? []).map((item) => ({
           rank: item.rank_group, title: item.title, domain: item.domain ?? null, cid: item.cid ?? null,
@@ -254,7 +287,11 @@ export function getMonitorRuns(monitorId: string, projectId?: string) {
     if (!rows.length) continue;
     const runs = rows.map((row) => runHeader(project, entryFromGridRow(row), row.pinned === 1, parsePoints(row.results, row.target)));
     const done = runs.filter((run) => run.status === 'done' && run.summary).reverse();
+    const latest = runs.find((run) => run.status === 'done');
     return {
+      /** Patch fork: the monitor's flag is its latest finished run's. */
+      report_safe: latest ? latest.report_safe : null,
+      report_safe_reason: latest ? latest.report_safe_reason : null,
       runs,
       // Semrush MRT metrics shape, keyed by ISO date (oldest first).
       metrics: {

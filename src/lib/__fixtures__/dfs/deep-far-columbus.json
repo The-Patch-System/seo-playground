@@ -1,0 +1,316 @@
+{
+ "tasks": [
+  {
+   "id": "11151718-2638-0066-0000-2d9f35911941",
+   "status_code": 20000,
+   "data": {
+    "keyword": "shockwave therapy",
+    "location_coordinate": "32.598915,-84.850095"
+   },
+   "result": [
+    {
+     "check_url": "https://www.google.com/search?q=shockwave+therapy&uule=j+WzEsMTIsMTc5NDc2MzExNzAzNjAwMCxudWxsLFszMjU5ODkxNTAsLTg0ODUwMDk1MF0sbnVsbCw5MzAwMCxudWxsLDZd&hl=en&gl=US&udm=1",
+     "items": [
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "title": "Revive Performance Therapy",
+       "description": "6720 Flat Rock Ct Ste A · (706) 580-4437 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.reviveperformancetherapy.com",
+       "url": "https://www.reviveperformancetherapy.com/",
+       "is_paid": false,
+       "cid": "16880714397883659374",
+       "rating": {
+        "value": 5,
+        "votes_count": 161
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 2,
+       "rank_absolute": 2,
+       "title": "West Georgia Ortho and PT",
+       "description": "Columbus, GA · (706) 507-3800 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.westgeorgiaorthopt.com",
+       "url": "https://www.westgeorgiaorthopt.com/",
+       "is_paid": false,
+       "cid": "10968043024542848463",
+       "rating": {
+        "value": 4.7,
+        "votes_count": 59
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 3,
+       "rank_absolute": 3,
+       "title": "TherapySouth Columbus",
+       "description": "Columbus, GA · (706) 786-6530 \nClosed · Opens 7 AM Mon ",
+       "domain": "therapysouth.com",
+       "url": "https://therapysouth.com/locations/columbus-ga/?utm_source=gmb&utm_medium=Yext",
+       "is_paid": false,
+       "cid": "12791644321935030090",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 147
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 4,
+       "rank_absolute": 4,
+       "title": "Pain Free PT",
+       "description": "Columbus, GA · (706) 321-9000 \nClosed · Opens 8 AM Mon ",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "8385266788649871204",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 15
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 5,
+       "rank_absolute": 5,
+       "title": "Southern Rehab & Sports Medicine",
+       "description": "Columbus, GA · (706) 315-8175 \nClosed · Opens 8 AM Mon ",
+       "domain": "southernrehab.com",
+       "url": "http://southernrehab.com/",
+       "is_paid": false,
+       "cid": "17044766947362295341",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 235
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 6,
+       "rank_absolute": 6,
+       "title": "Victory Rehabilitation",
+       "description": "Columbus, GA · (706) 507-5917 \nClosed · Opens 8 AM Mon ",
+       "domain": "victoryrehabilitation.net",
+       "url": "https://victoryrehabilitation.net/",
+       "is_paid": false,
+       "cid": "4253961778468919743",
+       "rating": {
+        "value": 5,
+        "votes_count": 90
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 7,
+       "rank_absolute": 7,
+       "title": "Columbus Rehab Solutions",
+       "description": "6516 Kitten Lake Drive Ste e7 · (706) 221-3031 \nClosed · Opens 8 AM Mon ",
+       "domain": "rehabsolutionspt.com",
+       "url": "https://rehabsolutionspt.com/",
+       "is_paid": false,
+       "cid": "16234589812191168147",
+       "rating": {
+        "value": 5,
+        "votes_count": 2
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 8,
+       "rank_absolute": 8,
+       "title": "Athletico Physical Therapy - Columbus (Highland Pines)",
+       "description": "Columbus, GA · (762) 261-1900 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.athletico.com",
+       "url": "https://www.athletico.com/locations/columbus-ga-highland-pines/?utm_source=google-columbus-ga-highland-pines&utm_medium=web&utm_campaign=google-listings",
+       "is_paid": false,
+       "cid": "2004118077145322461",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 47
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 9,
+       "rank_absolute": 9,
+       "title": "Beres Chiropractic Center",
+       "description": "Columbus, GA · (706) 596-7220 \nClosed · Opens 8 AM Mon ",
+       "domain": "bereschiropracticcenter.com",
+       "url": "https://bereschiropracticcenter.com/",
+       "is_paid": false,
+       "cid": "8672377611997254456",
+       "rating": {
+        "value": 5,
+        "votes_count": 227
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 10,
+       "rank_absolute": 10,
+       "title": "Human Performance & Rehabilitation Centers",
+       "description": "Columbus, GA · (706) 221-6448 \nClosed · Opens 7 AM Mon ",
+       "domain": "hprc.net",
+       "url": "https://hprc.net/location/hprc-at-horizons-diagnostics/?UTM_source=GMB_listing&UTM_medium=organic",
+       "is_paid": false,
+       "cid": "6425396698960694593",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 54
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 11,
+       "rank_absolute": 11,
+       "title": "Brodwyn and Associates",
+       "description": "Columbus, GA · (706) 563-3370 \nClosed · Opens 9 AM Mon ",
+       "domain": "www.drjaybrodwyn.com",
+       "url": "https://www.drjaybrodwyn.com/",
+       "is_paid": false,
+       "cid": "7289394998845755421",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 631
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 12,
+       "rank_absolute": 12,
+       "title": "Brodwyn Spine Center",
+       "description": "Columbus, GA · (706) 223-3741 \nClosed · Opens 9 AM Mon ",
+       "domain": "www.drjaybrodwyn.com",
+       "url": "https://www.drjaybrodwyn.com/",
+       "is_paid": false,
+       "cid": "11465064532100043235",
+       "rating": {
+        "value": 5,
+        "votes_count": 27
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 13,
+       "rank_absolute": 13,
+       "title": "Gameday Men's Health North Columbus, GA",
+       "description": "Columbus, GA · (706) 250-6026 \nClosed · Opens 8 AM Mon ",
+       "domain": "gamedaymenshealth.com",
+       "url": "https://gamedaymenshealth.com/north-columbus-ga?utm_source=google&utm_medium=organic&utm_campaign=gbp&utm_content=GA023",
+       "is_paid": false,
+       "cid": "13411528290749528103",
+       "rating": {
+        "value": 5,
+        "votes_count": 451
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 14,
+       "rank_absolute": 14,
+       "title": "ChiMed Rehab Phenix City",
+       "description": "Phenix City, AL · (877) 495-7773 \nClosed · Opens 8:30 AM Mon ",
+       "domain": "www.chimedicalmgt.com",
+       "url": "http://www.chimedicalmgt.com/",
+       "is_paid": false,
+       "cid": "4849564792473143905",
+       "rating": {
+        "value": 4.5,
+        "votes_count": 20
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 15,
+       "rank_absolute": 15,
+       "title": "Joseph Kostuch PT, SCS - HPRC at St. Francis Rehab",
+       "description": "Columbus, GA · (706) 256-0825 \nClosed · Opens 7:30 AM Mon ",
+       "domain": "hprc.net",
+       "url": "https://hprc.net/location/st-francis-main-campus/",
+       "is_paid": false,
+       "cid": "13938177158307257438",
+       "rating": {
+        "value": 5,
+        "votes_count": 1
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 16,
+       "rank_absolute": 16,
+       "title": "AgeRejuvenation - Columbus",
+       "description": "No reviews · Medical clinic \n3+ years in business · Columbus, GA · (706) 981-6896 ",
+       "domain": "agerejuvenation.com",
+       "url": "http://agerejuvenation.com/?utm_source=gmb&utm_medium=organic&utm_campaign=columbus",
+       "is_paid": false,
+       "cid": "9343880047330879997",
+       "rating": null
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 17,
+       "rank_absolute": 17,
+       "title": "The Academy of Shockwave Excellence",
+       "description": "Closed · Opens 9 AM Mon \n\"It will take you to another level of shockwave knowledge and skill!!\" ",
+       "domain": "theshockwaveacademy.com",
+       "url": "https://theshockwaveacademy.com/",
+       "is_paid": false,
+       "cid": "899642854675176334",
+       "rating": {
+        "value": 5,
+        "votes_count": 3
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 18,
+       "rank_absolute": 18,
+       "title": "Aspinwall Clinic",
+       "description": "LaGrange, GA · (706) 884-8360 \nClosed · Opens 9 AM Mon ",
+       "domain": "www.aspinwallclinic.com",
+       "url": "http://www.aspinwallclinic.com/",
+       "is_paid": false,
+       "cid": "12013604064862920609",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 454
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 19,
+       "rank_absolute": 19,
+       "title": "Shockwave of Woodstock",
+       "description": "Woodstock, GA · (678) 494-9668 \nClosed · Opens 8:30 AM Mon ",
+       "domain": "www.chiropractor-woodstock.com",
+       "url": "https://www.chiropractor-woodstock.com/shockwave-therapy",
+       "is_paid": false,
+       "cid": "14489839882316978387",
+       "rating": {
+        "value": 5,
+        "votes_count": 13
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 20,
+       "rank_absolute": 20,
+       "title": "REP SoftWave",
+       "description": "Woodstock, GA · (404) 784-6045 \n\"The immediate relief after my first treatment was incredible.\" ",
+       "domain": "www.repsoftwave.com",
+       "url": "http://www.repsoftwave.com/",
+       "is_paid": false,
+       "cid": "18260508519364911475",
+       "rating": {
+        "value": 5,
+        "votes_count": 17
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -6,7 +6,7 @@ import path from 'path';
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'grid-report-test-'));
 process.env.DB_PATH = path.join(tmpDir, 'test.db');
 
-import { createProject, gridSeriesId, saveGridSearch, saveGridSchedule, setActiveProject, type GridSearchEntry } from './db';
+import { createProject, getDbForProject, gridSeriesId, saveGridSearch, saveGridSchedule, setActiveProject, type GridPoint, type GridSearchEntry } from './db';
 import { getMonitorRuns, getRun, listMonitors } from './grid-report';
 
 afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
@@ -70,5 +70,87 @@ describe('reporting API data', () => {
     expect(Object.values(history?.metrics.mrt_average_positions ?? {})).toEqual([11.8889, 11.6667]);
     expect(getRun('run-new', undefined, { points: false })?.summary?.mrt_average_position).toBe(11.6667);
     expect(getMonitorRuns('nope')).toBeNull();
+  });
+});
+
+// Patch fork: provenance, data-quality and report-safety fields.
+describe('reporting API data quality', () => {
+  const quality = (keyword: string, id: string, points: GridPoint[], ts = base.ts + 2 * 86_400_000) => {
+    const series = gridSeriesId(keyword, center, 3, 2, target, 'English');
+    saveGridSearch({ ...base, id, keyword, series_id: series, ts }, points);
+    return series;
+  };
+  const fine = (i: number): GridPoint => ({ row: Math.floor(i / 3), col: i % 3, rank: 5, items: [rival, { ...us, rank_group: 5 }] });
+  const grid = (overrides: Record<number, GridPoint>) => Array.from({ length: 9 }, (_, i) => overrides[i] ?? fine(i));
+  const wrongCity: GridPoint = {
+    row: 0, col: 1, rank: null, items: [], failed: true, failed_reason: 'wrong_city', task_id: 't-wc', check_url: 'https://google/wc',
+    rechecks: [{ task_id: 't-wc0', reason: 'wrong_city' }, { task_id: 't-wc', reason: 'wrong_city' }],
+  };
+  const unresolved: GridPoint = { row: 0, col: 2, rank: null, items: [rival], truncated: true, rank_unresolved: true, task_id: 't-ru' };
+
+  it('exposes task_id, check_url, failed_reason and rank_unresolved on points, and quality on the header', () => {
+    const series = quality('pt quality', 'q-new', grid({
+      0: { ...fine(0), rank: 2, items: [rival, { ...us, rank_group: 2 }], task_id: 't-0', check_url: 'https://google/0' },
+      1: wrongCity,
+      2: unresolved,
+      3: { ...fine(3), location_status: 'unresolved' },
+    }));
+    const run = getRun('q-new');
+    if (!run || !('points' in run)) throw new Error('expected points');
+    expect(run.points[0]).toMatchObject({ rank: 2, task_id: 't-0', check_url: 'https://google/0', failed: false, failed_reason: null, rank_unresolved: false });
+    expect(run.points[1]).toMatchObject({ rank: null, failed: true, failed_reason: 'wrong_city', task_id: 't-wc', check_url: 'https://google/wc' });
+    expect(run.points[2]).toMatchObject({ rank: null, rank_unresolved: true, task_id: 't-ru', check_url: null });
+    expect(run.points[4]).toMatchObject({ task_id: null, check_url: null, failed: false, failed_reason: null, rank_unresolved: false });
+    expect(run.quality).toEqual({
+      points: 9, failed_points: 1, wrong_city_failed: 1, unresolved_points: 1, rank_unresolved_points: 1, wrong_city_rechecks: 2,
+    });
+    expect(run).toMatchObject({ rescanned_at: null, report_safe: false, report_safe_reason: 'wrong_city_persistent' });
+    // MRT leaves out the failed and the rank-unresolved point: (2 + 6 * 5) / 7.
+    expect(run.summary?.mrt_average_position).toBe(4.5714);
+    expect(getMonitorRuns(series)).toMatchObject({ report_safe: false, report_safe_reason: 'wrong_city_persistent' });
+    expect(listMonitors({ q: 'pt quality' })[0]).toMatchObject({ report_safe: false, report_safe_reason: 'wrong_city_persistent' });
+  });
+
+  it('computes report safety for runs that were never re-scanned', () => {
+    quality('pt clean', 'q-clean', grid({}));
+    quality('pt three failed', 'q-three', grid({
+      1: { ...wrongCity, failed_reason: 'task_error' }, 2: { ...wrongCity, row: 0, col: 2, failed_reason: 'task_error' },
+      3: { ...wrongCity, row: 1, col: 0, failed_reason: 'timeout' },
+    }));
+    quality('pt two failed', 'q-two', grid({ 1: { ...wrongCity, failed_reason: 'task_error' }, 2: { ...wrongCity, row: 0, col: 2, failed_reason: 'timeout' } }));
+    quality('pt unresolved', 'q-unresolved', grid({ 2: unresolved }));
+    expect(getRun('q-clean', undefined, { points: false })).toMatchObject({ report_safe: true, report_safe_reason: null, rescanned_at: null });
+    expect(getRun('q-three', undefined, { points: false })).toMatchObject({ report_safe: false, report_safe_reason: 'too_many_failed' });
+    expect(getRun('q-two', undefined, { points: false })).toMatchObject({ report_safe: true, report_safe_reason: null });
+    expect(getRun('q-unresolved', undefined, { points: false })).toMatchObject({ report_safe: false, report_safe_reason: 'rank_unresolved' });
+  });
+
+  it("uses the monitor's latest finished run for its flag", () => {
+    const series = quality('pt latest', 'q-latest-old', grid({ 1: wrongCity }), base.ts + 3 * 86_400_000);
+    quality('pt latest', 'q-latest-new', grid({}), base.ts + 4 * 86_400_000);
+    quality('pt latest', 'q-latest-pending', [], base.ts + 5 * 86_400_000);
+    getDbForProject('default').prepare("UPDATE grid_searches SET status = 'pending' WHERE id = 'q-latest-pending'").run();
+    const history = getMonitorRuns(series);
+    expect(history?.runs.map((r) => [r.run_id, r.report_safe])).toEqual([['q-latest-pending', true], ['q-latest-new', true], ['q-latest-old', false]]);
+    expect(history).toMatchObject({ report_safe: true, report_safe_reason: null });
+    expect(listMonitors({ q: 'pt latest' })[0]).toMatchObject({ report_safe: true, latest_run: { run_id: 'q-latest-new' } });
+  });
+
+  it('shows rescanned_at after a swap, and a re-scan safety flag wins over the computed one', () => {
+    quality('pt rescanned', 'q-rescanned', grid({ 2: unresolved }));
+    const swappedAt = Date.parse('2026-11-21T10:00:00Z');
+    const db = getDbForProject('default');
+    db.prepare(`INSERT INTO grid_rescans (run_id, series_id, manifest_id, label, state, attempt, queued_at, swapped_at, updated_at)
+      VALUES ('q-rescanned', 's', 'm', '', 'swapped', 1, ?, ?, ?)`).run(swappedAt, swappedAt, swappedAt);
+    db.prepare("INSERT INTO grid_run_safety (run_id, report_safe, reason, updated_at) VALUES ('q-rescanned', 1, NULL, ?)").run(swappedAt);
+    expect(getRun('q-rescanned', undefined, { points: false })).toMatchObject({
+      rescanned_at: '2026-11-21T10:00:00.000Z', report_safe: true, report_safe_reason: null,
+    });
+    // A held re-scan isn't a swap.
+    db.prepare("UPDATE grid_rescans SET state = 'held' WHERE run_id = 'q-rescanned'").run();
+    db.prepare("UPDATE grid_run_safety SET report_safe = 0, reason = 'wrong_city_persistent' WHERE run_id = 'q-rescanned'").run();
+    expect(getRun('q-rescanned', undefined, { points: false })).toMatchObject({
+      rescanned_at: null, report_safe: false, report_safe_reason: 'wrong_city_persistent',
+    });
   });
 });

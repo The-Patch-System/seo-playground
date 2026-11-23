@@ -1,5 +1,21 @@
-import type { GridPoint, GridLocalItem, GridTaskPoint } from '@/lib/db';
-import { matchesGridTarget } from '@/lib/grid-target';
+import type { GridPoint, GridRecheck, GridTaskPoint } from '@/lib/db';
+import { buildGridPoint, failedGridPoint, GRID_DEPTH, type RawLocalItem } from '@/lib/grid-point-builder';
+
+/** Patch fork: a point is posted at most this many times (initial + re-posts) before it is marked failed. */
+export const MAX_POINT_ATTEMPTS = 3;
+
+/**
+ * Patch fork: DataForSEO host for the Geo-grid calls only, so local end-to-end tests can point at a
+ * mock. Defaults to the real API.
+ */
+export function dataForSeoBaseUrl(): string {
+  return (process.env.DATAFORSEO_BASE_URL?.trim() || 'https://api.dataforseo.com').replace(/\/+$/, '');
+}
+
+/** Patch fork: tag on scheduled/manual tasks, so a run's tasks can be found in DataForSEO's free id_list. */
+export function gridTaskTag(prefix: string, row: number, col: number): string {
+  return `${prefix}|r${row}c${col}`.slice(0, 255);
+}
 
 export interface LocalPackItem {
   type: string;
@@ -52,18 +68,19 @@ async function mapWithConcurrency<T, R>(
 }
 
 async function requestGridPoint(
-  keyword: string, lat: number, lng: number, language: string, auth: string,
-): Promise<{ items: LocalPackItem[]; cost: number; error?: string }> {
+  keyword: string, lat: number, lng: number, language: string, auth: string, tag?: string,
+): Promise<{ items: RawLocalItem[]; cost: number; taskId?: string; checkUrl?: string; error?: string }> {
   let res: Response;
   try {
-    res = await fetch('https://api.dataforseo.com/v3/serp/google/local_finder/live/advanced', {
+    res = await fetch(`${dataForSeoBaseUrl()}/v3/serp/google/local_finder/live/advanced`, {
       method: 'POST',
       headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
       body: JSON.stringify([{
         keyword,
         location_coordinate: `${lat.toFixed(6)},${lng.toFixed(6)}`,
         language_name: language,
-        depth: 20,
+        depth: GRID_DEPTH,
+        ...(tag ? { tag } : {}),
       }]),
       signal: AbortSignal.timeout(45_000),
     });
@@ -72,31 +89,63 @@ async function requestGridPoint(
   }
   if (!res.ok) return { items: [], cost: 0, error: `HTTP ${res.status}` };
   const data = await res.json() as {
-    tasks?: Array<{ status_code?: number; status_message?: string; cost?: number; result?: Array<{ items?: LocalPackItem[] }> }>;
+    tasks?: Array<{ id?: string; status_code?: number; status_message?: string; cost?: number; result?: Array<{ check_url?: string; items?: RawLocalItem[] | null }> | null }>;
   };
   const task = data?.tasks?.[0];
   if (!task || task.status_code !== 20000) {
-    return { items: [], cost: 0, error: task?.status_message ?? 'no task in response' };
+    return { items: [], cost: task?.cost ?? 0, error: task?.status_message ?? 'no task in response' };
   }
-  const items = (task.result?.[0]?.items ?? []).filter((i) => i.type === 'local_pack');
-  return { items, cost: task.cost ?? 0 };
+  const result = task.result?.[0];
+  // Patch fork: a 20000 task without a result object is malformed, not a real zero-result search.
+  if (!result || !Array.isArray(result.items) && result.items !== null) {
+    return { items: [], cost: task.cost ?? 0, taskId: task.id, error: 'malformed result' };
+  }
+  return { items: result.items ?? [], cost: task.cost ?? 0, taskId: task.id, checkUrl: result.check_url };
 }
 
+/**
+ * Patch fork: fetches one point live. An errored request is retried once (as before); a wrong-city
+ * result is re-requested, up to MAX_POINT_ATTEMPTS requests in all, and then stored as failed so it
+ * never shows as ranks.
+ */
 export async function fetchOneGridPoint(
-  keyword: string, lat: number, lng: number, language: string, auth: string,
-): Promise<{ items: LocalPackItem[]; cost: number; failed: boolean }> {
-  let result = await requestGridPoint(keyword, lat, lng, language, auth);
-  if (result.error) {
-    // Transient failures (timeouts, rate limiting) are common under concurrent load; retry once.
-    result = await requestGridPoint(keyword, lat, lng, language, auth);
+  keyword: string, coord: { row: number; col: number; lat: number; lng: number }, language: string, auth: string,
+  target: string, tagPrefix?: string,
+): Promise<{ point: GridPoint; cost: number }> {
+  const tag = tagPrefix ? gridTaskTag(tagPrefix, coord.row, coord.col) : undefined;
+  const rechecks: GridRecheck[] = [];
+  let cost = 0;
+  let lastError = false;
+  for (let attempt = 1; attempt <= MAX_POINT_ATTEMPTS; attempt += 1) {
+    let result = await requestGridPoint(keyword, coord.lat, coord.lng, language, auth, tag);
+    cost += result.cost;
+    if (result.error) {
+      // Transient failures (timeouts, rate limiting) are common under concurrent load; retry once.
+      result = await requestGridPoint(keyword, coord.lat, coord.lng, language, auth, tag);
+      cost += result.cost;
+    }
+    if (result.error) {
+      lastError = true;
+      if (result.taskId) rechecks.push({ task_id: result.taskId, reason: 'task_error' });
+      break;
+    }
+    const built = buildGridPoint(coord, result.items, target, { task_id: result.taskId, check_url: result.checkUrl });
+    if (!built.location.wrongCity) {
+      return { point: rechecks.length ? { ...built.point, rechecks } : built.point, cost };
+    }
+    rechecks.push({ task_id: result.taskId ?? '', check_url: result.checkUrl, reason: 'wrong_city', far: built.location.far });
   }
-  // Patch fork: a point that still errored has no data, which is not the same as "not in the top 20".
-  return { items: result.items, cost: result.cost, failed: Boolean(result.error) };
+  // Patch fork: a point that still errored or stayed wrong-city has no data, which is not "not in the top 20".
+  const last = rechecks[rechecks.length - 1];
+  return {
+    point: failedGridPoint(coord, lastError ? 'task_error' : 'wrong_city', { task_id: last?.task_id || undefined, check_url: last?.check_url, rechecks }),
+    cost,
+  };
 }
 
 export async function fetchGridSearch(
   keyword: string, center: string, gridSize: number, spacingKm: number,
-  language: string, target: string, login: string, pass: string,
+  language: string, target: string, login: string, pass: string, tagPrefix?: string,
 ): Promise<{ results: GridPoint[]; cost: number; error?: string }> {
   const parts = center.split(',').map(Number);
   if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) {
@@ -108,25 +157,7 @@ export async function fetchGridSearch(
 
   const pointResults = await mapWithConcurrency(
     coords, 6,
-    async ({ row, col, lat, lng }) => {
-      const { items: rawItems, cost, failed } = await fetchOneGridPoint(keyword, lat, lng, language, auth);
-
-      const isTarget = (item: LocalPackItem) => matchesGridTarget(target, item);
-
-      const match = rawItems.find(isTarget);
-      const items: GridLocalItem[] = rawItems.slice(0, 20).map((item) => ({
-        rank_group: item.rank_group,
-        title: item.title ?? '—',
-        domain: item.domain,
-        url: item.url,
-        cid: item.cid,
-        rating_value: item.rating?.value,
-        rating_votes: item.rating?.votes_count,
-        is_target: isTarget(item),
-      }));
-
-      return { point: { row, col, lat, lng, rank: match ? match.rank_group : null, items, ...(failed ? { failed: true } : {}) }, cost };
-    },
+    (coord) => fetchOneGridPoint(keyword, coord, language, auth, target, tagPrefix),
   );
 
   const results = pointResults.map((r) => r.point);
@@ -134,9 +165,64 @@ export async function fetchGridSearch(
   return { results, cost: totalCost };
 }
 
+export interface GridTaskRequest {
+  keyword: string;
+  lat: number;
+  lng: number;
+  language: string;
+  priority: 1 | 2;
+  tag?: string;
+}
+
+export interface GridTaskPostResult {
+  /** Set when DataForSEO accepted (and billed) the task. */
+  taskId: string | null;
+  statusCode: number | null;
+  cost: number;
+}
+
+/**
+ * Patch fork: posts up to 100 tasks in one task_post call. Returns one result per request, in order,
+ * or an error when the call itself failed (then nothing in this chunk is known to be accepted).
+ * A task counts as accepted only with an id and a non-error status code.
+ */
+export async function postGridTaskChunk(
+  requests: GridTaskRequest[], auth: string, timeoutMs = 60_000,
+): Promise<{ results: GridTaskPostResult[]; error?: string }> {
+  let data: { tasks?: Array<{ id?: string; status_code?: number; cost?: number }> };
+  try {
+    const res = await fetch(`${dataForSeoBaseUrl()}/v3/serp/google/local_finder/task_post`, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(requests.map((r) => ({
+        keyword: r.keyword,
+        location_coordinate: `${r.lat.toFixed(6)},${r.lng.toFixed(6)}`,
+        language_name: r.language,
+        depth: GRID_DEPTH,
+        priority: r.priority,
+        ...(r.tag ? { tag: r.tag } : {}),
+      }))),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) return { results: [], error: `API error ${res.status}` };
+    data = await res.json();
+  } catch (error) {
+    return { results: [], error: error instanceof Error ? error.message : 'Could not reach DataForSEO.' };
+  }
+  if (!data.tasks) return { results: [], error: 'Empty response from DataForSEO.' };
+  return {
+    results: requests.map((_, j) => {
+      const task = data.tasks![j];
+      const statusCode = task?.status_code ?? null;
+      const accepted = Boolean(task?.id) && (statusCode === null || statusCode < 40000);
+      return { taskId: accepted ? task!.id! : null, statusCode, cost: accepted ? task?.cost ?? 0 : 0 };
+    }),
+  };
+}
+
 export async function postGridTasksQueue(
   keyword: string, center: string, gridSize: number, spacingKm: number,
-  language: string, login: string, pass: string, priorityMode: 'priority' | 'standard' = 'standard',
+  language: string, login: string, pass: string, priorityMode: 'priority' | 'standard' = 'standard', tagPrefix?: string,
 ): Promise<{ taskPoints: GridTaskPoint[]; cost: number; error?: string }> {
   const parts = center.split(',').map(Number);
   if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) {
@@ -151,72 +237,43 @@ export async function postGridTasksQueue(
   const CHUNK = 100;
   const allTaskPoints: GridTaskPoint[] = [];
   let totalCost = 0;
+  let rejected = 0;
 
   for (let i = 0; i < coords.length; i += CHUNK) {
     const chunk = coords.slice(i, i + CHUNK);
-    const body = chunk.map(({ lat, lng }) => ({
-      keyword,
-      location_coordinate: `${lat.toFixed(6)},${lng.toFixed(6)}`,
-      language_name: language,
-      depth: 20,
-      priority,
-    }));
+    const submittedAt = Date.now();
+    const posted = await postGridTaskChunk(chunk.map(({ row, col, lat, lng }) => ({
+      keyword, lat, lng, language, priority, tag: tagPrefix ? gridTaskTag(tagPrefix, row, col) : undefined,
+    })), auth);
     // On failure, still return the chunks already posted: those tasks are billed, and
     // callers keep them as a partial run rather than losing them or posting them twice.
-    let data: { tasks?: Array<{ id?: string; status_code?: number; cost?: number }> };
-    try {
-      const res = await fetch('https://api.dataforseo.com/v3/serp/google/local_finder/task_post', {
-        method: 'POST',
-        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(60_000),
-      });
-      if (!res.ok) return { taskPoints: allTaskPoints, cost: totalCost, error: `API error ${res.status}` };
-      data = await res.json();
-    } catch (error) {
-      return { taskPoints: allTaskPoints, cost: totalCost, error: error instanceof Error ? error.message : 'Could not reach DataForSEO.' };
-    }
-    if (!data.tasks) return { taskPoints: allTaskPoints, cost: totalCost, error: 'Empty response from DataForSEO.' };
-    data.tasks.forEach((task, j) => {
+    if (posted.error) return { taskPoints: allTaskPoints, cost: totalCost, error: posted.error };
+    posted.results.forEach((task, j) => {
       const coord = chunk[j];
-      if (task.id) {
-        allTaskPoints.push({ task_id: task.id, row: coord.row, col: coord.col, lat: coord.lat, lng: coord.lng });
+      // Patch fork: a task DataForSEO rejected (status 4xxxx) is not queued, even if it has an id.
+      if (task.taskId) {
+        allTaskPoints.push({ task_id: task.taskId, row: coord.row, col: coord.col, lat: coord.lat, lng: coord.lng, attempts: 1, submitted_at: submittedAt });
+      } else {
+        rejected += 1;
       }
-      totalCost += task.cost ?? 0;
+      totalCost += task.cost;
     });
   }
 
-  return { taskPoints: allTaskPoints, cost: totalCost };
+  return { taskPoints: allTaskPoints, cost: totalCost, ...(rejected ? { error: `DataForSEO rejected ${rejected} task(s).` } : {}) };
 }
 
 /**
- * Patch fork: re-posts one grid point whose queued task failed. Returns the new task id,
- * or null when DataForSEO did not accept it (the caller tries again on a later pass).
+ * Patch fork: re-posts one grid point whose queued task failed or came back wrong-city. Returns the
+ * new task id, or null when DataForSEO did not accept it (the caller tries again on a later pass).
  */
 export async function repostGridPoint(
-  keyword: string, lat: number, lng: number, language: string, auth: string, priorityMode: 'priority' | 'standard' = 'standard',
+  keyword: string, lat: number, lng: number, language: string, auth: string,
+  priorityMode: 'priority' | 'standard' = 'standard', tag?: string,
 ): Promise<{ taskId: string | null; cost: number }> {
-  try {
-    const res = await fetch('https://api.dataforseo.com/v3/serp/google/local_finder/task_post', {
-      method: 'POST',
-      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify([{
-        keyword,
-        location_coordinate: `${lat.toFixed(6)},${lng.toFixed(6)}`,
-        language_name: language,
-        depth: 20,
-        priority: priorityMode === 'priority' ? 2 : 1,
-      }]),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!res.ok) return { taskId: null, cost: 0 };
-    const data = await res.json() as { tasks?: Array<{ id?: string; status_code?: number; cost?: number }> };
-    const task = data.tasks?.[0];
-    if (!task?.id || (task.status_code !== undefined && task.status_code >= 40000)) return { taskId: null, cost: task?.cost ?? 0 };
-    return { taskId: task.id, cost: task.cost ?? 0 };
-  } catch {
-    return { taskId: null, cost: 0 };
-  }
+  const posted = await postGridTaskChunk([{ keyword, lat, lng, language, priority: priorityMode === 'priority' ? 2 : 1, tag }], auth, 30_000);
+  const task = posted.results[0];
+  return { taskId: task?.taskId ?? null, cost: task?.cost ?? 0 };
 }
 
 export function stableGridId(

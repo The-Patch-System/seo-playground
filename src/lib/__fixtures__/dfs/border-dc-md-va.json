@@ -1,0 +1,316 @@
+{
+ "tasks": [
+  {
+   "id": "11151709-2638-0066-0000-9a775a8c0520",
+   "status_code": 20000,
+   "data": {
+    "keyword": "pelvic floor physical therapy",
+    "location_coordinate": "38.971734,-77.169039"
+   },
+   "result": [
+    {
+     "check_url": "https://www.google.com/search?q=pelvic+floor+physical+therapy&uule=j+WzEsMTIsMTc5NDc2MjU4MTAwNDAwMCxudWxsLFszODk3MTczNDAsLTc3MTY5MDM5MF0sbnVsbCw5MzAwMCxudWxsLDZd&hl=en&gl=US&udm=1",
+     "items": [
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "title": "Oasis PT & Pelvic Health",
+       "description": "Bethesda, MD · (301) 381-4551 \nClosed · Opens 9 AM Mon ",
+       "domain": "oasispt.net",
+       "url": "https://oasispt.net/",
+       "is_paid": false,
+       "cid": "1548955503005324650",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 118
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 2,
+       "rank_absolute": 2,
+       "title": "ITR Physical Therapy",
+       "description": "Bethesda, MD · (301) 770-7060 \nClosed · Opens 7 AM Mon ",
+       "domain": "itrphysicaltherapy.com",
+       "url": "https://itrphysicaltherapy.com/",
+       "is_paid": false,
+       "cid": "14990786746526700742",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 100
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 3,
+       "rank_absolute": 3,
+       "title": "Pelvic Rehabilitation Medicine",
+       "description": "Bethesda, MD · (301) 200-7466 \nClosed · Opens 9 AM Mon ",
+       "domain": "www.pelvicrehabilitation.com",
+       "url": "https://www.pelvicrehabilitation.com/locations/dc-area/?utm_source=gmb&utm_medium=office_listing&utm_campaign=bethesda_office",
+       "is_paid": false,
+       "cid": "11819548660394272350",
+       "rating": {
+        "value": 4.5,
+        "votes_count": 64
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 4,
+       "rank_absolute": 4,
+       "title": "District Pelvic Health Physical Therapy + Pilates",
+       "description": "Falls Church, VA · (703) 249-9319 \nClosed · Opens 7:30 AM Mon ",
+       "domain": "www.districtpelvichealth.com",
+       "url": "http://www.districtpelvichealth.com/",
+       "is_paid": false,
+       "cid": "7729198222866230632",
+       "rating": {
+        "value": 5,
+        "votes_count": 67
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 5,
+       "rank_absolute": 5,
+       "title": "Restore Motion LLC",
+       "description": "Rockville, MD · (301) 881-9313 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.restoremotion.com",
+       "url": "http://www.restoremotion.com/",
+       "is_paid": false,
+       "cid": "13760428394503714452",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 46
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 6,
+       "rank_absolute": 6,
+       "title": "Jenny April Movements",
+       "description": "Potomac, MD · (240) 745-5418 \nClosed · Opens 10 AM Mon ",
+       "domain": "www.jennyaprilmovements.com",
+       "url": "http://www.jennyaprilmovements.com/",
+       "is_paid": false,
+       "cid": "7858255525753733020",
+       "rating": {
+        "value": 5,
+        "votes_count": 27
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 7,
+       "rank_absolute": 7,
+       "title": "Pilates PT and Pelvic Floor Rehab",
+       "description": "Silver Spring, MD · (240) 676-5206 \nClosed · Opens 9 AM Mon ",
+       "domain": "www.pilatesptrehab.com",
+       "url": "https://www.pilatesptrehab.com/",
+       "is_paid": false,
+       "cid": "4894686949786346092",
+       "rating": {
+        "value": 4.7,
+        "votes_count": 14
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 8,
+       "rank_absolute": 8,
+       "title": "EmpowerHeal Physical Therapy",
+       "description": "Bethesda, MD · (240) 277-9548 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.empowerhealpt.com",
+       "url": "https://www.empowerhealpt.com/",
+       "is_paid": false,
+       "cid": "13738951204091537069",
+       "rating": {
+        "value": 5,
+        "votes_count": 23
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 9,
+       "rank_absolute": 9,
+       "title": "ITR Physical Therapy",
+       "description": "McLean, VA · (301) 770-7060 \nClosed · Opens 8 AM Mon ",
+       "domain": "itrphysicaltherapy.com",
+       "url": "http://itrphysicaltherapy.com/",
+       "is_paid": false,
+       "cid": "11177949654668141773",
+       "rating": {
+        "value": 5,
+        "votes_count": 68
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 10,
+       "rank_absolute": 10,
+       "title": "Stacey M. Gayer, PT",
+       "description": "North Bethesda, MD · (267) 872-8760 \nClosed · Opens 9 AM Mon ",
+       "domain": "staceygayerpt.com",
+       "url": "http://staceygayerpt.com/",
+       "is_paid": false,
+       "cid": "8305129217933436947",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 28
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 11,
+       "rank_absolute": 11,
+       "title": "Pure Pelvic Physical Therapy",
+       "description": "Fairfax, VA · (703) 626-5000 \nOpen · Closes 4 PM ",
+       "domain": "purepelvic.com",
+       "url": "http://purepelvic.com/",
+       "is_paid": false,
+       "cid": "16353515158403822707",
+       "rating": {
+        "value": 5,
+        "votes_count": 3
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 12,
+       "rank_absolute": 12,
+       "title": "Functional Physical Therapy, LLC",
+       "description": "Rockville, MD · (240) 428-1410 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.funcphystherapy.com",
+       "url": "http://www.funcphystherapy.com/",
+       "is_paid": false,
+       "cid": "4810602319336650460",
+       "rating": {
+        "value": 5,
+        "votes_count": 29
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 13,
+       "rank_absolute": 13,
+       "title": "Pelvic Pro Physical Therapy",
+       "description": "Fairfax, VA · (703) 348-3033 \nClosed · Opens 7 AM Mon ",
+       "domain": "pelvicprophysicaltherapy.com",
+       "url": "http://pelvicprophysicaltherapy.com/",
+       "is_paid": false,
+       "cid": "35657209531398511",
+       "rating": {
+        "value": 5,
+        "votes_count": 42
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 14,
+       "rank_absolute": 14,
+       "title": "Bethesda Physiocare Inc",
+       "description": "Bethesda, MD · (301) 656-5613 \nClosed · Opens 10 AM Mon ",
+       "domain": "www.bethesdaphysiocare.com",
+       "url": "https://www.bethesdaphysiocare.com/?utm_campaign=gmb",
+       "is_paid": false,
+       "cid": "15697195668094628706",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 105
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 15,
+       "rank_absolute": 15,
+       "title": "Natural Fit Physio LLC",
+       "description": "Rockville, MD · (240) 813-0721 \nClosed · Opens 9 AM Mon ",
+       "domain": "www.naturalfitphysio.com",
+       "url": "https://www.naturalfitphysio.com/",
+       "is_paid": false,
+       "cid": "2348129067939059278",
+       "rating": {
+        "value": 5,
+        "votes_count": 39
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 16,
+       "rank_absolute": 16,
+       "title": "Solace PT & Pelvic Wellness",
+       "description": "College Park, MD · (301) 531-4113 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.solacept.com",
+       "url": "http://www.solacept.com/",
+       "is_paid": false,
+       "cid": "6272712941094548510",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 52
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 17,
+       "rank_absolute": 17,
+       "title": "Oncology & Pelvic Health Physical Therapy, PLLC.",
+       "description": "No reviews · Physical therapist \nBethesda, MD · (202) 987-3411 ",
+       "domain": "www.ophpt.com",
+       "url": "https://www.ophpt.com/",
+       "is_paid": false,
+       "cid": "16546105993821104750",
+       "rating": null
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 18,
+       "rank_absolute": 18,
+       "title": "Concierge Physical Therapists",
+       "description": "Open · Closes 8 PM \n\"This proactive strategy proved invaluable in my recovery journey.\" ",
+       "domain": "conciergephysicaltherapists.com",
+       "url": "http://conciergephysicaltherapists.com/",
+       "is_paid": false,
+       "cid": "6563073622348166128",
+       "rating": {
+        "value": 4.7,
+        "votes_count": 101
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 19,
+       "rank_absolute": 19,
+       "title": "Artizo: Men’s Pelvic Health Physical Therapy",
+       "description": "Falls Church, VA · (310) 721-0068 \nOpen · Closes 6 PM ",
+       "domain": "artizollc.com",
+       "url": "https://artizollc.com/",
+       "is_paid": false,
+       "cid": "11712091978413908987",
+       "rating": {
+        "value": 5,
+        "votes_count": 40
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 20,
+       "rank_absolute": 20,
+       "title": "Quality Touch Physical Therapy & Wellness",
+       "description": "Rockville, MD · (301) 246-2353 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.qualitytouchpt.com",
+       "url": "https://www.qualitytouchpt.com/",
+       "is_paid": false,
+       "cid": "1612603719409284463",
+       "rating": {
+        "value": 5,
+        "votes_count": 2
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,319 @@
+{
+ "tasks": [
+  {
+   "id": "11151715-2638-0066-0000-da42a611f70b",
+   "status_code": 20000,
+   "data": {
+    "keyword": "physical therapy",
+    "location_coordinate": "38.392252,-85.607635"
+   },
+   "result": [
+    {
+     "check_url": "https://www.google.com/search?q=physical+therapy&uule=j+WzEsMTIsMTc5NDc2MjkyNjI0MjAwMCxudWxsLFszODM5MjI1MjAsLTg1NjA3NjM1MF0sbnVsbCw5MzAwMCxudWxsLDZd&hl=en&gl=US&udm=1",
+     "items": [
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "title": "ProRehab Physical Therapy - Prospect",
+       "description": "6005 Timber Ridge Dr · (502) 292-0800 \nClosed · Opens 7 AM Mon ",
+       "domain": "prorehab.com",
+       "url": "https://prorehab.com/location/prospect/?UTM_source=GMB_listing&UTM_medium=organic%EF%BB%BF%EF%BB%BF%EF%BB%BF",
+       "is_paid": false,
+       "cid": "12068166236291180279",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 54
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 2,
+       "rank_absolute": 2,
+       "title": "Orthopedic & Sports Physical Therapy",
+       "description": "Louisville, KY · (502) 426-2221 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.osptky.com",
+       "url": "https://www.osptky.com/location/louisville/?UTM_source=GMB_listing&UTM_medium=organic%EF%BB%BF%EF%BB%BF%EF%BB%BF",
+       "is_paid": false,
+       "cid": "13235456840587035220",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 36
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 3,
+       "rank_absolute": 3,
+       "title": "KORT Physical Therapy - Old Brownsboro Crossing",
+       "description": "Louisville, KY · (502) 339-6490 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.kort.com",
+       "url": "https://www.kort.com/contact/find-a-location/ky/louisville/old-brownsboro-crossing/?ty=xt",
+       "is_paid": false,
+       "cid": "3143465795898833966",
+       "rating": {
+        "value": 5,
+        "votes_count": 293
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 4,
+       "rank_absolute": 4,
+       "title": "Baptist Health Physical Therapy - River Ridge",
+       "description": "Charlestown, IN · (812) 256-2147 \nClosed · Opens 7:30 AM Mon ",
+       "domain": "www.baptisthealth.com",
+       "url": "https://www.baptisthealth.com/locations/physical-therapy-river-ridge",
+       "is_paid": false,
+       "cid": "2885060675664544485",
+       "rating": {
+        "value": 5,
+        "votes_count": 2
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 5,
+       "rank_absolute": 5,
+       "title": "Results Physiotherapy Louisville, Kentucky - Brownsboro",
+       "description": "Louisville, KY · (502) 618-8200 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.resultspt.com",
+       "url": "https://www.resultspt.com/louisville-kentucky-brownsboro?utm_source=google&utm_medium=organic&utm_campaign=gmb",
+       "is_paid": false,
+       "cid": "3975236661089704017",
+       "rating": {
+        "value": 5,
+        "votes_count": 169
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 6,
+       "rank_absolute": 6,
+       "title": "Baptist Health Physical Therapy - Crestwood",
+       "description": "Crestwood, KY · (502) 241-1758 \nClosed · Opens 7:30 AM Mon ",
+       "domain": "www.baptisthealth.com",
+       "url": "https://www.baptisthealth.com/locations/physical-therapy-crestwood",
+       "is_paid": false,
+       "cid": "11200739022959221366",
+       "rating": {
+        "value": 3.8,
+        "votes_count": 10
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 7,
+       "rank_absolute": 7,
+       "title": "ProRehab Physical Therapy - Charlestown",
+       "description": "Charlestown, IN · (812) 503-0365 \nClosed · Opens 8 AM Mon ",
+       "domain": "prorehab.com",
+       "url": "https://prorehab.com/location/charlestown/",
+       "is_paid": false,
+       "cid": "10065820004780426003",
+       "rating": {
+        "value": 5,
+        "votes_count": 42
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 8,
+       "rank_absolute": 8,
+       "title": "ProRehab Physical Therapy - Springhurst",
+       "description": "Louisville, KY · (502) 425-1716 \nClosed · Opens 8 AM Mon ",
+       "domain": "dunnptky.com",
+       "url": "http://dunnptky.com/",
+       "is_paid": false,
+       "cid": "15449237043098039997",
+       "rating": {
+        "value": 4.5,
+        "votes_count": 49
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 9,
+       "rank_absolute": 9,
+       "title": "KORT Physical Therapy - Sports Performance & Rehab",
+       "description": "Louisville, KY · (502) 261-1950 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.kort.com",
+       "url": "https://www.kort.com/contact/find-a-location/ky/louisville/sports-performance-rehab/?ty=xt",
+       "is_paid": false,
+       "cid": "6050983966078825069",
+       "rating": {
+        "value": 5,
+        "votes_count": 99
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 10,
+       "rank_absolute": 10,
+       "title": "KORT Physical Therapy - Charlestown",
+       "description": "Charlestown, IN · (812) 800-9008 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.kort.com",
+       "url": "https://www.kort.com/contact/find-a-location/in/charlestown/charlestown/?ty=xt",
+       "is_paid": false,
+       "cid": "17249654731506715924",
+       "rating": {
+        "value": 5,
+        "votes_count": 82
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 11,
+       "rank_absolute": 11,
+       "title": "KORT Physical Therapy - Springhurst",
+       "description": "Louisville, KY · (502) 339-4700 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.kort.com",
+       "url": "https://www.kort.com/contact/find-a-location/ky/louisville/springhurst/?ty=xt",
+       "is_paid": false,
+       "cid": "12646573429728408912",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 205
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 12,
+       "rank_absolute": 12,
+       "title": "ProActive Physical Therapy and Wellness",
+       "description": "Lyndon, KY · (502) 512-2165 \nClosed · Opens 8 AM Mon ",
+       "domain": "proactiveptlou.com",
+       "url": "https://proactiveptlou.com/",
+       "is_paid": false,
+       "cid": "12338780939514724302",
+       "rating": {
+        "value": 5,
+        "votes_count": 151
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 13,
+       "rank_absolute": 13,
+       "title": "KORT Physical Therapy - Crestwood",
+       "description": "Crestwood, KY · (502) 241-5597 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.kort.com",
+       "url": "https://www.kort.com/contact/find-a-location/ky/crestwood/crestwood/?ty=xt",
+       "is_paid": false,
+       "cid": "13958065479969386157",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 92
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 14,
+       "rank_absolute": 14,
+       "title": "KORT Physical Therapy - River Ridge Sports and Rehab",
+       "description": "Jeffersonville, IN · (812) 920-8821 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.kort.com",
+       "url": "https://www.kort.com/contact/find-a-location/in/jeffersonville/river-ridge-sports-and-rehab/?ty=xt",
+       "is_paid": false,
+       "cid": "10326034346336342447",
+       "rating": {
+        "value": 4.7,
+        "votes_count": 3
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 15,
+       "rank_absolute": 15,
+       "title": "BenchMark Physical Therapy",
+       "description": "Crestwood, KY · (502) 212-2171 \nClosed · Opens 7:30 AM Mon ",
+       "domain": "www.benchmarkpt.com",
+       "url": "https://www.benchmarkpt.com/locations/crestwood/?utm_source=google&utm_medium=organic&utm_campaign=gmb",
+       "is_paid": false,
+       "cid": "14455297910260810006",
+       "rating": {
+        "value": 4.7,
+        "votes_count": 43
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 16,
+       "rank_absolute": 16,
+       "title": "Results Physiotherapy Jeffersonville, Indiana",
+       "description": "Jeffersonville, IN · (812) 748-8612 \nClosed · Opens 9:30 AM Mon ",
+       "domain": "www.resultspt.com",
+       "url": "https://www.resultspt.com/results-physiotherapy-jeffersonville-indiana?utm_source=google&utm_medium=organic&utm_campaign=gmb",
+       "is_paid": false,
+       "cid": "14695858936383141196",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 61
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 17,
+       "rank_absolute": 17,
+       "title": "KORT Physical Therapy - Jeffersonville",
+       "description": "Jeffersonville, IN · (812) 218-8039 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.kort.com",
+       "url": "https://www.kort.com/contact/find-a-location/in/jeffersonville/jeffersonville/?ty=xt",
+       "is_paid": false,
+       "cid": "5567048920640023312",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 174
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 18,
+       "rank_absolute": 18,
+       "title": "Focus Physical Therapy - Louisville",
+       "description": "Louisville, KY · (502) 509-3136 \nClosed · Opens 8 AM Mon ",
+       "domain": "physicaltherapylouisville.com",
+       "url": "https://physicaltherapylouisville.com/",
+       "is_paid": false,
+       "cid": "6744402502456006422",
+       "rating": {
+        "value": 5,
+        "votes_count": 219
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 19,
+       "rank_absolute": 19,
+       "title": "Summit Performance Therapy",
+       "description": "Louisville, KY · (502) 493-6979 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.summitptky.com",
+       "url": "http://www.summitptky.com/",
+       "is_paid": false,
+       "cid": "75651273548644643",
+       "rating": {
+        "value": 5,
+        "votes_count": 95
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 20,
+       "rank_absolute": 20,
+       "title": "ProRehab Physical Therapy - Jeffersonville",
+       "description": "Jeffersonville, IN · (812) 984-3020 \nClosed · Opens 7 AM Mon ",
+       "domain": "prorehab.com",
+       "url": "https://prorehab.com/location/jeffersonville/?UTM_source=GMB_listing&UTM_medium=organic%EF%BB%BF%EF%BB%BF%EF%BB%BF",
+       "is_paid": false,
+       "cid": "17901767077115444404",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 58
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

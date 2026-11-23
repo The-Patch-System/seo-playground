@@ -1,0 +1,316 @@
+{
+ "tasks": [
+  {
+   "id": "11152002-2638-0066-0000-90d20cbc87a1",
+   "status_code": 20000,
+   "data": {
+    "keyword": "physical therapy clinic",
+    "location_coordinate": "38.501849,-117.022967"
+   },
+   "result": [
+    {
+     "check_url": "https://www.google.com/search?q=physical+therapy+clinic&uule=j+WzEsMTIsMTc5NDc3Mjk1NDYyODAwMCxudWxsLFszODUwMTg0OTAsLTExNzAyMjk2NzBdLG51bGwsOTMwMDAsbnVsbCw2XQ==&hl=en&gl=US&udm=1",
+     "items": [
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "title": "4 Links",
+       "description": "omline · (408) 205-7469 \nClosed · Opens 10 AM Mon ",
+       "domain": "4linkstohealth.com",
+       "url": "http://4linkstohealth.com/",
+       "is_paid": false,
+       "cid": "2492237301705740244",
+       "rating": {
+        "value": 5,
+        "votes_count": 9
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 2,
+       "rank_absolute": 2,
+       "title": "Nevada Physical Therapy",
+       "description": "Reno, NV · (775) 507-4210 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.nevpt.com",
+       "url": "http://www.nevpt.com/",
+       "is_paid": false,
+       "cid": "2221131838527514596",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 255
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 3,
+       "rank_absolute": 3,
+       "title": "Northern Nevada Medical Center Rehab and Sports Medicine",
+       "description": "Reno, NV · (775) 386-2244 \nClosed · Opens 7 AM Mon ",
+       "domain": "nnmc.com",
+       "url": "http://nnmc.com/",
+       "is_paid": false,
+       "cid": "3880084731484472613",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 107
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 4,
+       "rank_absolute": 4,
+       "title": "Nevada Physical Therapy",
+       "description": "Sparks, NV · (775) 993-3640 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.nevpt.com",
+       "url": "http://www.nevpt.com/",
+       "is_paid": false,
+       "cid": "12375573682672886835",
+       "rating": {
+        "value": 5,
+        "votes_count": 74
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 5,
+       "rank_absolute": 5,
+       "title": "Fallon Physical Therapy",
+       "description": "Fallon, NV · (775) 423-5233 \nClosed · Opens 8 AM Mon ",
+       "domain": "fallonphysicaltherapist.com",
+       "url": "https://fallonphysicaltherapist.com/",
+       "is_paid": false,
+       "cid": "14416428401675421357",
+       "rating": {
+        "value": 4.6,
+        "votes_count": 17
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 6,
+       "rank_absolute": 6,
+       "title": "First Choice Physical Therapy - Carlin",
+       "description": "Carlin, NV · (775) 296-8349 \nClosed · Opens 8 AM Tue ",
+       "domain": "firstchoiceptnv.com",
+       "url": "https://firstchoiceptnv.com/physical-therapy-clinic/carlin-nv/",
+       "is_paid": false,
+       "cid": "1119269962590016075",
+       "rating": {
+        "value": 5,
+        "votes_count": 43
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 7,
+       "rank_absolute": 7,
+       "title": "roc Physical Therapy",
+       "description": "\"The staff are awesome and the therapy seems to be very effective.\" \n",
+       "domain": "www.renoortho.com",
+       "url": "https://www.renoortho.com/",
+       "is_paid": false,
+       "cid": "2909568771141317521",
+       "rating": {
+        "value": 5,
+        "votes_count": 2
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 8,
+       "rank_absolute": 8,
+       "title": "Fernley Physical Therapy, Inc.",
+       "description": "Fernley, NV · (775) 575-5508 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.fernleypt.com",
+       "url": "https://www.fernleypt.com/",
+       "is_paid": false,
+       "cid": "11009945183843057754",
+       "rating": {
+        "value": 4.6,
+        "votes_count": 15
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 9,
+       "rank_absolute": 9,
+       "title": "Great Basin Orthopaedics Physical Therapy - Kietzke",
+       "description": "Reno, NV · (775) 786-1600 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.greatbasinortho.com",
+       "url": "https://www.greatbasinortho.com/?utm_source=google&utm_medium=organic&utm_campaign=gmbwebsite",
+       "is_paid": false,
+       "cid": "8044748890158431016",
+       "rating": {
+        "value": 5,
+        "votes_count": 55
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 10,
+       "rank_absolute": 10,
+       "title": "Great Basin Physical Therapy and Performance Center",
+       "description": "Minden, NV · (775) 782-4466 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.greatbasinpt.com",
+       "url": "http://www.greatbasinpt.com/",
+       "is_paid": false,
+       "cid": "17348530000353560643",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 16
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 11,
+       "rank_absolute": 11,
+       "title": "Healing Hands Physical Therapy and Bodywork",
+       "description": "Temporarily closed \n\"After each appointment, I left feeling relief from my hip pain.\" ",
+       "domain": "healinghandspt.net",
+       "url": "https://healinghandspt.net/",
+       "is_paid": false,
+       "cid": "628724920917676708",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 89
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 12,
+       "rank_absolute": 12,
+       "title": "Premier Physical Therapy and Sports Performance",
+       "description": "Reno, NV · (775) 828-9724 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.premierptreno.com",
+       "url": "http://www.premierptreno.com/",
+       "is_paid": false,
+       "cid": "4383031229805146331",
+       "rating": {
+        "value": 5,
+        "votes_count": 23
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 13,
+       "rank_absolute": 13,
+       "title": "Nevada Physical Therapy",
+       "description": "Reno, NV · (775) 823-5350 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.nevpt.com",
+       "url": "http://www.nevpt.com/",
+       "is_paid": false,
+       "cid": "28671104277351135",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 40
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 14,
+       "rank_absolute": 14,
+       "title": "Premier Physical Therapy & Sports Performance - Carson City, NV",
+       "description": "Carson City, NV · (775) 883-8800 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.premierptreno.com",
+       "url": "http://www.premierptreno.com/",
+       "is_paid": false,
+       "cid": "9932706087813684466",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 51
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 15,
+       "rank_absolute": 15,
+       "title": "Northern Nevada Physical Therapy & Rehab",
+       "description": "Sparks, NV · (775) 356-4960 \nClosed · Opens 7:30 AM Mon ",
+       "domain": "www.nnmc.com",
+       "url": "https://www.nnmc.com/",
+       "is_paid": false,
+       "cid": "4379414875830662315",
+       "rating": {
+        "value": 4.4,
+        "votes_count": 7
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 16,
+       "rank_absolute": 16,
+       "title": "Great Basin Orthopaedics Physical Therapy",
+       "description": "Reno, NV · (775) 786-1600 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.greatbasinortho.com",
+       "url": "https://www.greatbasinortho.com/service/physical-therapy",
+       "is_paid": false,
+       "cid": "3244805572230320121",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 54
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 17,
+       "rank_absolute": 17,
+       "title": "Fit Physical Therapy - Mesquite, NV",
+       "description": "Mesquite, NV · (702) 346-3105 \nClosed · Opens 7 AM Mon ",
+       "domain": "therapypartnersgroup.com",
+       "url": "https://therapypartnersgroup.com/location/mesquite-nv/",
+       "is_paid": false,
+       "cid": "6837962083687367970",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 367
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 18,
+       "rank_absolute": 18,
+       "title": "Smith Valley Physical Therapy & Wellness Center",
+       "description": "No reviews · Medical clinic \n2299 NV-208 ",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "9976916994867905572",
+       "rating": null
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 19,
+       "rank_absolute": 19,
+       "title": "The Health Lab",
+       "description": "Carson City, NV · (775) 525-8681 \nClosed · Opens 8 AM Mon ",
+       "domain": "nvhealthlab.com",
+       "url": "http://nvhealthlab.com/",
+       "is_paid": false,
+       "cid": "147483153193241673",
+       "rating": {
+        "value": 5,
+        "votes_count": 215
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 20,
+       "rank_absolute": 20,
+       "title": "Performance Physical Therapy",
+       "description": "Reno, NV · (775) 787-3733 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.prnpt.com",
+       "url": "https://www.prnpt.com/locations/304/performance-physical-therapy/reno/location-details",
+       "is_paid": false,
+       "cid": "11351048320497731208",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 87
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

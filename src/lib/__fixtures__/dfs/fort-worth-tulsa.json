@@ -1,0 +1,319 @@
+{
+ "tasks": [
+  {
+   "id": "11151801-2638-0066-0000-b41953d3a9a9",
+   "status_code": 20000,
+   "data": {
+    "keyword": "physical therapy",
+    "location_coordinate": "33.038713,-97.312143"
+   },
+   "result": [
+    {
+     "check_url": "https://www.google.com/search?q=physical+therapy&uule=j+WzEsMTIsMTc5NDc2NTY4ODE0OTAwMCxudWxsLFszMzAzODcxMzAsLTk3MzEyMTQzMF0sbnVsbCw5MzAwMCxudWxsLDZd&hl=en&gl=US&udm=1",
+     "items": [
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "title": "UCHealth Physical Therapy and Rehabilitation Clinic - Woodland Park",
+       "description": "Woodland Park, CO · (719) 374-6172 \n\"Mary is a caring and knowledgeable physical therapist.\" ",
+       "domain": "www.uchealth.org",
+       "url": "https://www.uchealth.org/locations/uchealth-physical-therapy-rehabilitation-clinic-woodland-park/",
+       "is_paid": false,
+       "cid": "13173985922552687602",
+       "rating": {
+        "value": 4.6,
+        "votes_count": 19
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 2,
+       "rank_absolute": 2,
+       "title": "Crested Butte Physiotherapy",
+       "description": "Crested Butte, CO · (970) 349-2817 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.crestedbuttephysiotherapy.com",
+       "url": "http://www.crestedbuttephysiotherapy.com/",
+       "is_paid": false,
+       "cid": "17508708679899447321",
+       "rating": {
+        "value": 5,
+        "votes_count": 71
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 3,
+       "rank_absolute": 3,
+       "title": "Physical Therapy of Tulsa",
+       "description": "Tulsa, OK · (918) 494-3000 \nClosed · Opens 7 AM Mon ",
+       "domain": "ptoftulsa.com",
+       "url": "http://ptoftulsa.com/",
+       "is_paid": false,
+       "cid": "17930053185444986968",
+       "rating": {
+        "value": 5,
+        "votes_count": 300
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 4,
+       "rank_absolute": 4,
+       "title": "Physical Therapy Specialists of Tulsa",
+       "description": "Tulsa, OK · (918) 615-6280 \nClosed · Opens 7 AM Mon ",
+       "domain": "tulsapts.com",
+       "url": "https://tulsapts.com/",
+       "is_paid": false,
+       "cid": "15500255140233499841",
+       "rating": {
+        "value": 5,
+        "votes_count": 219
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 5,
+       "rank_absolute": 5,
+       "title": "E6 Physical Therapy",
+       "description": "Albuquerque, NM · (505) 830-3678 \nClosed · Opens 8 AM Mon ",
+       "domain": "e6pt.com",
+       "url": "http://e6pt.com/",
+       "is_paid": false,
+       "cid": "17823591757808192038",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 179
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 6,
+       "rank_absolute": 6,
+       "title": "Bayfield Physical Therapy",
+       "description": "Bayfield, CO · (970) 884-2423 \nClosed · Opens 7 AM Mon ",
+       "domain": "bayfieldpt.com",
+       "url": "https://bayfieldpt.com/",
+       "is_paid": false,
+       "cid": "10413335099418590849",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 60
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 7,
+       "rank_absolute": 7,
+       "title": "Dignity Health Physical Therapy - Henderson",
+       "description": "Henderson, NV · (702) 454-1162 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.dignityhealthpt.com",
+       "url": "http://www.dignityhealthpt.com/contact/find-a-location/nv/henderson/henderson",
+       "is_paid": false,
+       "cid": "4573496743587922086",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 292
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 8,
+       "rank_absolute": 8,
+       "title": "Heights Physical Therapy",
+       "description": "Gunnison, CO · (970) 414-4765 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.heightsperformance.com",
+       "url": "http://www.heightsperformance.com/",
+       "is_paid": false,
+       "cid": "13542511829657463802",
+       "rating": {
+        "value": 5,
+        "votes_count": 223
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 9,
+       "rank_absolute": 9,
+       "title": "Rocky Mountain Therapy Services - Montrose",
+       "description": "Montrose, CO · (970) 249-6920 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.rmts-co.com",
+       "url": "https://www.rmts-co.com/",
+       "is_paid": false,
+       "cid": "499241406066294760",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 51
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 10,
+       "rank_absolute": 10,
+       "title": "Mountain Springs Physical Therapy",
+       "description": "Steamboat Springs, CO · (970) 819-6252 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.mountainspringspt.com",
+       "url": "http://www.mountainspringspt.com/",
+       "is_paid": false,
+       "cid": "8169021885241927119",
+       "rating": {
+        "value": 5,
+        "votes_count": 37
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 11,
+       "rank_absolute": 11,
+       "title": "Empower Physiotherapy",
+       "description": "Buena Vista, CO · (719) 398-1256 \nClosed · Opens 9:30 AM Mon ",
+       "domain": "empowerphysio.training",
+       "url": "https://empowerphysio.training/",
+       "is_paid": false,
+       "cid": "13348392239069528026",
+       "rating": {
+        "value": 5,
+        "votes_count": 64
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 12,
+       "rank_absolute": 12,
+       "title": "Good Shepherd Physical Therapy",
+       "description": "Hermiston, OR · (541) 667-3657 \nOpen · Closes 5 PM ",
+       "domain": "www.gshealth.org",
+       "url": "https://www.gshealth.org/physical-therapy",
+       "is_paid": false,
+       "cid": "17980339616114081006",
+       "rating": {
+        "value": 4.3,
+        "votes_count": 6
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 13,
+       "rank_absolute": 13,
+       "title": "Vail Physical Therapy",
+       "description": "Vail, CO · (970) 476-7510 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.vailphysicaltherapy.com",
+       "url": "http://www.vailphysicaltherapy.com/",
+       "is_paid": false,
+       "cid": "9509707012049115675",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 59
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 14,
+       "rank_absolute": 14,
+       "title": "St. Charles Physical Therapy",
+       "description": "Bend, OR · (541) 706-5940 \nOpen · Closes 6 PM ",
+       "domain": "www.stcharleshealthcare.org",
+       "url": "https://www.stcharleshealthcare.org/locations/st-charles-physical-therapy?utm_source=local-listing&utm_medium=organic&utm_campaign=website-link",
+       "is_paid": false,
+       "cid": "9164977095265531732",
+       "rating": {
+        "value": 5,
+        "votes_count": 2
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 15,
+       "rank_absolute": 15,
+       "title": "Rocky Mountain Physical Therapy",
+       "description": "Pagosa Springs, CO · (970) 731-3303 \n\"They care and they take good care of you.\" ",
+       "domain": "www.rockymountainpt.com",
+       "url": "https://www.rockymountainpt.com/",
+       "is_paid": false,
+       "cid": "10612373192719399173",
+       "rating": {
+        "value": 4.3,
+        "votes_count": 11
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 16,
+       "rank_absolute": 16,
+       "title": "Rocky Mountain Physical Therapy",
+       "description": "Pagosa Springs, CO · (970) 264-3303 \n\"He has helped me recover 110%!\" ",
+       "domain": "www.rockymountainpt.com",
+       "url": "http://www.rockymountainpt.com/",
+       "is_paid": false,
+       "cid": "13750516695173136834",
+       "rating": {
+        "value": 5,
+        "votes_count": 2
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 17,
+       "rank_absolute": 17,
+       "title": "Arkansas Valley Physical Therapy and Pain Center",
+       "description": "Salida, CO · (719) 539-3626 \nClosed · Opens 12 PM Mon ",
+       "domain": "arkansasvalleypt.com",
+       "url": "https://arkansasvalleypt.com/",
+       "is_paid": false,
+       "cid": "11821239407383610394",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 17
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 18,
+       "rank_absolute": 18,
+       "title": "Rebound Physical Therapy/Salida Physical Therapy",
+       "description": "Salida, CO · (719) 539-6144 \n\"I leave feeling so much better, and with my pain in check.\" ",
+       "domain": "salidareboundpt.com",
+       "url": "https://salidareboundpt.com/",
+       "is_paid": false,
+       "cid": "13334277392183054209",
+       "rating": {
+        "value": 4.4,
+        "votes_count": 14
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 19,
+       "rank_absolute": 19,
+       "title": "Roaring Fork Physical Therapy",
+       "description": "Basalt, CO · (970) 927-9319 \nClosed · Opens 5 AM Mon ",
+       "domain": "www.roaringforkphysicaltherapy.com",
+       "url": "https://www.roaringforkphysicaltherapy.com/",
+       "is_paid": false,
+       "cid": "13096073497130682221",
+       "rating": {
+        "value": 4,
+        "votes_count": 8
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 20,
+       "rank_absolute": 20,
+       "title": "Rehabilitation Services at Valley View - Willits HealthCare",
+       "description": "Basalt, CO · (970) 384-7103 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.vvh.org",
+       "url": "https://www.vvh.org/our-services-2/rehab-services/?utm_source=GMBSocialClimb&utm_medium=RehabilitationServicesatValleyView-WillitsHealthCare",
+       "is_paid": false,
+       "cid": "7476287274530977068",
+       "rating": {
+        "value": 5,
+        "votes_count": 2
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

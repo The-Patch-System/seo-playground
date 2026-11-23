@@ -8,6 +8,7 @@ import {
 import { runPromptChecks } from '@/lib/prompt-tracker';
 import { postGridTasksQueue } from '@/app/dashboard/local-finder/grid-api';
 import { collectGridProgress } from '@/lib/grid-progress';
+import { advanceRescans, newRescanCounters } from '@/lib/grid-rescan';
 import { collectRankProgress } from '@/lib/rank-progress';
 import { queueStandardRankChecksForProject } from '@/lib/rank-queue';
 
@@ -76,7 +77,7 @@ async function runPass(credentials: { login: string; pass: string }) {
     try {
       const result = await postGridTasksQueue(
         schedule.keyword, schedule.center, schedule.grid_size, schedule.spacing_km, schedule.language,
-        credentials.login, credentials.pass, schedule.queue_mode === 'priority' ? 'priority' : 'standard',
+        credentials.login, credentials.pass, schedule.queue_mode === 'priority' ? 'priority' : 'standard', schedule.series_id,
       );
       if (result.error) failed.push({ seriesId: schedule.series_id, error: result.error });
       if (result.taskPoints.length === 0) {
@@ -134,6 +135,9 @@ async function runPass(credentials: { login: string; pass: string }) {
   let rankPendingChecked = 0;
   let rankCompleted = 0;
   let rankFailed = 0;
+  // Patch fork (temporary): in-place re-scans. Starts are paced across all projects per pass.
+  const rescans = newRescanCounters();
+  let rescanErrors = 0;
   for (const project of getProjects()) {
     const pending = getPendingGridEntriesForProject(project.id);
     for (const entry of pending) {
@@ -144,6 +148,11 @@ async function runPass(credentials: { login: string; pass: string }) {
       } catch {
         // A temporary DataForSEO failure is retried by the next cron invocation.
       }
+    }
+    try {
+      await advanceRescans(project.id, credentials, rescans);
+    } catch {
+      rescanErrors += 1;
     }
     try {
       const rankProgress = await collectRankProgress(project.id, credentials);
@@ -184,6 +193,7 @@ async function runPass(credentials: { login: string; pass: string }) {
 
   return {
     due: due.length, started, failed, gridRetries, pendingChecked, completed, gridRunsPruned,
+    rescans: { started: rescans.started, collected: rescans.collected, swapped: rescans.swapped, held: rescans.held, orphaned: rescans.orphaned, errors: rescanErrors },
     rankSchedulesDue: dueRankSchedules.length, rankScheduled, rankScheduleRetries, rankPendingChecked, rankCompleted, rankFailed,
     promptSchedulesDue: duePromptSchedules.length, promptRuns, promptRunsFailed,
   };
