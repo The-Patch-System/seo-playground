@@ -50,7 +50,7 @@ describe('notifyGridAlert', () => {
     expect(logged.join('\n')).not.toContain('secret-token');
   });
 
-  it('dedupes the Slack post per process on kind|run_id|reason', async () => {
+  it('dedupes the Slack post per process on kind|run_id|monitor_id|reason', async () => {
     vi.stubEnv('GEO_GRID_ALERT_WEBHOOK_URL', WEBHOOK);
     await notifyGridAlert({ kind: 'rescan_held', reason: 'timeout', run_id: 'r3' });
     await notifyGridAlert({ kind: 'rescan_held', reason: 'timeout', run_id: 'r3' });
@@ -60,6 +60,15 @@ describe('notifyGridAlert', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     // Every alert is still logged.
     expect(logged.filter((l) => l.startsWith('[geo-grid-alert]'))).toHaveLength(4);
+  });
+
+  // Patch fork: start alerts have no run id yet, so the monitor keeps two monitors' alerts apart.
+  it('dedupes per monitor, so two monitors with the same start failure both post', async () => {
+    vi.stubEnv('GEO_GRID_ALERT_WEBHOOK_URL', WEBHOOK);
+    await notifyGridAlert({ kind: 'scheduled_start_unclear', reason: 'unclear_post_stopped', monitor_id: 'grid-a' });
+    await notifyGridAlert({ kind: 'scheduled_start_unclear', reason: 'unclear_post_stopped', monitor_id: 'grid-b' });
+    await notifyGridAlert({ kind: 'scheduled_start_unclear', reason: 'unclear_post_stopped', monitor_id: 'grid-a' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('never throws when the webhook fails, and logs the failure without the URL', async () => {

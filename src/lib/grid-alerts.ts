@@ -1,7 +1,7 @@
 // Patch fork: loud failures for the Geo-grid worker and re-scans. Every alert is logged as one
 // `[geo-grid-alert] {json}` line. If GEO_GRID_ALERT_WEBHOOK_URL is set (a Slack incoming webhook for
 // #seo-workflow-errors; a secret, env only, never logged), it is also posted there, once per
-// kind|run_id|reason per process so a held run doesn't alert on every worker pass.
+// kind|run_id|monitor_id|reason per process so a held run doesn't alert on every worker pass.
 
 export type GridAlertKind =
   /** A re-scan was held (reason = hold reason). */
@@ -13,7 +13,20 @@ export type GridAlertKind =
   /** A scheduled or manual queued run finished, but its numbers are not safe to report. */
   | 'scheduled_run_unsafe'
   /** DataForSEO billed more for a re-scan task than the price reserved for it. */
-  | 'price_mismatch';
+  | 'price_mismatch'
+  /**
+   * A scheduled run's start got an unclear answer (timeout, 5xx, odd body), so its tasks may have been
+   * queued and billed. reason: `unclear_post_retrying` (one retry in 5 min), `unclear_post_stopped`,
+   * `unclear_post_partial` (some tasks accepted; the run will be incomplete) or `start_error` (a local
+   * failure after posting).
+   */
+  | 'scheduled_start_unclear'
+  /** A scheduled run's start was refused by DataForSEO and its 6 h retry window is used up. */
+  | 'scheduled_start_failed'
+  /** A scheduled run's single-point re-post got an unclear answer (may be billed twice; capped at 3 attempts). */
+  | 'scheduled_repost_unclear'
+  /** A re-scan POST got an unclear answer, but the run could not be held (a cancel or retry won the race). */
+  | 'rescan_post_unknown_unheld';
 
 export interface GridAlert {
   kind: GridAlertKind;
@@ -51,7 +64,8 @@ export async function notifyGridAlert(alert: GridAlert): Promise<void> {
   }
   const url = process.env.GEO_GRID_ALERT_WEBHOOK_URL?.trim();
   if (!url) return;
-  const key = `${alert.kind}|${alert.run_id ?? ''}|${alert.reason}`;
+  // Patch fork: monitor_id is part of the key, since start alerts have no run id yet.
+  const key = `${alert.kind}|${alert.run_id ?? ''}|${alert.monitor_id ?? ''}|${alert.reason}`;
   if (sent.has(key)) return;
   sent.add(key);
   try {

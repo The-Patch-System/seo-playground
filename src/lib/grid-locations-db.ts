@@ -513,8 +513,9 @@ export function updateLocationSchedule(projectId: string, locationId: string, ra
   const db = getDbForProject(projectId);
   const select = db.prepare(`SELECT series_id, keyword, target, center, grid_size, spacing_km, language, queue_mode, frequency,
     weekday, time_of_day, time_zone, next_run_at, created_at, updated_at FROM grid_schedules WHERE series_id = ?`);
-  const update = db.prepare(`UPDATE grid_schedules SET queue_mode = ?, frequency = ?, weekday = ?, time_of_day = ?, next_run_at = ?, updated_at = ?
-    WHERE series_id = ?`);
+  // Patch fork: new settings start a fresh slot, so any retry chain (retry_slot_at, unclear_posts) is cleared.
+  const update = db.prepare(`UPDATE grid_schedules SET queue_mode = ?, frequency = ?, weekday = ?, time_of_day = ?, next_run_at = ?, updated_at = ?,
+    retry_slot_at = NULL, unclear_posts = 0 WHERE series_id = ?`);
   const result: ScheduleUpdateResult = { updated: 0, created: 0, oneTime: 0, rescheduled: 0 };
   db.transaction(() => {
     for (const monitor of location.monitors) {
@@ -555,7 +556,8 @@ export function requestRunNow(projectId: string, locationId: string, seriesId: s
   const monitors = seriesId ? [requireMonitor(location, seriesId)] : location.monitors;
   const db = getDbForProject(projectId);
   const result: RunNowResult = { queued: [], skipped: [] };
-  const setDue = db.prepare('UPDATE grid_schedules SET next_run_at = ?, updated_at = ? WHERE series_id = ? AND next_run_at = ?');
+  // Patch fork: a deliberate Run now starts a fresh slot (clears any retry chain).
+  const setDue = db.prepare('UPDATE grid_schedules SET next_run_at = ?, updated_at = ?, retry_slot_at = NULL, unclear_posts = 0 WHERE series_id = ? AND next_run_at = ?');
   db.transaction(() => {
     for (const monitor of monitors) {
       const schedule = db.prepare('SELECT next_run_at FROM grid_schedules WHERE series_id = ?').get(monitor.series_id) as { next_run_at: number } | undefined;

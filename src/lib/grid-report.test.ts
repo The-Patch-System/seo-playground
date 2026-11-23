@@ -12,10 +12,11 @@ import { getMonitorRuns, getRun, listMonitors } from './grid-report';
 afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
 // Schedules can't live in the Default Project (sales demos), so these monitors sit in a client project.
-setActiveProject(createProject({
+const projectId = createProject({
   name: 'Elevation Athletics', domain: 'elevation-athletics.example', defaultLocation: 'United States',
   defaultLanguage: 'English', defaultCoordinates: '', rankTrackerDepth: '100',
-}).id);
+}).id;
+setActiveProject(projectId);
 
 const target = 'Elevation Athletics (cid:9715887968687677574)';
 const center = '32.894142,-97.269100';
@@ -130,7 +131,7 @@ describe('reporting API data quality', () => {
     const series = quality('pt latest', 'q-latest-old', grid({ 1: wrongCity }), base.ts + 3 * 86_400_000);
     quality('pt latest', 'q-latest-new', grid({}), base.ts + 4 * 86_400_000);
     quality('pt latest', 'q-latest-pending', [], base.ts + 5 * 86_400_000);
-    getDbForProject('default').prepare("UPDATE grid_searches SET status = 'pending' WHERE id = 'q-latest-pending'").run();
+    getDbForProject(projectId).prepare("UPDATE grid_searches SET status = 'pending' WHERE id = 'q-latest-pending'").run();
     const history = getMonitorRuns(series);
     expect(history?.runs.map((r) => [r.run_id, r.report_safe])).toEqual([['q-latest-pending', null], ['q-latest-new', true], ['q-latest-old', false]]);
     expect(history).toMatchObject({ report_safe: true, report_safe_reason: null });
@@ -140,7 +141,7 @@ describe('reporting API data quality', () => {
   it('shows rescanned_at after a swap, and a re-scan safety flag wins over the computed one', () => {
     quality('pt rescanned', 'q-rescanned', grid({ 2: unresolved }));
     const swappedAt = Date.parse('2026-11-21T10:00:00Z');
-    const db = getDbForProject('default');
+    const db = getDbForProject(projectId);
     db.prepare(`INSERT INTO grid_rescans (run_id, series_id, manifest_id, label, state, attempt, queued_at, swapped_at, updated_at)
       VALUES ('q-rescanned', 's', 'm', '', 'swapped', 1, ?, ?, ?)`).run(swappedAt, swappedAt, swappedAt);
     db.prepare("INSERT INTO grid_run_safety (run_id, report_safe, reason, updated_at) VALUES ('q-rescanned', 1, NULL, ?)").run(swappedAt);

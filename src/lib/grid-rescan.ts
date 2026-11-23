@@ -569,6 +569,18 @@ function recoverStaleIntents(projectId: string, now: number, counters: RescanPas
   }
 }
 
+/**
+ * An unclear (possibly billed) POST whose run could not be held, because a cancel or retry won the
+ * race. The ledger has the submissions; this makes sure someone hears about them.
+ */
+function alertUnheldUnknown(projectId: string, run: RunRow, attempt: number): void {
+  const tags = (getDbForProject(projectId).prepare("SELECT tag FROM grid_rescan_submissions WHERE run_id = ? AND attempt = ? AND state = 'unknown'")
+    .all(run.id, attempt) as Array<{ tag: string }>).map((r) => r.tag);
+  void notifyGridAlert({
+    kind: 'rescan_post_unknown_unheld', reason: 'post_unknown', project_id: projectId, run_id: run.id, monitor_id: run.series_id, detail: { attempt, tags },
+  });
+}
+
 /** A worker step for one run failed: its state is as it was. Counted, logged and alerted, never swallowed. */
 function reportRunError(projectId: string, runId: string, monitorId: string | null, error: unknown, counters: RescanPassCounters): void {
   counters.errors += 1;
@@ -649,6 +661,7 @@ async function startOne(projectId: string, rescan: RescanRow, auth: string, coun
     if (outcomes.some((o) => o.state === 'unknown')) {
       saveTaskPoints(projectId, run.id, rescan.attempt, taskPoints);
       if (hold(projectId, run.id, rescan.attempt, 'post_unknown', ['posting'])) counters.held += 1;
+      else alertUnheldUnknown(projectId, run, rescan.attempt);
       return;
     }
   }
@@ -705,6 +718,7 @@ async function collectOne(projectId: string, rescan: RescanRow, auth: string, co
   saveTaskPoints(projectId, run.id, rescan.attempt, step.pending, results);
   if (step.unknown > 0) {
     if (hold(projectId, run.id, rescan.attempt, 'post_unknown')) counters.held += 1;
+    else alertUnheldUnknown(projectId, run, rescan.attempt);
     return;
   }
   if (step.budgetExhausted) {

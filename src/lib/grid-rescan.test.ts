@@ -57,7 +57,8 @@ function stubDataForSeo() {
       postedPriorities.push(...body.map((t) => t.priority));
       onPost?.(body.map((t) => t.tag));
       if (postMode === 'missing') return new Response(JSON.stringify({ status_code: 20000, tasks: [] }));
-      return new Response(JSON.stringify({ tasks: body.map((t) => ({ id: `id-${t.tag}`, status_code: 20100, cost: postCost })) }));
+      // Like DataForSEO, each task echoes what was posted (incl. the tag) under `data`.
+      return new Response(JSON.stringify({ tasks: body.map((t) => ({ id: `id-${t.tag}`, status_code: 20100, cost: postCost, data: t })) }));
     }
     const id = url.split('/').pop()!;
     const kind = reply(id.slice(3));
@@ -614,6 +615,25 @@ describe('re-scan worker', () => {
     expect(rescanRow('default', 'run-cancel-race')!.state).toBe('cancelled');
     // Nothing recorded for the points that were never posted.
     expect(submissions('default', 'run-cancel-race').filter((x) => x.seq === 2)).toHaveLength(1);
+  });
+
+  // Patch fork: an unclear POST whose run a cancel already moved on can't be held; it is still alerted.
+  it('alerts an unclear POST that could not be held because a cancel won the race', async () => {
+    freshDay();
+    const logged = captureAlerts();
+    seedRun('default', 'run-unheld');
+    queue(['run-unheld']);
+    postMode = 'missing';
+    onPost = (tags) => {
+      if (tags.some((tag) => tag.startsWith('rs:run-unheld:'))) expect(applyRescanAction('cancel', ['run-unheld'])[0]).toMatchObject({ ok: true });
+    };
+    await pass();
+    logged.restore();
+    expect(rescanRow('default', 'run-unheld')!.state).toBe('cancelled');
+    expect(submissions('default', 'run-unheld')).toEqual([{ tag: 'rs:run-unheld:a1:r0c0:s1', state: 'unknown', seq: 1 }]);
+    expect(logged.alerts.filter((a) => a.run_id === 'run-unheld')).toEqual([expect.objectContaining({
+      kind: 'rescan_post_unknown_unheld', reason: 'post_unknown', detail: { attempt: 1, tags: ['rs:run-unheld:a1:r0c0:s1'] },
+    })]);
   });
 
   // Patch fork (Codex round 3): a crash between the claim and the first intent must not hang in posting.

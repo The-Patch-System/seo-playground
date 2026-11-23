@@ -178,9 +178,10 @@ export async function demoScanAction(_prev: ActionState, formData: FormData): Pr
     grid_size: gridSize, spacing_km: spacingKm, language, status: 'pending', queue_mode: 'standard',
   };
   const result = await postGridTasksQueue(keyword, center, gridSize, spacingKm, language, creds.login, creds.pass, 'standard');
-  // A failure after some chunks were posted still leaves billed tasks to collect.
-  if (result.taskPoints.length > 0) saveGridSearchPendingForProject(DEMO_PROJECT_ID, { ...entry, cost: result.cost }, result.taskPoints);
-  if (result.error && result.taskPoints.length === 0) return { error: `DataForSEO: ${result.error}` };
+  // A failure after some chunks were posted still leaves billed tasks to collect. Patch fork: count
+  // accepted tasks, since refused ones are kept as retry-pending points.
+  if (result.accepted > 0) saveGridSearchPendingForProject(DEMO_PROJECT_ID, { ...entry, cost: result.cost }, result.taskPoints);
+  if (result.error && result.accepted === 0) return { error: `DataForSEO: ${result.error}` };
 
   revalidatePath(clientUrl(DEMO_PROJECT_ID), 'layout');
   redirect(keywordUrl(DEMO_PROJECT_ID, locationIdFor(DEMO_PROJECT_ID, target, center), seriesId));

@@ -222,7 +222,7 @@ export async function postGridTaskChunk(
     return { results: [], error: error instanceof Error ? error.message : 'Could not reach DataForSEO.', rejected: false };
   }
   if (!res.ok) return { results: [], error: `API error ${res.status}`, rejected: res.status >= 400 && res.status < 500 };
-  let data: { status_code?: number; status_message?: string; tasks?: Array<{ id?: string; status_code?: number; cost?: number } | null> | null };
+  let data: { status_code?: number; status_message?: string; tasks?: Array<{ id?: string; status_code?: number; cost?: number; data?: { tag?: unknown } | null } | null> | null };
   try {
     data = await res.json();
   } catch {
@@ -233,9 +233,10 @@ export async function postGridTaskChunk(
     return { results: [], error: `DataForSEO refused the call: ${data.status_code} ${data.status_message ?? ''}`.trim(), rejected: true };
   }
   if (!tasks) return { results: [], error: 'No tasks array in the DataForSEO response.', rejected: false };
+  const answerFor = matchTaskAnswers(requests, tasks);
   return {
     results: requests.map((_, j): GridTaskPostResult => {
-      const task = tasks[j];
+      const task = answerFor(j);
       const statusCode = typeof task?.status_code === 'number' ? task.status_code : null;
       if (task?.id && statusCode !== null && statusCode < 40000) {
         return { taskId: task.id, statusCode, cost: typeof task.cost === 'number' ? task.cost : null, outcome: 'accepted' };
@@ -246,6 +247,28 @@ export async function postGridTaskChunk(
   };
 }
 
+/**
+ * Patch fork: which answer belongs to which request. DataForSEO echoes each task's `data.tag`, so a
+ * tagged request is matched by its tag (a missing or duplicated tag is no answer: unknown, never
+ * someone else's task). Without tags in the answer, by position, and only when the counts match.
+ */
+function matchTaskAnswers<T extends { data?: { tag?: unknown } | null } | null>(
+  requests: GridTaskRequest[], tasks: T[],
+): (index: number) => T | undefined {
+  const echoed = tasks.some((t) => typeof t?.data?.tag === 'string');
+  if (echoed && requests.every((r) => r.tag)) {
+    const byTag = new Map<string, T | null>();
+    for (const t of tasks) {
+      const tag = t?.data?.tag;
+      if (typeof tag !== 'string') continue;
+      byTag.set(tag, byTag.has(tag) ? null : t);
+    }
+    return (index) => byTag.get(requests[index].tag as string) ?? undefined;
+  }
+  if (tasks.length !== requests.length) return () => undefined;
+  return (index) => tasks[index];
+}
+
 /** Patch fork: a point DataForSEO refused at its first post; the collector re-posts it after 60 s. */
 function retryPendingPoint(coord: { row: number; col: number; lat: number; lng: number }, now: number): GridTaskPoint {
   return { task_id: '', row: coord.row, col: coord.col, lat: coord.lat, lng: coord.lng, attempts: 0, post_failures: 1, awaiting_retry: true, retry_due_at: now + 60_000 };
@@ -254,10 +277,14 @@ function retryPendingPoint(coord: { row: number; col: number; lat: number; lng: 
 export async function postGridTasksQueue(
   keyword: string, center: string, gridSize: number, spacingKm: number,
   language: string, login: string, pass: string, priorityMode: 'priority' | 'standard' = 'standard', tagPrefix?: string,
-): Promise<{ taskPoints: GridTaskPoint[]; cost: number; accepted: number; error?: string }> {
+): Promise<{
+  taskPoints: GridTaskPoint[]; cost: number; accepted: number; error?: string;
+  /** Patch fork: some task got an unclear answer, so it may have been queued and billed without a task id. */
+  unclear: boolean;
+}> {
   const parts = center.split(',').map(Number);
   if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) {
-    return { taskPoints: [], cost: 0, accepted: 0, error: 'Invalid coordinates.' };
+    return { taskPoints: [], cost: 0, accepted: 0, error: 'Invalid coordinates.', unclear: false };
   }
   const [centerLat, centerLng] = parts;
   const coords = generateGridCoords(centerLat, centerLng, gridSize, spacingKm);
@@ -291,7 +318,7 @@ export async function postGridTasksQueue(
       }
       // An unclear failure may have queued (and billed) this chunk: return what's known, never re-post
       // it. Callers keep a partial run, which ends incomplete and is flagged not safe to report.
-      return { taskPoints: allTaskPoints, cost: totalCost, accepted, error: [posted.error, problems()].filter(Boolean).join(' ') };
+      return { taskPoints: allTaskPoints, cost: totalCost, accepted, error: [posted.error, problems()].filter(Boolean).join(' '), unclear: true };
     }
     posted.results.forEach((task, j) => {
       const coord = chunk[j];
@@ -310,20 +337,22 @@ export async function postGridTasksQueue(
   }
 
   const error = problems();
-  return { taskPoints: allTaskPoints, cost: totalCost, accepted, ...(error ? { error } : {}) };
+  return { taskPoints: allTaskPoints, cost: totalCost, accepted, ...(error ? { error } : {}), unclear: unknown > 0 };
 }
 
 /**
  * Patch fork: re-posts one grid point whose queued task failed or came back wrong-city. Returns the
  * new task id, or null when DataForSEO did not accept it (the caller tries again on a later pass).
+ * `unclear` marks an answer that may have been queued and billed anyway (timeout, 5xx, odd body).
  */
 export async function repostGridPoint(
   keyword: string, lat: number, lng: number, language: string, auth: string,
   priorityMode: 'priority' | 'standard' = 'standard', tag?: string,
-): Promise<{ taskId: string | null; cost: number }> {
+): Promise<{ taskId: string | null; cost: number; unclear: boolean }> {
   const posted = await postGridTaskChunk([{ keyword, lat, lng, language, priority: priorityMode === 'priority' ? 2 : 1, tag }], auth, 30_000);
   const task = posted.results[0];
-  return { taskId: task?.taskId ?? null, cost: task?.cost ?? 0 };
+  const unclear = posted.error ? !posted.rejected : task?.outcome !== 'accepted' && task?.outcome !== 'rejected';
+  return { taskId: task?.taskId ?? null, cost: task?.cost ?? 0, unclear };
 }
 
 export function stableGridId(

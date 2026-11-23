@@ -282,8 +282,31 @@ describe('postGridTaskChunk', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ tasks: [{ id: 'a', status_code: 20100, cost: 0.0018 }] }))));
     const req = { keyword: 'pt', lat: 1, lng: 2, language: 'English', priority: 1 as const };
     const posted = await postGridTaskChunk([req, req], 'auth');
-    expect(posted.results.map((r) => r.outcome)).toEqual(['accepted', 'unknown']);
+    // Untagged and one answer short: position can't say whose answer it is, so neither is trusted.
+    expect(posted.results.map((r) => r.outcome)).toEqual(['unknown', 'unknown']);
     expect(posted.error).toBeUndefined();
+  });
+
+  // Patch fork: answers are matched to requests by the echoed tag, not by position.
+  it('matches answers by their echoed tag, whatever their order', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ tasks: [
+      { id: 'b', status_code: 20100, cost: 0.0018, data: { tag: 't-b' } },
+      { id: 'a', status_code: 20100, cost: 0.0018, data: { tag: 't-a' } },
+    ] }))));
+    const req = { keyword: 'pt', lat: 1, lng: 2, language: 'English', priority: 1 as const };
+    const posted = await postGridTaskChunk([{ ...req, tag: 't-a' }, { ...req, tag: 't-b' }], 'auth');
+    expect(posted.results.map((r) => r.taskId)).toEqual(['a', 'b']);
+  });
+
+  it('treats a tag that is missing or answered twice as unknown', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ tasks: [
+      { id: 'a1', status_code: 20100, cost: 0.0018, data: { tag: 't-a' } },
+      { id: 'a2', status_code: 20100, cost: 0.0018, data: { tag: 't-a' } },
+      { id: 'x', status_code: 20100, cost: 0.0018, data: { tag: 't-other' } },
+    ] }))));
+    const req = { keyword: 'pt', lat: 1, lng: 2, language: 'English', priority: 1 as const };
+    const posted = await postGridTaskChunk([{ ...req, tag: 't-a' }, { ...req, tag: 't-b' }, { ...req, tag: 't-c' }], 'auth');
+    expect(posted.results.map((r) => r.outcome)).toEqual(['unknown', 'unknown', 'unknown']);
   });
 
   it.each([
@@ -403,6 +426,24 @@ describe('scheduled run completion alert', () => {
     expect(JSON.parse(alert!.slice('[geo-grid-alert] '.length))).toMatchObject({
       kind: 'scheduled_run_unsafe', reason: 'wrong_city_persistent', project_id: 'default', run_id: 'run-wc-alert', monitor_id: 'grid-wc-alert',
     });
+  });
+
+  // Patch fork: an unclear single-point re-post is still retried later (capped), but it is raised.
+  it('alerts when a scheduled re-post gets an unclear answer, and keeps the point for a later re-post', async () => {
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { logged.push(args.map(String).join(' ')); });
+    const unclearEntry: GridSearchEntry = { ...entry, id: 'run-unclear-repost', series_id: 'grid-unclear-repost' };
+    saveGridSearchPendingForProject('default', unclearEntry, [{ task_id: 'old-task', row: 0, col: 0, lat: 1, lng: 1 }]);
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('task_post')) return new Response('bad gateway', { status: 502 });
+      return new Response(JSON.stringify({ tasks: [{ status_code: 40501, result: null }] }));
+    }));
+    expect((await collectGridProgress('default', { ...unclearEntry, task_ids: [] }, creds)).status).toBe('pending');
+    spy.mockRestore();
+    const alerts = logged.filter((l) => l.startsWith('[geo-grid-alert]')).map((l) => JSON.parse(l.slice('[geo-grid-alert] '.length)));
+    expect(alerts).toEqual([expect.objectContaining({
+      kind: 'scheduled_repost_unclear', project_id: 'default', run_id: 'run-unclear-repost', monitor_id: 'grid-unclear-repost', detail: expect.objectContaining({ row: 0, col: 0 }),
+    })]);
   });
 });
 

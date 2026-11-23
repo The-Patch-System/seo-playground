@@ -242,8 +242,37 @@ describe('Geo-grid monitoring', () => {
     expect(retryClaimedGridSchedule(claimed.projectId, claimed, slot + 1_000)).toBe(true);
     expect(getGridSchedule(seriesId)?.next_run_at).toBe(slot + 1_000 + 5 * 60_000);
 
+    // Patch fork: the re-claim carries the original slot, so the 6 h window is measured from it
+    // (it used to restart at every retry, so a failing slot retried every 5 min until the next slot).
     const [reclaimed] = claimDueGridSchedules(slot + 7 * 3_600_000).filter((item) => item.series_id === seriesId);
-    expect(retryClaimedGridSchedule(reclaimed.projectId, { ...reclaimed, scheduled_at: slot }, slot + 7 * 3_600_000)).toBe(false);
+    expect(reclaimed.scheduled_at).toBe(slot);
+    expect(retryClaimedGridSchedule(reclaimed.projectId, reclaimed, slot + 7 * 3_600_000)).toBe(false);
+    deleteGridSchedule(seriesId);
+  });
+
+  it('keeps the original slot across several retries, and allows one unclear retry per slot', () => {
+    const saved = saveGridSchedule({ ...base, frequency: 'daily', weekday: null, time_of_day: '08:30', time_zone: 'Europe/Paris' });
+    const slot = saved.next_run_at;
+    const claimAt = (at: number) => claimDueGridSchedules(at).filter((item) => item.series_id === seriesId)[0];
+    const first = claimAt(slot + 1_000);
+    expect(first.unclear_posts).toBe(0);
+    // A refused start and then an unclear one: both retried, still measured from the original slot.
+    expect(retryClaimedGridSchedule(first.projectId, first, slot + 1_000)).toBe(true);
+    const second = claimAt(slot + 10 * 60_000);
+    expect(second).toMatchObject({ scheduled_at: slot, unclear_posts: 0 });
+    expect(retryClaimedGridSchedule(second.projectId, second, slot + 10 * 60_000, undefined, true)).toBe(true);
+    const third = claimAt(slot + 20 * 60_000);
+    expect(third).toMatchObject({ scheduled_at: slot, unclear_posts: 1 });
+    // A second unclear post is the limit: no third POST for this slot.
+    expect(retryClaimedGridSchedule(third.projectId, third, slot + 20 * 60_000, undefined, true)).toBe(false);
+    // A claim clears the chain in the database; a slot that isn't retried starts the next one fresh.
+    expect(getDbForProject(third.projectId).prepare('SELECT retry_slot_at, unclear_posts FROM grid_schedules WHERE series_id = ?').get(seriesId))
+      .toEqual({ retry_slot_at: null, unclear_posts: 0 });
+    // Saving the schedule again also clears a chain.
+    expect(retryClaimedGridSchedule(third.projectId, { ...third, unclear_posts: 0 }, slot + 20 * 60_000)).toBe(true);
+    saveGridSchedule({ ...base, frequency: 'daily', weekday: null, time_of_day: '08:30', time_zone: 'Europe/Paris' });
+    expect(getDbForProject(third.projectId).prepare('SELECT retry_slot_at, unclear_posts FROM grid_schedules WHERE series_id = ?').get(seriesId))
+      .toEqual({ retry_slot_at: null, unclear_posts: 0 });
     deleteGridSchedule(seriesId);
   });
 

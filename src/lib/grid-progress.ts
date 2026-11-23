@@ -238,7 +238,16 @@ async function collectGridProgressOnce(
     async (task) => {
       const tag = gridTaskTag(entry.series_id || entry.id, task.row, task.col);
       const repost = await repostGridPoint(entry.keyword, task.lat, task.lng, entry.language, auth, priority, tag);
-      return repost.taskId ? { kind: 'accepted', taskId: repost.taskId } : { kind: 'rejected' };
+      if (repost.taskId) return { kind: 'accepted', taskId: repost.taskId };
+      // Patch fork: an unclear answer is still re-posted later (capped at MAX_POINT_ATTEMPTS, as planned),
+      // but it may have been billed, so it is raised.
+      if (repost.unclear) {
+        void notifyGridAlert({
+          kind: 'scheduled_repost_unclear', reason: 'unclear_repost', project_id: projectId, run_id: entry.id, monitor_id: entry.series_id,
+          detail: { row: task.row, col: task.col, tag },
+        });
+      }
+      return { kind: 'rejected' };
     },
   );
 

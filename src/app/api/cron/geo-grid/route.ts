@@ -9,6 +9,7 @@ import { runPromptChecks } from '@/lib/prompt-tracker';
 import { postGridTasksQueue } from '@/app/dashboard/local-finder/grid-api';
 import { collectGridProgress } from '@/lib/grid-progress';
 import { advanceRescans, newRescanCounters } from '@/lib/grid-rescan';
+import { notifyGridAlert } from '@/lib/grid-alerts';
 import { collectRankProgress } from '@/lib/rank-progress';
 import { queueStandardRankChecksForProject } from '@/lib/rank-queue';
 
@@ -80,12 +81,28 @@ async function runPass(credentials: { login: string; pass: string }) {
         credentials.login, credentials.pass, schedule.queue_mode === 'priority' ? 'priority' : 'standard', schedule.series_id,
       );
       if (result.error) failed.push({ seriesId: schedule.series_id, error: result.error });
+      const alertBase = {
+        project_id: schedule.projectId, monitor_id: schedule.series_id,
+        detail: { error: result.error ?? null, slot: new Date(schedule.scheduled_at).toISOString(), unclear_posts: schedule.unclear_posts + (result.unclear ? 1 : 0) },
+      };
       // Patch fork: count accepted tasks, not task points (refused tasks are kept as retry-pending points).
       if (result.accepted === 0) {
-        // Nothing was queued or billed, so the slot can safely be attempted again.
+        if (result.unclear) {
+          // Patch fork: the answer was unclear (timeout, 5xx, odd body), so DataForSEO may have queued and
+          // billed these tasks with no task id for us to collect. One retry, then stop; both are alerted.
+          const retrying = retryClaimedGridSchedule(schedule.projectId, schedule, Date.now(), undefined, true);
+          if (retrying) gridRetries += 1;
+          void notifyGridAlert({ kind: 'scheduled_start_unclear', reason: retrying ? 'unclear_post_retrying' : 'unclear_post_stopped', ...alertBase });
+          continue;
+        }
+        // Refused (or never sent): nothing was queued or billed, so the slot can safely be attempted again.
         if (retryClaimedGridSchedule(schedule.projectId, schedule)) gridRetries += 1;
+        else void notifyGridAlert({ kind: 'scheduled_start_failed', reason: 'retry_window_used', ...alertBase });
         continue;
       }
+      // Patch fork: some tasks were accepted, but others got an unclear answer: the run will end
+      // incomplete (and alert as unsafe then); raise it now too.
+      if (result.unclear) void notifyGridAlert({ kind: 'scheduled_start_unclear', reason: 'unclear_post_partial', ...alertBase });
       // A partial post is kept as-is: re-posting would bill the queued points twice.
       const entry: GridSearchEntry = {
         id: randomUUID(),
@@ -106,7 +123,10 @@ async function runPass(credentials: { login: string; pass: string }) {
     } catch (error) {
       // postGridTasksQueue reports API failures itself, so this is a local failure after
       // posting; retrying would bill the same points again.
-      failed.push({ seriesId: schedule.series_id, error: error instanceof Error ? error.message : 'Could not start grid run.' });
+      const message = error instanceof Error ? error.message : 'Could not start grid run.';
+      failed.push({ seriesId: schedule.series_id, error: message });
+      // Patch fork: billed tasks may now have no run to land in; never silent.
+      void notifyGridAlert({ kind: 'scheduled_start_unclear', reason: 'start_error', project_id: schedule.projectId, monitor_id: schedule.series_id, detail: { error: message } });
     }
   }
 
