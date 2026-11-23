@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic';
 //    does not depend on a live Google search and keeps working when the live endpoint is flaky.
 //
 // Query parameters:
-//   q                    business name (required)
+//   q                    business name (required unless cid is given)
+//   cid                  Patch fork: look up one listing by Google CID (address + pin) instead
 //   location_coordinate  "lat,lng" or "lat,lng,zoom" (usually the current map view)
 //   location_code        DataForSEO location code, used when no coordinate is given (default: US)
 //   language             language name from the form (e.g. "French"); defaults to English
@@ -85,8 +86,32 @@ function titleCandidates(query: string): string[] {
   return candidates;
 }
 
+/**
+ * Patch fork: look one listing up by its Google CID (from a pasted Google Maps link), for its address
+ * and pin. Business Listings database, filtered on the CID.
+ */
+async function lookupByCid(cid: string): Promise<NextResponse> {
+  const credentials = getCredentials();
+  if (!credentials) return NextResponse.json({ results: [], error: 'DataForSEO credentials are not configured.' }, { status: 503 });
+  const auth = Buffer.from(`${credentials.login}:${credentials.pass}`).toString('base64');
+  const listings = await callDataForSeo(auth, 'business_data/business_listings/search/live', {
+    filters: [['cid', '=', cid]],
+    limit: 1,
+  }, 15_000);
+  if (listings.error) {
+    console.error(`[business-search] CID lookup failed for ${cid}: ${listings.error}`);
+    return NextResponse.json({ results: [], error: `Business listings: ${listings.error}` }, { status: 502 });
+  }
+  return NextResponse.json({ results: toResults(listings.items ?? [], 'business_listing').filter((r) => r.cid === cid), source: 'business_listings' });
+}
+
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
+  const cid = params.get('cid')?.trim();
+  if (cid) {
+    if (!/^\d{6,25}$/.test(cid)) return NextResponse.json({ results: [], error: 'Invalid CID.' }, { status: 400 });
+    return lookupByCid(cid);
+  }
   const query = params.get('q')?.trim();
   if (!query) return NextResponse.json({ results: [] });
   const coordinate = parseCoordinate(params.get('location_coordinate'));

@@ -6,6 +6,12 @@ export function clientUrl(projectId: string) {
   return `${CLIENTS_URL}/${encodeURIComponent(projectId)}`;
 }
 
+export function newLocationUrl(projectId: string) {
+  return `${clientUrl(projectId)}/locations/new`;
+}
+
+export const DEMO_SCAN_URL = '/dashboard/geo-grid/clients/demo-scan';
+
 export function locationUrl(projectId: string, locationId: string) {
   return `${clientUrl(projectId)}/locations/${encodeURIComponent(locationId)}`;
 }

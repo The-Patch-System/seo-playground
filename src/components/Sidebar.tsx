@@ -117,7 +117,18 @@ export default function Sidebar({ initialCollapsed = [], projects, activeProject
         </Link>
       </div>
 
-      <ProjectSwitcher projects={projects} activeProject={activeProject} />
+      {/* Patch fork: the location-based Geo-grid pages take the client from the URL, so the active
+          project would only mislead there (it can name a different client than the page). */}
+      {pathname.startsWith('/dashboard/geo-grid/clients') ? (
+        <div className="px-3 pt-3 shrink-0">
+          <p className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-[12px] leading-snug text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
+            <span className="block font-bold text-slate-800 dark:text-slate-200">Geo-grid clients</span>
+            Each page shows its client in the breadcrumb. The project picker isn&apos;t used here.
+          </p>
+        </div>
+      ) : (
+        <ProjectSwitcher projects={projects} activeProject={activeProject} />
+      )}
 
       {/* Filter */}
       <div className="px-3 pt-3 shrink-0">

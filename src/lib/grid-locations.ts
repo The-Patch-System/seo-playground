@@ -480,3 +480,62 @@ export function pickRunsForDay(headersBySeries: Map<string, RunHeader[]>, day: s
   }
   return out;
 }
+
+// --- Keyword page helpers ---
+
+/** One competitor's own ranks across the grid ("View on grid"): rank where they appear, else outside the top 20. */
+export function competitorPoints(points: GridPoint[], key: string): GridPoint[] {
+  return points.map((point) => {
+    if (point.failed) return { ...point, items: [] };
+    const hit = (point.items ?? []).find((item) => competitorKeyOf(item) === key);
+    return { ...point, rank: hit && hit.rank_group <= 20 ? hit.rank_group : null, items: [] };
+  });
+}
+
+export interface PointMove {
+  /** "+2" (moved up two places), "−1", "new" (now in the top 20), "lost" (dropped out), or "". */
+  label: string;
+  tone: DeltaTone;
+}
+
+/** Per-point movement against the compared scan, keyed "row:col". Failed points on either side show nothing. */
+export function pointMoves(current: GridPoint[], compare: GridPoint[] | null): Map<string, PointMove> {
+  const moves = new Map<string, PointMove>();
+  if (!compare) return moves;
+  const before = new Map(compare.map((p) => [`${p.row}:${p.col}`, p]));
+  for (const point of current) {
+    const key = `${point.row}:${point.col}`;
+    const old = before.get(key);
+    if (!old || old.failed || point.failed) continue;
+    const a = old.rank != null && old.rank <= 20 ? old.rank : null;
+    const b = point.rank != null && point.rank <= 20 ? point.rank : null;
+    if (a == null && b == null) continue;
+    if (a == null) moves.set(key, { label: 'new', tone: 'better' });
+    else if (b == null) moves.set(key, { label: 'lost', tone: 'worse' });
+    else if (a !== b) moves.set(key, { label: `${a > b ? '+' : '−'}${Math.abs(a - b)}`, tone: a > b ? 'better' : 'worse' });
+  }
+  return moves;
+}
+
+export interface TrendBar {
+  runId: string;
+  ts: number;
+  pinned: boolean;
+  total: number;
+  top3: number;
+  top4to10: number;
+  top11to20: number;
+  /** Outside the top 20 or no data. */
+  rest: number;
+}
+
+/** Rank buckets per scan for the "Position over time" chart, oldest first. */
+export function trendBars(runs: RunWithPoints[]): TrendBar[] {
+  return [...runs].sort((a, b) => a.ts - b.ts).map((run) => {
+    const k = computeKpis(run.points);
+    return {
+      runId: run.id, ts: run.ts, pinned: run.pinned, total: k.total,
+      top3: k.top3, top4to10: k.top10 - k.top3, top11to20: k.inTop20 - k.top10, rest: k.total - k.inTop20,
+    };
+  });
+}

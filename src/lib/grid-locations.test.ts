@@ -14,12 +14,12 @@ import {
 import { createMonitor } from './grid-import';
 import { getMonitorRuns, listMonitors } from './grid-report';
 import {
-  addKeywordToLocation, addLocation, centerKey, deleteLocation, getKeywordData, getLocation, listClients, listLocations,
+  addClient, addKeywordToLocation, addLocation, centerKey, DEMO_PROJECT_ID, deleteKeyword, deleteLocation, getKeywordData, getLocation, listClients, listLocations,
   listLocationsWithLatest, locationIdFor, LocationError, MAX_KEYWORD_RUNS, requestRunNow, updateLocationSchedule,
 } from './grid-locations-db';
 import {
   compareKpis, computeCompetitorRows, computeKpis, computeRings, deltaLower, describeSchedule, formatScanDate,
-  locationStatus, rankLabel, resolveCompare, sharedGridConfig,
+  locationStatus, rankLabel, resolveCompare, sharedGridConfig, competitorPoints, pointMoves, trendBars,
 } from './grid-locations';
 
 afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
@@ -256,7 +256,7 @@ describe('run now', () => {
     const p = project();
     seedRun(p, { keyword: 'pt', target: 'Fresh (cid:31)', center: '40,-75', ts: NOW - 40 * DAY, scheduled: true });
     const [location] = listLocations(p);
-    const added = addKeywordToLocation(p, location.id, 'dry needling', NOW);
+    const added = addKeywordToLocation(p, location.id, 'dry needling', NOW, { firstScanNow: false });
     expect(requestRunNow(p, location.id, added.series_id, NOW + 1000).queued).toEqual([added.series_id]);
     // Claimed (updated_at stamped) but the pending run isn't saved yet.
     claimDueGridSchedules(NOW + 2000);
@@ -272,8 +272,8 @@ describe('run now', () => {
     getDbForProject(p).prepare('UPDATE grid_schedules SET created_at = ?, updated_at = ?').run(NOW - 10 * DAY, NOW - 5 * DAY);
     const [location] = listLocations(p);
     const base = location.monitors.find((m) => m.keyword === 'base')!.series_id;
-    const scanning = addKeywordToLocation(p, location.id, 'scanning', NOW - DAY);
-    const ok = addKeywordToLocation(p, location.id, 'ok', NOW - DAY);
+    const scanning = addKeywordToLocation(p, location.id, 'scanning', NOW - DAY, { firstScanNow: false });
+    const ok = addKeywordToLocation(p, location.id, 'ok', NOW - DAY, { firstScanNow: false });
     const entry: GridSearchEntry = {
       id: 'pending-1', series_id: scanning.series_id, ts: NOW - 60_000, keyword: 'scanning', target: 'All (cid:32)', center: '40,-75',
       grid_size: 9, spacing_km: 2.0117, language: 'English', status: 'pending', queue_mode: 'standard',
@@ -323,6 +323,66 @@ describe('add keyword and location', () => {
     expect(location.monitors.every((m) => m.schedule?.time_zone === 'America/Phoenix')).toBe(true);
     expect(() => addLocation(p, { business: { name: 'New Spot', cid: '50' }, center: { lat: 33.4484, lng: -112.074 }, keywords: ['x'], spacing_km: 2.0117 }, NOW)).toThrow(/already tracked/);
     expect(() => addLocation(p, { business: { name: 'Bad', cid: 'abc' }, center: { lat: 1, lng: 1 }, keywords: ['x'], spacing_km: 2 }, NOW)).toThrow(LocationError);
+  });
+});
+
+describe('first scan, clients and the sales demo project', () => {
+  it('runs a new keyword or location first scan right away, then returns to the regular slot', () => {
+    const p = project();
+    const created = addLocation(p, { business: { name: 'First Scan', cid: '60' }, center: { lat: 40, lng: -75 }, keywords: ['pt'], spacing_km: 2.0117 }, NOW);
+    const [series] = created.series_ids;
+    const nextRun = () => (getDbForProject(p).prepare('SELECT next_run_at FROM grid_schedules WHERE series_id = ?').get(series) as { next_run_at: number }).next_run_at;
+    expect(nextRun()).toBe(NOW);
+    const claimed = claimDueGridSchedules(NOW + 30_000).filter((c) => c.series_id === series);
+    expect(claimed).toHaveLength(1);
+    expect(nextRun()).toBeGreaterThan(NOW + DAY);
+    const added = addKeywordToLocation(p, created.locationId, 'chiro', NOW + 60_000);
+    expect((getDbForProject(p).prepare('SELECT next_run_at FROM grid_schedules WHERE series_id = ?').get(added.series_id) as { next_run_at: number }).next_run_at).toBe(NOW + 60_000);
+  });
+
+  it('keeps a due first scan due when the schedule is saved before the worker claims it', () => {
+    const p = project();
+    const created = addLocation(p, { business: { name: 'Early Save', cid: '62' }, center: { lat: 40, lng: -75 }, keywords: ['pt'], spacing_km: 2.0117 }, NOW);
+    const result = updateLocationSchedule(p, created.locationId, { frequency: 'monthly', day: 3, time_of_day: '09:00', queue_mode: 'standard' }, NOW + 10_000);
+    expect(result.updated).toBe(1);
+    const row = getDbForProject(p).prepare('SELECT next_run_at, weekday, time_of_day FROM grid_schedules WHERE series_id = ?').get(created.series_ids[0]);
+    expect(row).toEqual({ next_run_at: NOW, weekday: 3, time_of_day: '09:00' });
+  });
+
+  it('never creates or changes a schedule in the sales demo project', () => {
+    expect(() => addLocation(DEMO_PROJECT_ID, { business: { name: 'Demo', cid: '61' }, center: { lat: 40, lng: -75 }, keywords: ['pt'], spacing_km: 2 }, NOW)).toThrow(/one-time/);
+    expect(() => addKeywordToLocation(DEMO_PROJECT_ID, 'v1-anything', 'pt', NOW)).toThrow(/one-time/);
+    expect(() => updateLocationSchedule(DEMO_PROJECT_ID, 'v1-anything', { frequency: 'monthly', day: 15, time_of_day: '12:00', queue_mode: 'standard' }, NOW)).toThrow(/one-time/);
+  });
+
+  it('adds a client once per domain and lists clients with no locations, but not the sales demo project', () => {
+    const { projectId } = addClient('  Fresh   Start PT ', 'https://www.Fresh-Start-PT.com/about');
+    const listed = listClients().find((c) => c.project.id === projectId)!;
+    expect(listed).toMatchObject({ project: { name: 'Fresh Start PT', domain: 'fresh-start-pt.com' }, locations: 0, keywords: 0, lastScanAt: null });
+    expect(listed.project.createdAt).toBeGreaterThan(0);
+    expect(() => addClient('Copy', 'fresh-start-pt.com')).toThrow(/already uses/);
+    expect(() => addClient('No domain', 'not a domain')).toThrow(/domain/);
+    expect(() => addClient('   ', 'ok-pt.com')).toThrow(/name/);
+    expect(listClients().some((c) => c.project.id === DEMO_PROJECT_ID)).toBe(false);
+  });
+});
+
+describe('delete keyword', () => {
+  it('deletes one keyword (runs, pin, schedule) and leaves the others, refusing while its scan is due', () => {
+    const p = project();
+    const target = 'Two KW (cid:70)';
+    const keep = seedRun(p, { keyword: 'keep', target, center: '40,-75', ts: NOW - 40 * DAY, scheduled: true, pinned: true });
+    const drop = seedRun(p, { keyword: 'drop', target, center: '40,-75', ts: NOW - 40 * DAY, scheduled: true, pinned: true });
+    getDbForProject(p).prepare('UPDATE grid_schedules SET created_at = ?, updated_at = ?').run(NOW - 10 * DAY, NOW - 10 * DAY);
+    const [location] = listLocations(p);
+    getDbForProject(p).prepare('UPDATE grid_schedules SET next_run_at = ? WHERE series_id = ?').run(NOW - 1000, drop.series);
+    expect(() => deleteKeyword(p, location.id, drop.series, NOW)).toThrow(/in progress/);
+    getDbForProject(p).prepare('UPDATE grid_schedules SET next_run_at = ? WHERE series_id = ?').run(NOW + 10 * DAY, drop.series);
+    expect(deleteKeyword(p, location.id, drop.series, NOW)).toEqual({ runs: 1, schedules: 1 });
+    const after = listLocations(p);
+    expect(after).toHaveLength(1);
+    expect(after[0].monitors.map((m) => m.series_id)).toEqual([keep.series]);
+    expect(() => deleteKeyword(p, location.id, drop.series, NOW)).toThrow(LocationError);
   });
 });
 
@@ -488,5 +548,43 @@ describe('location scan dates', () => {
     const oct = pickRunsForDay(headers, '2026-10-15', tz);
     expect(oct.get('a')).toMatchObject({ current: { id: 'a2' }, previous: { id: 'a1' } });
     expect(oct.get('b')).toEqual({ current: null, previous: null });
+  });
+});
+
+describe('keyword page helpers', () => {
+  const item = (rank_group: number, cid: string, is_target = false) => ({ rank_group, title: `Biz ${cid}`, cid, is_target });
+  const now = [
+    { row: 0, col: 0, rank: 2, items: [item(1, '9'), item(2, '1', true)] },
+    { row: 0, col: 1, rank: null, items: [item(4, '9')] },
+    { row: 1, col: 0, rank: 5, items: [] },
+    { row: 1, col: 1, rank: null, failed: true, items: [] },
+  ];
+  const before = [
+    { row: 0, col: 0, rank: 4, items: [] },
+    { row: 0, col: 1, rank: 7, items: [] },
+    { row: 1, col: 0, rank: null, items: [] },
+    { row: 1, col: 1, rank: 3, items: [] },
+  ];
+
+  it('shows a competitor\'s own ranks on the grid, keeping failed points', () => {
+    const pts = competitorPoints(now, 'cid:9');
+    expect(pts.map((p) => p.rank)).toEqual([1, 4, null, null]);
+    expect(pts[3].failed).toBe(true);
+  });
+
+  it('labels each point\'s movement against the compared scan', () => {
+    const moves = pointMoves(now, before);
+    expect(moves.get('0:0')).toEqual({ label: '+2', tone: 'better' });
+    expect(moves.get('0:1')).toEqual({ label: 'lost', tone: 'worse' });
+    expect(moves.get('1:0')).toEqual({ label: 'new', tone: 'better' });
+    expect(moves.has('1:1')).toBe(false);
+    expect(pointMoves(now, null).size).toBe(0);
+  });
+
+  it('buckets each scan for the trend chart, oldest first', () => {
+    const run = (id: string, ts: number, points: typeof now) => ({ id, series_id: 's', ts, status: 'done' as const, pinned: false, points });
+    const bars = trendBars([run('b', 2, now), run('a', 1, before)]);
+    expect(bars.map((b) => b.runId)).toEqual(['a', 'b']);
+    expect(bars[1]).toMatchObject({ total: 4, top3: 1, top4to10: 1, top11to20: 0, rest: 2 });
   });
 });

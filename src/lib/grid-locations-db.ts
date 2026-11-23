@@ -11,7 +11,7 @@
 import { createHash } from 'crypto';
 import type Database from 'better-sqlite3';
 import {
-  getDbForProject, getProjects, gridSeriesId, nextGridScheduleRun, projectExists,
+  createProject, getDbForProject, getProjects, gridSeriesId, nextGridScheduleRun, projectExists,
   type GridPoint, type GridQueueMode, type GridScheduleFrequency, type Project,
 } from './db';
 import { formatBusinessTarget, parseTargetCid, reconcileGridPoints } from './grid-target';
@@ -32,6 +32,18 @@ export type LocationErrorCode = 'not_found' | 'invalid' | 'duplicate' | 'scan_in
 export class LocationError extends Error {
   constructor(public code: LocationErrorCode, message: string) {
     super(message);
+  }
+}
+
+/**
+ * The Default Project holds sales demos: one-time scans only, never a schedule.
+ * TODO(after PR #8 merges): use DEMO_PROJECT_ID / isOneTimeOnlyProject from ./grid-guardrails.
+ */
+export const DEMO_PROJECT_ID = 'default';
+
+function refuseDemoSchedule(projectId: string) {
+  if (projectId === DEMO_PROJECT_ID) {
+    throw new LocationError('invalid', 'The sales demo project only takes one-time scans. Add the client first, then add the location to that client.');
   }
 }
 
@@ -284,7 +296,7 @@ export function mostCommonConfigMonitor<M extends Pick<MonitorInfo, 'grid_size' 
 // --- Public reads ---
 
 export interface ClientSummary {
-  project: Pick<Project, 'id' | 'name' | 'domain'>;
+  project: Pick<Project, 'id' | 'name' | 'domain' | 'createdAt'>;
   locations: number;
   keywords: number;
   lastScanAt: number | null;
@@ -292,17 +304,17 @@ export interface ClientSummary {
   scanning: number;
 }
 
-/** All clients with Geo-grid monitors (no results blobs read). */
+/** Every client (project) except the sales demo project, with Geo-grid counts (no results blobs read). */
 export function listClients(): ClientSummary[] {
   const out: ClientSummary[] = [];
   for (const project of getProjects()) {
+    if (project.id === DEMO_PROJECT_ID) continue;
     const db = getDbForProject(project.id);
     const monitors = readMonitors(db);
-    if (monitors.length === 0) continue;
     const last = db.prepare(`SELECT MAX(ts) AS ts FROM grid_searches WHERE status = 'done'`).get() as { ts: number | null };
     const nextTimes = monitors.map((m) => m.schedule?.next_run_at).filter((t): t is number => t != null);
     out.push({
-      project: { id: project.id, name: project.name, domain: project.domain },
+      project: { id: project.id, name: project.name, domain: project.domain, createdAt: project.createdAt },
       locations: new Set(monitors.map((m) => locationIdFor(project.id, m.target, m.center))).size,
       keywords: monitors.length,
       lastScanAt: last.ts ?? null,
@@ -311,6 +323,24 @@ export function listClients(): ClientSummary[] {
     });
   }
   return out.sort((a, b) => a.project.name.localeCompare(b.project.name));
+}
+
+/** "+ Add client": a new project for the clinic's website. One project per website, so a domain is used once. */
+export function addClient(rawName: string, rawDomain: string): { projectId: string } {
+  const name = rawName.replace(/\s+/g, ' ').trim();
+  if (!name) throw new LocationError('invalid', 'Enter the client name.');
+  if (name.length > 120) throw new LocationError('invalid', 'That name is too long.');
+  const domain = rawDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain)) throw new LocationError('invalid', 'Enter the website domain, like example-pt.com.');
+  const existing = getProjects().find((p) => p.domain.toLowerCase().replace(/^www\./, '') === domain);
+  if (existing) throw new LocationError('duplicate', `${existing.name} already uses ${domain}.`);
+  try {
+    const project = createProject({ name, domain, defaultLocation: 'United States', defaultLanguage: 'English', defaultCoordinates: '', rankTrackerDepth: '100' });
+    return { projectId: project.id };
+  } catch (error) {
+    if (error instanceof Error && /already exists/.test(error.message)) throw new LocationError('duplicate', `A client already uses ${domain}.`);
+    throw error;
+  }
 }
 
 export function getClient(projectId: string): Pick<Project, 'id' | 'name' | 'domain'> {
@@ -424,7 +454,8 @@ function scanActivity(db: Database.Database, monitor: MonitorInfo, now: number):
   // The worker's claim moves next_run_at forward and stamps updated_at, then spends a few seconds posting
   // before the pending run is saved. A just-created schedule (created_at = updated_at) was never claimed.
   if (schedule && schedule.updated_at !== schedule.created_at && schedule.updated_at > now - RECENT_CLAIM_MS) {
-    return 'A scan may be starting right now. Try again in two minutes.';
+    // A schedule save stamps updated_at too, and the table can't tell the two apart.
+    return 'A scan may be starting, or the schedule was just changed. Try again in two minutes.';
   }
   return null;
 }
@@ -473,6 +504,7 @@ export interface ScheduleUpdateResult {
  * location added at SEO setup.
  */
 export function updateLocationSchedule(projectId: string, locationId: string, raw: LocationScheduleInput, now = Date.now()): ScheduleUpdateResult {
+  refuseDemoSchedule(projectId);
   const input = normalizeSchedule(raw);
   const location = requireLocation(projectId, locationId);
   if (!location.monitors.some((m) => m.schedule)) {
@@ -491,7 +523,10 @@ export function updateLocationSchedule(projectId: string, locationId: string, ra
         const timingChanged = row.frequency !== input.frequency || (row.weekday ?? null) !== input.day || row.time_of_day !== input.time_of_day;
         const queueChanged = row.queue_mode !== input.queue_mode;
         if (!timingChanged && !queueChanged) continue;
-        const next = timingChanged
+        // A scan that's already due (a new keyword's first scan, or Run now) stays due: the worker
+        // claims it within a minute and then moves it to the new regular slot.
+        const due = row.next_run_at <= now;
+        const next = timingChanged && !due
           ? nextGridScheduleRun({ frequency: input.frequency, weekday: input.day, time_of_day: input.time_of_day, time_zone: row.time_zone }, now)
           : row.next_run_at;
         update.run(input.queue_mode, input.frequency, input.day, input.time_of_day, next, now, monitor.series_id);
@@ -571,11 +606,17 @@ function inheritedSchedule(location: LocationGroup): Omit<ScheduleInfo, 'next_ru
   return { frequency: 'monthly', weekday: DEFAULT_SCHEDULE_DAY, time_of_day: DEFAULT_SCHEDULE_TIME, time_zone: null, queue_mode: 'standard' };
 }
 
+/**
+ * firstScanNow makes the new schedule due at once, so the worker runs the first scan (the keyword's
+ * starting point) within about a minute and then moves next_run_at to the regular slot.
+ */
 function insertSchedule(db: Database.Database, fields: {
   series_id: string; keyword: string; target: string; center: string; grid_size: number; spacing_km: number; language: string;
-}, schedule: ReturnType<typeof inheritedSchedule>, now: number) {
+}, schedule: ReturnType<typeof inheritedSchedule>, now: number, firstScanNow: boolean) {
   const timeZone = schedule.time_zone ?? timeZoneForCenter(fields.center) ?? 'America/New_York';
-  const next = nextGridScheduleRun({ frequency: schedule.frequency, weekday: schedule.weekday, time_of_day: schedule.time_of_day, time_zone: timeZone }, now);
+  const next = firstScanNow
+    ? now
+    : nextGridScheduleRun({ frequency: schedule.frequency, weekday: schedule.weekday, time_of_day: schedule.time_of_day, time_zone: timeZone }, now);
   db.prepare(`INSERT INTO grid_schedules
     (series_id, keyword, target, center, grid_size, spacing_km, language, queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -586,9 +627,12 @@ function insertSchedule(db: Database.Database, fields: {
 /**
  * Adds a keyword to a location by cloning the location's exact stored center, target, grid, spacing
  * and language (the most common configuration) into a new schedule. Refuses a keyword the location
- * already tracks. The first scan runs on the schedule (or with Run now).
+ * already tracks. The first scan runs right away unless firstScanNow is false.
  */
-export function addKeywordToLocation(projectId: string, locationId: string, rawKeyword: string, now = Date.now()): NewKeywordResult {
+export function addKeywordToLocation(
+  projectId: string, locationId: string, rawKeyword: string, now = Date.now(), { firstScanNow = true } = {},
+): NewKeywordResult {
+  refuseDemoSchedule(projectId);
   const keyword = normalizeKeyword(rawKeyword);
   const location = requireLocation(projectId, locationId);
   if (location.monitors.length === 0) throw new LocationError('not_found', 'Location not found for this client.');
@@ -605,7 +649,7 @@ export function addKeywordToLocation(projectId: string, locationId: string, rawK
     if (seriesExists(db, seriesId)) throw new LocationError('duplicate', `"${keyword}" is already tracked at this location.`);
     insertSchedule(db, {
       series_id: seriesId, keyword, target: base.target, center: base.center, grid_size: base.grid_size, spacing_km: base.spacing_km, language: base.language,
-    }, inheritedSchedule(location), now);
+    }, inheritedSchedule(location), now, firstScanNow);
   })();
   return { series_id: seriesId, keyword };
 }
@@ -620,9 +664,12 @@ export interface NewLocationInput {
   schedule?: LocationScheduleInput;
 }
 
-/** Adds a location to a client: one scheduled monitor per keyword, no scan until the schedule (or Run now). */
-export function addLocation(projectId: string, input: NewLocationInput, now = Date.now()): { locationId: string; series_ids: string[] } {
+/** Adds a location to a client: one scheduled monitor per keyword. The first scans run right away unless firstScanNow is false. */
+export function addLocation(
+  projectId: string, input: NewLocationInput, now = Date.now(), { firstScanNow = true } = {},
+): { locationId: string; series_ids: string[] } {
   const db = requireProject(projectId);
+  refuseDemoSchedule(projectId);
   const name = input.business?.name?.trim();
   if (!name) throw new LocationError('invalid', 'Pick the business.');
   const cid = input.business.cid ? String(input.business.cid).trim() : '';
@@ -655,10 +702,31 @@ export function addLocation(projectId: string, input: NewLocationInput, now = Da
   db.transaction(() => {
     keywords.forEach((keyword, index) => {
       if (seriesExists(db, seriesIds[index])) throw new LocationError('duplicate', `"${keyword}" is already tracked here.`);
-      insertSchedule(db, { series_id: seriesIds[index], keyword, target, center, grid_size: gridSize, spacing_km: input.spacing_km, language }, inherited, now);
+      insertSchedule(db, { series_id: seriesIds[index], keyword, target, center, grid_size: gridSize, spacing_km: input.spacing_km, language }, inherited, now, firstScanNow);
     });
   })();
   return { locationId, series_ids: seriesIds };
+}
+
+/**
+ * Deletes one keyword from a location: its runs (the starting point too) and its schedule. Refuses
+ * while its scan is running, queued, or possibly just claimed by the worker.
+ */
+export function deleteKeyword(projectId: string, locationId: string, seriesId: string, now = Date.now()): { runs: number; schedules: number } {
+  const location = requireLocation(projectId, locationId);
+  const monitor = requireMonitor(location, seriesId);
+  const db = getDbForProject(projectId);
+  const busy = scanActivity(db, monitor, now);
+  if (busy) throw new LocationError('scan_in_progress', `Can't delete while a scan is in progress (${busy}) Try again in a few minutes.`);
+  return db.transaction(() => {
+    if (db.prepare(`SELECT 1 FROM grid_searches WHERE series_id = ? AND status = 'pending' LIMIT 1`).get(seriesId)) {
+      throw new LocationError('scan_in_progress', "Can't delete while a scan is in progress. Try again in a few minutes.");
+    }
+    return {
+      runs: db.prepare('DELETE FROM grid_searches WHERE series_id = ?').run(seriesId).changes,
+      schedules: db.prepare('DELETE FROM grid_schedules WHERE series_id = ?').run(seriesId).changes,
+    };
+  })();
 }
 
 /**
