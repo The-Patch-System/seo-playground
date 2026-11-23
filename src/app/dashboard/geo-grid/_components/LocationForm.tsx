@@ -51,6 +51,9 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
   const [customCenter, setCustomCenter] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [pasteNote, setPasteNote] = useState<{ ok: boolean; text: string } | null>(null);
+  /** The CID whose lookup is in flight, so a stale answer from an earlier paste is ignored. */
+  const lookupCid = useRef<string | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
   const [gridSize, setGridSize] = useState(DEFAULT_GRID_SIZE);
   const [radiusMi, setRadiusMi] = useState<number>(DEFAULT_RADIUS_MI);
   const [keywords, setKeywords] = useState('');
@@ -89,6 +92,31 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
     }
     const found = [info.name && 'name', info.cid && 'Google CID', info.center && (info.centerIsPin ? "the listing's pin" : 'a map center (not the pin; check it)')].filter(Boolean);
     setPasteNote({ ok: Boolean(info.cid), text: `Found ${found.join(', ')}.${info.cid ? '' : ' No CID in this link: open the listing itself (not a search) and copy that link.'}` });
+    if (info.cid) void lookUpListing(info.cid, info.centerIsPin ? info.center : null);
+  }
+
+  /** Fetch the listing's address (and pin, if the link had none) by CID. About $0.01 per lookup. */
+  async function lookUpListing(cidToFind: string, linkPin: string | null) {
+    lookupCid.current = cidToFind;
+    setLookingUp(true);
+    let listing: BusinessResult | null = null;
+    try {
+      const res = await fetch(`/api/business-search?cid=${encodeURIComponent(cidToFind)}`);
+      const data = await res.json() as { results?: BusinessResult[] };
+      listing = data.results?.[0] ?? null;
+    } catch { listing = null; }
+    if (lookupCid.current !== cidToFind) return;
+    setLookingUp(false);
+    if (!listing) {
+      if (!linkPin) setPasteNote({ ok: false, text: "Found the Google CID, but couldn't look up the address or pin. Wait a second for Google Maps to add the coordinates (the @… part) to the address bar, then copy the link again." });
+      return;
+    }
+    setBusiness(listing);
+    setName((current) => current.trim() || listing.title);
+    if (!linkPin) {
+      const at = `${listing.lat.toFixed(6)},${listing.lng.toFixed(6)}`;
+      setPin(at); setCenter(at); setCustomCenter(false);
+    }
   }
 
   function centerOnListing() {
@@ -127,7 +155,7 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
           <div>
             <h2 className="text-[15px] font-black">1. Find the business on Google Maps</h2>
             <ol className="mt-1.5 list-decimal space-y-0.5 pl-5 text-sm text-slate-600 dark:text-slate-400">
-              <li>Type the clinic&apos;s name and city (e.g. &ldquo;Elevation Athletics Physical Therapy Denver&rdquo;) and press <strong>Find</strong>.</li>
+              <li>Type the clinic&apos;s name and city (e.g. &ldquo;Elevation Athletics Physical Therapy Fort Worth&rdquo;) and press <strong>Find</strong>.</li>
               <li>Pick the right listing from the results. That fills in the name, Google CID and the grid center for you.</li>
             </ol>
           </div>
@@ -158,7 +186,9 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
               <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">Business to track</p>
               <p className="mt-0.5 text-base font-black">{name}</p>
-              {business && <p className="text-emerald-900/80 dark:text-emerald-200/80">{[business.category, business.address].filter(Boolean).join(' · ')}</p>}
+              {business?.address && <p className="font-semibold text-emerald-900 dark:text-emerald-100">{business.address}</p>}
+              {business?.category && <p className="text-emerald-900/80 dark:text-emerald-200/80">{business.category}</p>}
+              {!business?.address && lookingUp && <p className="text-emerald-900/80 dark:text-emerald-200/80">Looking up the address…</p>}
               <p className="mt-1 text-xs">
                 Google CID: {cid ? <strong>{cid}</strong> : <strong className="text-amber-700 dark:text-amber-300">missing</strong>}
                 {center && <> · Grid center: <strong>{center}</strong> ({centerNote})</>}
@@ -283,7 +313,8 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
         <div ref={reviewRef} role="region" aria-label="Review" className="rounded-2xl border-2 border-blue-300 bg-blue-50 p-5 text-sm text-blue-950 lg:col-span-2 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-100">
           <p className="text-lg font-black">{reviewTitle}</p>
           <dl className="mt-3 grid grid-cols-[150px_minmax(0,1fr)] gap-x-4 gap-y-1.5">
-            <dt className="font-bold">Business</dt><dd>{name.trim()}{business?.address ? ` · ${business.address}` : ''}</dd>
+            <dt className="font-bold">Business</dt><dd>{name.trim()}</dd>
+            <dt className="font-bold">Address</dt><dd>{business?.address || <span className="text-blue-900/70 dark:text-blue-200/70">Not known (entered by hand). Check the center on the map.</span>}</dd>
             <dt className="font-bold">Google CID</dt><dd>{cid || <span className="font-bold text-amber-700 dark:text-amber-300">None: matched by name only</span>}</dd>
             <dt className="font-bold">Grid center</dt><dd>{center} ({centerNote})</dd>
             <dt className="font-bold">Grid</dt><dd>{gridSize}×{gridSize}, {radiusMi} mi radius ({gridSize * gridSize} points)</dd>

@@ -12,6 +12,14 @@ describe('parseMapsInput', () => {
     });
   });
 
+  it('reads the CID from both forms of a real listing link: before and after Google adds the coordinates', () => {
+    const cid = '10223171319798353624';
+    expect(parseMapsInput('https://www.google.com/maps/place/The+Wellness+Track,+LLC/data=!4m2!3m1!1s0x0:0x8de00026928aced8?sa=X&ved=1t:2428&ictx=111'))
+      .toEqual({ cid, center: null, centerIsPin: false, name: 'The Wellness Track, LLC' });
+    expect(parseMapsInput('https://www.google.com/maps/place/The+Wellness+Track,+LLC/@39.1651321,-84.7003209,1109m/data=!3m2!1e3!4b1!4m6!3m5!1s0x8805679fc2307283:0x8de00026928aced8!8m2!3d39.1651321!4d-84.7003209!16s%2Fg%2F11sqq0fn0h!5m1!1e2?entry=ttu&g_ep=EgoyMDI2MTExOC4xIKXMDSoASAFQAw%3D%3D'))
+      .toEqual({ cid, center: '39.165132,-84.700321', centerIsPin: true, name: 'The Wellness Track, LLC' });
+  });
+
   it('reads ?cid= links and falls back to the map view center', () => {
     expect(parseMapsInput('https://maps.google.com/?cid=7380112684083592032')).toMatchObject({ cid: '7380112684083592032', center: null });
     expect(parseMapsInput('https://www.google.com/maps/@40.7128,-74.006,14z')).toEqual({ cid: null, center: '40.712800,-74.006000', centerIsPin: false, name: null });
