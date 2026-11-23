@@ -351,17 +351,18 @@ export function keywordState(monitor: Pick<MonitorInfo, 'doneRuns' | 'pendingRun
   return monitor.pendingRun ? 'scanning' : 'waiting';
 }
 
-export type LocationStatus = 'tracking' | 'scanning' | 'first_scan_running' | 'first_scan_done' | 'waiting' | 'not_scheduled';
+export type LocationStatus = 'tracking' | 'scanning' | 'first_scan_running' | 'first_scan_done' | 'waiting' | 'not_scheduled' | 'one_time';
 
 export function locationStatus(monitors: Array<Pick<MonitorInfo, 'doneRuns' | 'pendingRun' | 'schedule'>>): { status: LocationStatus; label: string } {
   const anyDone = monitors.some((m) => m.doneRuns > 0);
   const anyPending = monitors.some((m) => m.pendingRun);
   if (anyPending) return anyDone ? { status: 'scanning', label: 'Scanning' } : { status: 'first_scan_running', label: 'First scan running' };
+  // Scans but no schedule anywhere: one-time scans, e.g. a sales demo. They never become tracking.
+  if (anyDone && monitors.every((m) => !m.schedule)) return { status: 'one_time', label: 'One-time scan' };
   if (!anyDone) {
     return monitors.some((m) => m.schedule) ? { status: 'waiting', label: 'Waiting for first scan' } : { status: 'not_scheduled', label: 'Not scheduled' };
   }
   if (monitors.every((m) => m.doneRuns <= 1)) return { status: 'first_scan_done', label: 'First scan done' };
-  if (monitors.every((m) => !m.schedule)) return { status: 'not_scheduled', label: 'Not scheduled' };
   return { status: 'tracking', label: 'Tracking' };
 }
 
@@ -429,4 +430,112 @@ export function mapsUrl(cid: string | null, name: string, center?: string): stri
   if (cid) return `https://www.google.com/maps?cid=${cid}`;
   const q = encodeURIComponent(name);
   return center ? `https://www.google.com/maps/search/${q}/@${center},14z` : `https://www.google.com/maps/search/${q}`;
+}
+
+// --- Location page: "Showing" scan dates ---
+
+/** YYYY-MM-DD in the clinic's time zone. */
+export function dayKey(ts: number, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone }).format(new Date(ts));
+  } catch {
+    return new Date(ts).toISOString().slice(0, 10);
+  }
+}
+
+export interface ScanDateOption {
+  /** YYYY-MM-DD (clinic time). */
+  day: string;
+  ts: number;
+  /** True when any keyword's pinned starting-point scan falls on this day. */
+  startingPoint: boolean;
+}
+
+/** The distinct days any keyword at the location finished a scan, newest first. */
+export function scanDateOptions(headersBySeries: Map<string, RunHeader[]>, timeZone: string): ScanDateOption[] {
+  const byDay = new Map<string, ScanDateOption>();
+  for (const headers of headersBySeries.values()) {
+    for (const h of headers) {
+      if (h.status !== 'done') continue;
+      const day = dayKey(h.ts, timeZone);
+      const current = byDay.get(day) ?? { day, ts: h.ts, startingPoint: false };
+      current.ts = Math.max(current.ts, h.ts);
+      current.startingPoint ||= h.pinned;
+      byDay.set(day, current);
+    }
+  }
+  return [...byDay.values()].sort((a, b) => b.ts - a.ts);
+}
+
+/**
+ * For each keyword, the newest finished scan on or before the chosen day (clinic time) and the one
+ * before it. With no day, the latest scan. Keywords with no scan by then get nulls.
+ */
+export function pickRunsForDay(headersBySeries: Map<string, RunHeader[]>, day: string | null, timeZone: string): Map<string, { current: RunHeader | null; previous: RunHeader | null }> {
+  const out = new Map<string, { current: RunHeader | null; previous: RunHeader | null }>();
+  for (const [seriesId, headers] of headersBySeries) {
+    const done = headers.filter((h) => h.status === 'done').sort((a, b) => b.ts - a.ts);
+    const index = day ? done.findIndex((h) => dayKey(h.ts, timeZone) <= day) : (done.length ? 0 : -1);
+    out.set(seriesId, index < 0 ? { current: null, previous: null } : { current: done[index], previous: done[index + 1] ?? null });
+  }
+  return out;
+}
+
+// --- Keyword page helpers ---
+
+/** One competitor's own ranks across the grid ("View on grid"): rank where they appear, else outside the top 20. */
+export function competitorPoints(points: GridPoint[], key: string): GridPoint[] {
+  return points.map((point) => {
+    if (point.failed) return { ...point, items: [] };
+    const hit = (point.items ?? []).find((item) => competitorKeyOf(item) === key);
+    return { ...point, rank: hit && hit.rank_group <= 20 ? hit.rank_group : null, items: [] };
+  });
+}
+
+export interface PointMove {
+  /** "+2" (moved up two places), "−1", "new" (now in the top 20), "lost" (dropped out), or "". */
+  label: string;
+  tone: DeltaTone;
+}
+
+/** Per-point movement against the compared scan, keyed "row:col". Failed points on either side show nothing. */
+export function pointMoves(current: GridPoint[], compare: GridPoint[] | null): Map<string, PointMove> {
+  const moves = new Map<string, PointMove>();
+  if (!compare) return moves;
+  const before = new Map(compare.map((p) => [`${p.row}:${p.col}`, p]));
+  for (const point of current) {
+    const key = `${point.row}:${point.col}`;
+    const old = before.get(key);
+    if (!old || old.failed || point.failed) continue;
+    const a = old.rank != null && old.rank <= 20 ? old.rank : null;
+    const b = point.rank != null && point.rank <= 20 ? point.rank : null;
+    if (a == null && b == null) continue;
+    if (a == null) moves.set(key, { label: 'new', tone: 'better' });
+    else if (b == null) moves.set(key, { label: 'lost', tone: 'worse' });
+    else if (a !== b) moves.set(key, { label: `${a > b ? '+' : '−'}${Math.abs(a - b)}`, tone: a > b ? 'better' : 'worse' });
+  }
+  return moves;
+}
+
+export interface TrendBar {
+  runId: string;
+  ts: number;
+  pinned: boolean;
+  total: number;
+  top3: number;
+  top4to10: number;
+  top11to20: number;
+  /** Outside the top 20 or no data. */
+  rest: number;
+}
+
+/** Rank buckets per scan for the "Position over time" chart, oldest first. */
+export function trendBars(runs: RunWithPoints[]): TrendBar[] {
+  return [...runs].sort((a, b) => a.ts - b.ts).map((run) => {
+    const k = computeKpis(run.points);
+    return {
+      runId: run.id, ts: run.ts, pinned: run.pinned, total: k.total,
+      top3: k.top3, top4to10: k.top10 - k.top3, top11to20: k.inTop20 - k.top10, rest: k.total - k.inTop20,
+    };
+  });
 }

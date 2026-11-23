@@ -24,6 +24,8 @@ interface Props {
   language?: string;
   /** Called when a Google listing is picked from the search results. */
   onBusinessSelect?: (business: BusinessResult) => void;
+  /** Patch fork: false makes map clicks do nothing (the pin follows the picked listing). Default true. */
+  clickToPlace?: boolean;
 }
 
 interface NominatimResult {
@@ -52,7 +54,10 @@ function calcGridCoords(
   return coords;
 }
 
-export default function MapPicker({ coordinate, onChange, showGrid, gridSize, spacingKm, language, onBusinessSelect }: Props) {
+export default function MapPicker({ coordinate, onChange, showGrid, gridSize, spacingKm, language, onBusinessSelect, clickToPlace = true }: Props) {
+  // The click handler is registered once, so it reads the latest setting from a ref.
+  const clickToPlaceRef = useRef(clickToPlace);
+  useEffect(() => { clickToPlaceRef.current = clickToPlace; }, [clickToPlace]);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import('leaflet').Map | null>(null);
   const markerRef = useRef<import('leaflet').Marker | null>(null);
@@ -63,6 +68,8 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
   const [geocoding, setGeocodng] = useState(false);
   const [geoError, setGeoError] = useState('');
   const [businesses, setBusinesses] = useState<BusinessResult[]>([]);
+  // Patch fork: the map loads asynchronously; a center set before it's ready is drawn once it is.
+  const [mapReady, setMapReady] = useState(false);
 
   const mapHeight = expanded ? 420 : 260;
 
@@ -89,6 +96,7 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
       const map = L.map(containerRef.current!).setView([defaultLat, defaultLng], coordinate ? 12 : 4);
       mapRef.current = map;
       gridLayerRef.current = L.layerGroup().addTo(map);
+      setMapReady(true);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -100,6 +108,7 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
       }
 
       map.on('click', (e) => {
+        if (!clickToPlaceRef.current) return;
         const { lat, lng } = e.latlng;
         const rounded = `${lat.toFixed(6)},${lng.toFixed(6)}`;
         if (markerRef.current) {
@@ -144,7 +153,7 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
       }
       mapRef.current.setView([lat, lng], mapRef.current.getZoom());
     });
-  }, [coordinate]);
+  }, [coordinate, mapReady]);
 
   // ── Draw grid overlay ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -179,7 +188,7 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
         setExpanded(true);
       }
     });
-  }, [showGrid, coordinate, gridSize, spacingKm]);
+  }, [showGrid, coordinate, gridSize, spacingKm, mapReady]);
 
   // ── Business / address search ──────────────────────────────────────────────
   // Search Google Maps (DataForSEO) first so a business can be picked by name and
