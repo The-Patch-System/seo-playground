@@ -1,6 +1,6 @@
 // Patch fork: organic-only ranks, dedupe, provenance and the truncated/rank_unresolved flags.
 import { describe, it, expect } from 'vitest';
-import { buildGridPoint, failedGridPoint, GRID_DEPTH, GRID_ORGANIC_KEEP, type RawLocalItem } from './grid-point-builder';
+import { buildGridPoint, classifyRawItems, failedGridPoint, GRID_DEPTH, GRID_ORGANIC_KEEP, type RawLocalItem } from './grid-point-builder';
 import { loadDfsFixture } from './__fixtures__/dfs/load';
 
 const coord = { row: 2, col: 3, lat: 34.058457, lng: -118.144055 };
@@ -156,5 +156,30 @@ describe('failedGridPoint', () => {
     expect(failedGridPoint(coord, 'task_error')).toEqual({
       row: 2, col: 3, lat: coord.lat, lng: coord.lng, rank: null, items: [], failed: true, failed_reason: 'task_error',
     });
+  });
+});
+
+// Patch fork (Codex r4 #1): items with no usable organic listing must not become a clean "not found".
+describe('classifyRawItems', () => {
+  it('treats items: [] as a real zero-result search', () => {
+    expect(classifyRawItems([])).toBe('empty');
+  });
+
+  it('accepts organic-only and mixed ads + organic results', () => {
+    expect(classifyRawItems([organic(1, 'a'), organic(2, 'b')])).toBe('ok');
+    expect(classifyRawItems([ad(1, 'x'), organic(2, 'a')])).toBe('ok');
+  });
+
+  it('flags a result where every local-pack listing is an ad', () => {
+    expect(classifyRawItems([ad(1, 'x'), ad(2, 'y')])).toBe('ads_only');
+  });
+
+  it('flags items with no local_pack listing as malformed', () => {
+    expect(classifyRawItems([{ type: 'maps_paid_item', rank_group: 1 }])).toBe('malformed');
+  });
+
+  it('flags a local_pack listing without a numeric rank_group as malformed', () => {
+    expect(classifyRawItems([organic(1, 'a'), { ...organic(2, 'b'), rank_group: null as unknown as number }])).toBe('malformed');
+    expect(classifyRawItems([{ ...organic(1, 'a'), rank_group: '1' as unknown as number }])).toBe('malformed');
   });
 });

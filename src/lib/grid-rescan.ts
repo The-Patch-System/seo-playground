@@ -716,6 +716,13 @@ async function collectOne(projectId: string, rescan: RescanRow, auth: string, co
   if (!stillScanning) return;
   const results = [...collected, ...step.ready];
   saveTaskPoints(projectId, run.id, rescan.attempt, step.pending, results);
+  // Patch fork: the hold rules already count these failed points (too_many_failed); this only raises them.
+  if (step.adsOnlyFailed.length > 0) {
+    void notifyGridAlert({
+      kind: 'ads_only_persistent', reason: 'ads_only_twice', project_id: projectId, run_id: run.id, monitor_id: run.series_id,
+      detail: { attempt: rescan.attempt, points: step.adsOnlyFailed.map((p) => ({ row: p.row, col: p.col, task_id: p.task_id })) },
+    });
+  }
   if (step.unknown > 0) {
     if (hold(projectId, run.id, rescan.attempt, 'post_unknown')) counters.held += 1;
     else alertUnheldUnknown(projectId, run, rescan.attempt);

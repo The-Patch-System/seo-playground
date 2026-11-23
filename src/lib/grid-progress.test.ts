@@ -197,6 +197,92 @@ describe('collectGridProgress wrong-city and error retries', () => {
     expect(progress().pendingTasks[0].rechecks).toEqual([{ task_id: 'p1', check_url: 'u', reason: 'task_error' }]);
   });
 
+  // Patch fork (Codex r4 #1): items with no usable organic listing are re-posted, not stored as "not found".
+  const itemsBody = (id: string, items: unknown[]) => ({ tasks: [{ id, status_code: 20000, result: [{ check_url: `u-${id}`, items }] }] });
+  const adItem = (n: number) => ({ type: 'local_pack', rank_group: n, title: `Ad ${n}`, cid: `ad${n}`, is_paid: true });
+  const adsOnly = (id: string) => itemsBody(id, [adItem(1), adItem(2)]);
+  const alertsFrom = (logged: string[]) => logged.filter((l) => l.startsWith('[geo-grid-alert]')).map((l) => JSON.parse(l.slice('[geo-grid-alert] '.length)));
+
+  it('re-posts malformed items at once and fails the point as task_error after 3 searches', async () => {
+    saveGridSearchPendingForProject('default', kgEntry, [task()]);
+    const malformed = (id: string) => itemsBody(id, [{ type: 'local_pack', rank_group: null, title: 'X' }]);
+    const dfs = stubDfs({ p1: malformed('p1'), 'new-1': itemsBody('new-1', [{ type: 'maps_search', rank_group: 1 }]), 'new-2': malformed('new-2') });
+    vi.setSystemTime(t0 + MIN);
+    await collect();
+    expect(dfs.posts).toHaveLength(1);
+    expect(progress().pendingTasks[0]).toMatchObject({ task_id: 'new-1', attempts: 2, rechecks: [{ task_id: 'p1', reason: 'task_error' }] });
+    vi.setSystemTime(t0 + 2 * MIN);
+    await collect();
+    expect(dfs.posts).toHaveLength(2);
+    vi.setSystemTime(t0 + 3 * MIN);
+    expect((await collect()).status).toBe('done');
+    expect(dfs.posts).toHaveLength(2);
+    const [point] = progress().results;
+    expect(point).toMatchObject({ rank: null, items: [], failed: true, failed_reason: 'task_error', task_id: 'new-2' });
+    expect(point.rechecks!.map((r) => r.reason)).toEqual(['task_error', 'task_error', 'task_error']);
+  });
+
+  it('retries an ads-only point once after 5 min and keeps an organic second answer', async () => {
+    saveGridSearchPendingForProject('default', kgEntry, [task()]);
+    const dfs = stubDfs({ p1: adsOnly('p1'), 'new-1': withTaskId(good, 'new-1') });
+    vi.setSystemTime(t0 + MIN);
+    await collect();
+    expect(dfs.posts).toHaveLength(0);
+    expect(progress().pendingTasks[0]).toMatchObject({ task_id: 'p1', awaiting_retry: true, retry_due_at: t0 + 5 * MIN });
+    expect(progress().pendingTasks[0].rechecks).toEqual([{ task_id: 'p1', check_url: 'u-p1', reason: 'ads_only' }]);
+    vi.setSystemTime(t0 + 5 * MIN);
+    await collect();
+    expect(dfs.posts).toHaveLength(1);
+    vi.setSystemTime(t0 + 6 * MIN);
+    expect((await collect()).status).toBe('done');
+    const [point] = progress().results;
+    expect(point).toMatchObject({ rank: 2, task_id: 'new-1', rechecks: [{ task_id: 'p1', reason: 'ads_only' }] });
+    expect(point.failed).toBeUndefined();
+  });
+
+  it('fails a point that is ads-only twice after 2 searches, as task_error, and alerts', async () => {
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { logged.push(args.map(String).join(' ')); });
+    saveGridSearchPendingForProject('default', kgEntry, [task()]);
+    const dfs = stubDfs({ p1: adsOnly('p1'), 'new-1': adsOnly('new-1') });
+    vi.setSystemTime(t0 + MIN);
+    await collect();
+    vi.setSystemTime(t0 + 5 * MIN);
+    await collect();
+    vi.setSystemTime(t0 + 6 * MIN);
+    expect((await collect()).status).toBe('done');
+    spy.mockRestore();
+    expect(dfs.posts).toHaveLength(1);
+    const [point] = progress().results;
+    expect(point).toMatchObject({ rank: null, items: [], failed: true, failed_reason: 'task_error', task_id: 'new-1', check_url: 'u-new-1' });
+    expect(point.rechecks!.map((r) => [r.task_id, r.reason])).toEqual([['p1', 'ads_only'], ['new-1', 'ads_only']]);
+    expect(alertsFrom(logged).filter((a) => a.kind === 'ads_only_persistent')).toEqual([expect.objectContaining({
+      reason: 'ads_only_twice', project_id: 'default', run_id: 'run-kg', monitor_id: 'grid-kg',
+      detail: { points: [{ row: 0, col: 0, task_id: 'new-1' }] },
+    })]);
+  });
+
+  it('carries on with the normal wrong-city flow after an ads-only first answer', async () => {
+    saveGridSearchPendingForProject('default', kgEntry, [task()]);
+    const dfs = stubDfs({ p1: adsOnly('p1'), 'new-1': withTaskId(bad, 'new-1'), 'new-2': withTaskId(good, 'new-2') });
+    vi.setSystemTime(t0 + MIN);
+    await collect();
+    vi.setSystemTime(t0 + 5 * MIN);
+    await collect();
+    vi.setSystemTime(t0 + 6 * MIN);
+    await collect();
+    // The 2nd search came back wrong-city: the 3rd waits 30 min after it, like any wrong-city 2nd answer.
+    expect(progress().pendingTasks[0]).toMatchObject({ task_id: 'new-1', awaiting_retry: true, retry_due_at: t0 + 35 * MIN });
+    vi.setSystemTime(t0 + 35 * MIN);
+    await collect();
+    expect(dfs.posts).toHaveLength(2);
+    vi.setSystemTime(t0 + 36 * MIN);
+    expect((await collect()).status).toBe('done');
+    const [point] = progress().results;
+    expect(point).toMatchObject({ rank: 2, task_id: 'new-2' });
+    expect(point.rechecks!.map((r) => r.reason)).toEqual(['ads_only', 'wrong_city']);
+  });
+
   it('waits on a pending task for 30 min, then re-posts it as a timeout', async () => {
     saveGridSearchPendingForProject('default', kgEntry, [task()]);
     const dfs = stubDfs({ p1: 40602 });
@@ -475,6 +561,39 @@ describe('fetchOneGridPoint (live path)', () => {
     expect(point).toMatchObject({ failed: true, failed_reason: 'wrong_city', task_id: 'live-3', rank: null, items: [] });
     expect(point.rechecks!.map((r) => r.task_id)).toEqual(['live-1', 'live-2', 'live-3']);
     expect(cost).toBe(0);
+  });
+
+  it('treats items with no local_pack listing as an error (retried once), not an empty point', async () => {
+    const malformed = (id: string) => ({ tasks: [{ id, status_code: 20000, result: [{ check_url: 'u', items: [{ type: 'maps_search', rank_group: 1 }] }] }] });
+    const sent = stubLive([malformed('m1'), malformed('m2')]);
+    const { point } = await fetchOneGridPoint(bad.keyword, coord, 'English', 'auth', '');
+    expect(sent).toHaveLength(2);
+    expect(point).toMatchObject({ failed: true, failed_reason: 'task_error', task_id: 'm2' });
+  });
+
+  const adsOnlyLive = (id: string) => ({ tasks: [{ id, status_code: 20000, result: [{ check_url: `u-${id}`, items: [{ type: 'local_pack', rank_group: 1, title: 'Ad', cid: 'ad1', is_paid: true }] }] }] });
+
+  it('re-requests an ads-only result once and keeps an organic second answer', async () => {
+    const sent = stubLive([adsOnlyLive('a1'), withTaskId(good, 'a2')]);
+    const { point } = await fetchOneGridPoint(bad.keyword, coord, 'English', 'auth', '');
+    expect(sent).toHaveLength(2);
+    expect(point).toMatchObject({ task_id: 'a2', rank: null, rechecks: [{ task_id: 'a1', reason: 'ads_only' }] });
+    expect(point.failed).toBeUndefined();
+  });
+
+  it('fails a point that is ads-only twice as task_error and alerts', async () => {
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { logged.push(args.map(String).join(' ')); });
+    const sent = stubLive([adsOnlyLive('a1'), adsOnlyLive('a2'), withTaskId(good, 'never')]);
+    const { point } = await fetchOneGridPoint(bad.keyword, coord, 'English', 'auth', '', 'grid-x');
+    spy.mockRestore();
+    expect(sent).toHaveLength(2);
+    expect(point).toMatchObject({ failed: true, failed_reason: 'task_error', task_id: 'a2', check_url: 'u-a2', rank: null, items: [] });
+    expect(point.rechecks!.map((r) => r.reason)).toEqual(['ads_only', 'ads_only']);
+    const alerts = logged.filter((l) => l.startsWith('[geo-grid-alert]')).map((l) => JSON.parse(l.slice('[geo-grid-alert] '.length)));
+    expect(alerts).toEqual([expect.objectContaining({
+      kind: 'ads_only_persistent', detail: { keyword: bad.keyword, row: 1, col: 2, tag: 'grid-x|r1c2', task_id: 'a2' },
+    })]);
   });
 
   it('treats a 20000 task with no result object as an error, not an empty point', async () => {

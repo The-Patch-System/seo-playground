@@ -3,7 +3,7 @@ import {
   type GridPoint, type GridRecheck, type GridSearchEntry, type GridTaskPoint,
 } from '@/lib/db';
 import { dataForSeoBaseUrl, gridTaskTag, MAX_POINT_ATTEMPTS, repostGridPoint } from '@/app/dashboard/local-finder/grid-api';
-import { buildGridPoint, failedGridPoint, type BuiltPoint, type RawLocalItem } from '@/lib/grid-point-builder';
+import { buildGridPoint, classifyRawItems, failedGridPoint, type BuiltPoint, type RawLocalItem } from '@/lib/grid-point-builder';
 import { notifyGridAlert } from '@/lib/grid-alerts';
 import { computedSafety } from '@/lib/grid-safety';
 
@@ -28,9 +28,11 @@ export const MAX_POST_FAILURES = 3;
 
 /**
  * Patch fork: wrong-city results came in bursts lasting minutes on Nov 15, so a wrong-city point's
- * 2nd search is 5 min after its 1st and the 3rd is 30 min after the 2nd. Task errors re-post at once.
+ * 2nd search is 5 min after its 1st and the 3rd is 30 min after the 2nd. An ads-only point's one
+ * retry also waits 5 min (cause unknown; waiting costs nothing). Task errors re-post at once.
  */
 export function retryDelayMs(reason: GridRecheck['reason'], postsSoFar: number): number {
+  if (reason === 'ads_only') return 5 * 60_000;
   if (reason !== 'wrong_city') return 0;
   return postsSoFar <= 1 ? 5 * 60_000 : 30 * 60_000;
 }
@@ -57,7 +59,8 @@ export type GridTaskCheck =
  * Patch fork: fetches one queued task and classifies it. Shared by scheduled runs and re-scans.
  * - pending: not finished yet (or the fetch failed; tried again next pass)
  * - ready: a usable, location-checked point
- * - bad: wrong-city result, task error, malformed result or pending too long; the caller re-posts or fails it
+ * - bad: wrong-city result, task error, malformed result, ads-only result or pending too long; the caller
+ *   re-posts or fails it
  */
 export async function checkGridTask(
   task: GridTaskPoint, ctx: { auth: string; target: string; now: number },
@@ -83,6 +86,14 @@ export async function checkGridTask(
     if (dfsTask.status_code !== 20000 || !result || !Array.isArray(result.items)) {
       return { kind: 'bad', recheck: { task_id: task.task_id, check_url: result?.check_url, reason: 'task_error' } };
     }
+    // Patch fork: items with no usable organic listing are not a "not found" either.
+    const itemsClass = classifyRawItems(result.items);
+    if (itemsClass === 'malformed') {
+      return { kind: 'bad', recheck: { task_id: task.task_id, check_url: result.check_url, reason: 'task_error' } };
+    }
+    if (itemsClass === 'ads_only') {
+      return { kind: 'bad', recheck: { task_id: task.task_id, check_url: result.check_url, reason: 'ads_only' } };
+    }
     const built = buildGridPoint(task, result.items, ctx.target, { task_id: task.task_id, check_url: result.check_url });
     if (built.location.wrongCity) {
       return { kind: 'bad', recheck: { task_id: task.task_id, check_url: result.check_url, reason: 'wrong_city', far: built.location.far } };
@@ -102,9 +113,10 @@ export function pointFromReady(task: GridTaskPoint, built: BuiltPoint): GridPoin
   return task.rechecks?.length ? { ...built.point, rechecks: task.rechecks } : built.point;
 }
 
-export function failedPointFromTask(task: GridTaskPoint, reason: NonNullable<GridPoint['failed_reason']>): GridPoint {
+export function failedPointFromTask(task: GridTaskPoint, reason: GridRecheck['reason']): GridPoint {
   const last = task.rechecks?.[task.rechecks.length - 1];
-  return failedGridPoint(task, reason, { task_id: last?.task_id ?? task.task_id, check_url: last?.check_url, rechecks: task.rechecks });
+  // Patch fork: an ads-only point fails as task_error, so the Reporting API and UI need no new reason.
+  return failedGridPoint(task, reason === 'ads_only' ? 'task_error' : reason, { task_id: last?.task_id ?? task.task_id, check_url: last?.check_url, rechecks: task.rechecks });
 }
 
 export type RepostOutcome =
@@ -123,12 +135,15 @@ export type RepostOutcome =
  * - still pending (task in flight, or waiting for its retry time),
  * - re-posted (wrong-city / error / timeout, while it has searches left: MAX_POINT_ATTEMPTS in all),
  * - a ready point, or a failed point (searches or re-post attempts used up).
+ * An ads-only result gets one retry: a second ads-only result (or one with no searches left) fails the
+ * point at once, and it is listed in adsOnlyFailed so the caller can alert.
  */
 export async function stepGridTasks(
   tasks: GridTaskPoint[], checks: Map<GridTaskPoint, GridTaskCheck>, now: number,
   repost: (task: GridTaskPoint) => Promise<RepostOutcome>,
-): Promise<{ ready: GridPoint[]; pending: GridTaskPoint[]; budgetExhausted: boolean; unknown: number }> {
+): Promise<{ ready: GridPoint[]; pending: GridTaskPoint[]; budgetExhausted: boolean; unknown: number; adsOnlyFailed: GridPoint[] }> {
   const ready: GridPoint[] = [];
+  const adsOnlyFailed: GridPoint[] = [];
   const pending: GridTaskPoint[] = [];
   let budgetExhausted = false;
   let stopped = false;
@@ -151,6 +166,12 @@ export async function stepGridTasks(
     if (check?.kind === 'bad') {
       const posts = task.attempts ?? 1;
       const rechecks = [...(task.rechecks ?? []), check.recheck];
+      if (check.recheck.reason === 'ads_only' && (posts >= MAX_POINT_ATTEMPTS || task.rechecks?.some((r) => r.reason === 'ads_only'))) {
+        const failed = failedPointFromTask({ ...task, rechecks }, 'ads_only');
+        ready.push(failed);
+        adsOnlyFailed.push(failed);
+        continue;
+      }
       if (posts >= MAX_POINT_ATTEMPTS) {
         ready.push(failedPointFromTask({ ...task, rechecks }, check.recheck.reason));
         continue;
@@ -199,7 +220,7 @@ export async function stepGridTasks(
       ...(task.seq !== undefined ? { seq: task.seq + 1 } : {}),
     });
   }
-  return { ready, pending, budgetExhausted, unknown };
+  return { ready, pending, budgetExhausted, unknown, adsOnlyFailed };
 }
 
 const inFlightCollections = new Map<string, Promise<{ status: 'done' | 'pending'; ready: number; total: number }>>();
@@ -233,7 +254,7 @@ async function collectGridProgressOnce(
   const priority = entry.queue_mode === 'priority' ? 'priority' : 'standard';
   const toCheck = progress.pendingTasks.filter((task) => !task.awaiting_retry && task.task_id);
   const checks = await checkGridTasks(toCheck, { auth, target: entry.target, now });
-  const { ready: readyPoints, pending: pendingTasks } = await stepGridTasks(
+  const { ready: readyPoints, pending: pendingTasks, adsOnlyFailed } = await stepGridTasks(
     progress.pendingTasks, new Map(toCheck.map((task, index) => [task, checks[index]])), now,
     async (task) => {
       const tag = gridTaskTag(entry.series_id || entry.id, task.row, task.col);
@@ -253,6 +274,12 @@ async function collectGridProgressOnce(
 
   const accumulated = [...progress.results, ...readyPoints];
   updateGridProgressForProject(projectId, entry.id, accumulated, pendingTasks);
+  if (adsOnlyFailed.length > 0) {
+    void notifyGridAlert({
+      kind: 'ads_only_persistent', reason: 'ads_only_twice', project_id: projectId, run_id: entry.id, monitor_id: entry.series_id,
+      detail: { points: adsOnlyFailed.map((p) => ({ row: p.row, col: p.col, task_id: p.task_id })) },
+    });
+  }
   if (pendingTasks.length === 0) {
     // Patch fork: a finished run whose numbers aren't safe to report is raised, not just flagged.
     const safety = computedSafety(accumulated, entry.grid_size);

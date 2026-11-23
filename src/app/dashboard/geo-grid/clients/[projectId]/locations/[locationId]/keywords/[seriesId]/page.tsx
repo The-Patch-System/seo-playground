@@ -494,7 +494,7 @@ function KpiRow({ kpis, total }: { kpis: KpiComparison; total: number }) {
           </dd>
         </div>
       ))}
-      {k.failed > 0 && <p className="col-span-full text-xs text-slate-500">{k.failed} point{k.failed === 1 ? '' : 's'} had no data from Google on this scan (shown as —).</p>}
+      {k.noData > 0 && <p className="col-span-full text-xs text-slate-500">{k.noData} point{k.noData === 1 ? '' : 's'} had no usable data on this scan (shown as —).</p>}
     </dl>
   );
 }

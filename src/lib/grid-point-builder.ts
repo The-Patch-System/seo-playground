@@ -23,6 +23,25 @@ export interface RawLocalItem {
   rating?: { value?: number; votes_count?: number } | null;
 }
 
+export type RawItemsClass = 'ok' | 'empty' | 'malformed' | 'ads_only';
+
+/**
+ * Patch fork: whether a task's raw items can be ranked. Checked before buildGridPoint, because a
+ * result with no usable organic listing would otherwise be stored as a clean "not found".
+ * - empty: items: [], a real zero-result search
+ * - malformed: no local_pack item, or a local_pack item without a numeric rank_group (strict on
+ *   purpose: unknown data must not read as "not found")
+ * - ads_only: every local_pack item is an ad, so Google's organic results were never seen
+ */
+export function classifyRawItems(items: RawLocalItem[]): RawItemsClass {
+  if (items.length === 0) return 'empty';
+  const local = items.filter((item) => item?.type === 'local_pack');
+  if (local.length === 0) return 'malformed';
+  if (local.some((item) => typeof item.rank_group !== 'number' || !Number.isFinite(item.rank_group))) return 'malformed';
+  if (local.every((item) => item.is_paid)) return 'ads_only';
+  return 'ok';
+}
+
 export interface BuiltPoint {
   point: GridPoint;
   location: LocationCheck;

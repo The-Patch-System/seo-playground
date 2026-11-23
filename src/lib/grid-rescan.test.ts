@@ -34,7 +34,7 @@ const freshDay = () => { setNow(clock + DAY); return clock; };
 
 // --- Stubbed DataForSEO ------------------------------------------------------------------------------
 
-type Reply = 'bad' | 'good' | 'error' | 'pending';
+type Reply = 'bad' | 'good' | 'error' | 'pending' | 'ads';
 let reply: (tag: string) => Reply = () => 'good';
 let postMode: 'ok' | 'throw' | 'http500' | 'http400' | 'missing' = 'ok';
 let postCalls = 0;
@@ -65,6 +65,9 @@ function stubDataForSeo() {
     if (kind === 'bad') return new Response(JSON.stringify(withTaskId(bad, id)));
     if (kind === 'good') return new Response(JSON.stringify(withTaskId(good, id)));
     if (kind === 'pending') return new Response(JSON.stringify({ tasks: [{ id, status_code: 40602 }] }));
+    if (kind === 'ads') {
+      return new Response(JSON.stringify({ tasks: [{ id, status_code: 20000, result: [{ check_url: 'u-ads', items: [{ type: 'local_pack', rank_group: 1, title: 'Ad', cid: 'ad1', is_paid: true }] }] }] }));
+    }
     return new Response(JSON.stringify({ tasks: [{ id, status_code: 20000, result: null }] }));
   }));
 }
@@ -400,6 +403,39 @@ describe('re-scan worker', () => {
     for (let i = 1; i <= 3; i++) { setNow(t + i * MIN); await pass(); }
     expect(rescanRow('default', 'run-two-errors')!.state).toBe('swapped');
     expect(safetyOf('default', 'run-two-errors')).toEqual({ report_safe: true, reason: null });
+  });
+
+  // Patch fork (Codex r4 #1): an ads-only point gets one retry, then fails and is raised.
+  it('fails a point that is ads-only twice, alerts, and still swaps a run with 2 or fewer failed points', async () => {
+    const t = freshDay();
+    seedRun('default', 'run-ads', { size: 2 });
+    reply = (tag) => (tag.includes(':r1c1:') ? 'ads' : 'good');
+    const { alerts, restore } = captureAlerts();
+    try {
+      queue(['run-ads']);
+      await pass();
+      setNow(t + MIN);
+      await pass();
+      // One retry, 5 min after the first search.
+      expect(postedTags.filter((tag) => tag.startsWith('rs:run-ads:a1:r1c1:'))).toHaveLength(1);
+      setNow(t + 5 * MIN);
+      await pass();
+      expect(postedTags.filter((tag) => tag.startsWith('rs:run-ads:a1:r1c1:'))).toHaveLength(2);
+      setNow(t + 6 * MIN);
+      expect(await pass()).toMatchObject({ swapped: 1 });
+    } finally {
+      restore();
+    }
+    expect(postedTags.filter((tag) => tag.startsWith('rs:run-ads:'))).toHaveLength(5);
+    const points = JSON.parse(runJson('default', 'run-ads')!.results) as GridPoint[];
+    const failed = points.find((p) => p.row === 1 && p.col === 1)!;
+    expect(failed).toMatchObject({ failed: true, failed_reason: 'task_error', rank: null, task_id: 'id-rs:run-ads:a1:r1c1:s2' });
+    expect(failed.rechecks!.map((r) => r.reason)).toEqual(['ads_only', 'ads_only']);
+    expect(safetyOf('default', 'run-ads')).toEqual({ report_safe: true, reason: null });
+    expect(alerts.filter((a) => a.kind === 'ads_only_persistent')).toEqual([expect.objectContaining({
+      reason: 'ads_only_twice', run_id: 'run-ads', monitor_id: 'grid-run-ads',
+      detail: { attempt: 1, points: [{ row: 1, col: 1, task_id: 'id-rs:run-ads:a1:r1c1:s2' }] },
+    })]);
   });
 
   it('cancel stops a queued run, and only active runs can be cancelled', () => {

@@ -1,5 +1,6 @@
 import type { GridPoint, GridRecheck, GridTaskPoint } from '@/lib/db';
-import { buildGridPoint, failedGridPoint, GRID_DEPTH, type RawLocalItem } from '@/lib/grid-point-builder';
+import { buildGridPoint, classifyRawItems, failedGridPoint, GRID_DEPTH, type RawLocalItem } from '@/lib/grid-point-builder';
+import { notifyGridAlert } from '@/lib/grid-alerts';
 
 /** Patch fork: a point is posted at most this many times (initial + re-posts) before it is marked failed. */
 export const MAX_POINT_ATTEMPTS = 3;
@@ -101,13 +102,18 @@ async function requestGridPoint(
   if (!result || !Array.isArray(result.items)) {
     return { items: [], cost: task.cost ?? 0, taskId: task.id, error: 'malformed result' };
   }
+  // Patch fork: items with no local_pack listing, or one without a numeric rank_group, are malformed too.
+  if (classifyRawItems(result.items) === 'malformed') {
+    return { items: [], cost: task.cost ?? 0, taskId: task.id, checkUrl: result.check_url, error: 'malformed result' };
+  }
   return { items: result.items, cost: task.cost ?? 0, taskId: task.id, checkUrl: result.check_url };
 }
 
 /**
- * Patch fork: fetches one point live. An errored request is retried once (as before); a wrong-city
- * result is re-requested, up to MAX_POINT_ATTEMPTS requests in all, and then stored as failed so it
- * never shows as ranks.
+ * Patch fork: fetches one point live. An errored (or malformed) request is retried once (as before); a
+ * wrong-city result is re-requested, up to MAX_POINT_ATTEMPTS requests in all, and then stored as failed
+ * so it never shows as ranks. An ads-only result is re-requested once; a second one fails the point as
+ * task_error and raises an ads_only_persistent alert.
  */
 export async function fetchOneGridPoint(
   keyword: string, coord: { row: number; col: number; lat: number; lng: number }, language: string, auth: string,
@@ -127,8 +133,22 @@ export async function fetchOneGridPoint(
     }
     if (result.error) {
       lastError = true;
-      if (result.taskId) rechecks.push({ task_id: result.taskId, reason: 'task_error' });
+      if (result.taskId) rechecks.push({ task_id: result.taskId, check_url: result.checkUrl, reason: 'task_error' });
       break;
+    }
+    if (classifyRawItems(result.items) === 'ads_only') {
+      const repeated = rechecks.some((r) => r.reason === 'ads_only');
+      rechecks.push({ task_id: result.taskId ?? '', check_url: result.checkUrl, reason: 'ads_only' });
+      if (repeated || attempt === MAX_POINT_ATTEMPTS) {
+        // A live scan has no run id: the keyword in the reason keeps the Slack dedupe to one per keyword.
+        void notifyGridAlert({
+          kind: 'ads_only_persistent', reason: `ads_only_twice (live scan: "${keyword}")`,
+          detail: { keyword, row: coord.row, col: coord.col, tag, task_id: result.taskId },
+        });
+        lastError = true;
+        break;
+      }
+      continue;
     }
     const built = buildGridPoint(coord, result.items, target, { task_id: result.taskId, check_url: result.checkUrl });
     if (!built.location.wrongCity) {
@@ -136,7 +156,8 @@ export async function fetchOneGridPoint(
     }
     rechecks.push({ task_id: result.taskId ?? '', check_url: result.checkUrl, reason: 'wrong_city', far: built.location.far });
   }
-  // Patch fork: a point that still errored or stayed wrong-city has no data, which is not "not in the top 20".
+  // Patch fork: a point that still errored, stayed wrong-city or stayed ads-only has no data, which is not
+  // "not in the top 20". Ads-only fails as task_error so the Reporting API and UI need no new reason.
   const last = rechecks[rechecks.length - 1];
   return {
     point: failedGridPoint(coord, lastError ? 'task_error' : 'wrong_city', { task_id: last?.task_id || undefined, check_url: last?.check_url, rechecks }),

@@ -26,7 +26,12 @@ export type GridAlertKind =
   /** A scheduled run's single-point re-post got an unclear answer (may be billed twice; capped at 3 attempts). */
   | 'scheduled_repost_unclear'
   /** A re-scan POST got an unclear answer, but the run could not be held (a cancel or retry won the race). */
-  | 'rescan_post_unknown_unheld';
+  | 'rescan_post_unknown_unheld'
+  /**
+   * A point came back ads-only (every local-pack listing an ad) on its search and its one retry, so it
+   * failed as task_error and is left out of MRT. detail lists the points (row, col, task_id).
+   */
+  | 'ads_only_persistent';
 
 export interface GridAlert {
   kind: GridAlertKind;

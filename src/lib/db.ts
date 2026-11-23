@@ -1878,7 +1878,8 @@ export interface GridTaskPoint {
 export interface GridRecheck {
   task_id: string;
   check_url?: string;
-  reason: 'wrong_city' | 'task_error' | 'timeout';
+  /** ads_only: every local-pack listing was an ad (one retry, then the point fails as task_error). */
+  reason: 'wrong_city' | 'task_error' | 'timeout' | 'ads_only';
   far?: Array<{ rank: number; title?: string; place: string; km: number; method: 'place' | 'state' }>;
 }
 
