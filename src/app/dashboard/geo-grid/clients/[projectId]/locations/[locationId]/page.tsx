@@ -18,6 +18,9 @@ import MiniGrid from '../../../../_components/MiniGrid';
 import RankLegend from '../../../../_components/RankLegend';
 import NavSelect from '../../../../_components/NavSelect';
 import { CLIENTS_URL, clientUrl, keywordUrl, locationUrl } from '../../../../_components/routes';
+import { AddKeywordButton, LocationSettingsButton, RunNowButton } from '../../../../_components/Actions';
+import { addKeywordSummary, locationSettingsProps } from '../../../../_components/settings-props';
+import { DEMO_PROJECT_ID } from '@/lib/grid-locations-db';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,7 +105,8 @@ export default async function LocationPage({ params, searchParams }: { params: P
   const schedule = sharedSchedule(location.monitors);
   const { lines: rivals, top: topBySeries } = locationCompetitors(location, current);
   const anyListings = rivals.length > 0;
-  const anyScanning = location.monitors.some((m) => m.pendingRun);
+  // Also refresh while a just-added or Run-now scan waits for the worker (about a minute).
+  const anyScanning = location.monitors.some((m) => m.pendingRun || (m.schedule != null && m.schedule.next_run_at <= Date.now() + 60_000));
   const latestDay = options[0]?.day;
 
   const scanOptions = [
@@ -134,9 +138,14 @@ export default async function LocationPage({ params, searchParams }: { params: P
             <span className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-[13px] font-bold ${schedule.schedule ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300'}`}>
               <i className={`h-2 w-2 rounded-full ${schedule.schedule ? 'bg-emerald-600' : 'bg-amber-500'}`} aria-hidden="true" />
               {schedule.schedule ? describeSchedule(schedule.schedule) : status.status === 'one_time' ? 'One-time scan · not tracked' : 'Not scheduled'}
-              {schedule.nextRunAt != null && ` · Next ${formatScanDate(schedule.nextRunAt, tz)}`}
+              {schedule.nextRunAt != null && (schedule.nextRunAt <= Date.now() + 60_000 ? ' · Scan starting within a minute' : ` · Next ${formatScanDate(schedule.nextRunAt, tz)}`)}
               {(schedule.mixed || (schedule.schedule && schedule.unscheduled > 0)) && ' · Mixed'}
             </span>
+            {schedule.schedule && <RunNowButton projectId={projectId} locationId={locationId} seriesId={null} label="Run all now" />}
+            {schedule.schedule && projectId !== DEMO_PROJECT_ID && (
+              <AddKeywordButton projectId={projectId} locationId={locationId} locationLabel={`Location ${location.number}`} summary={addKeywordSummary(location)} />
+            )}
+            <LocationSettingsButton {...locationSettingsProps(projectId, location)} />
           </div>
         </div>
       </div>
@@ -189,7 +198,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
                   ) : day && monitor.doneRuns > 0 ? (
                     <span>No scan on or before this date.</span>
                   ) : monitor.schedule ? (
-                    <><b className="text-slate-900">Waiting for its first scan</b><span>Next scan {formatScanDate(monitor.schedule.next_run_at, tz)}</span></>
+                    <><b className="text-slate-900">Waiting for its first scan</b><span>{monitor.schedule.next_run_at <= Date.now() + 60_000 ? 'Starting within a minute' : `Next scan ${formatScanDate(monitor.schedule.next_run_at, tz)}`}</span></>
                   ) : (
                     <><b className="text-slate-900">No scans yet</b><span>Not scheduled.</span></>
                   )}

@@ -18,6 +18,8 @@ import DeltaText from '../../../../../../_components/DeltaText';
 import RankLegend from '../../../../../../_components/RankLegend';
 import NavSelect from '../../../../../../_components/NavSelect';
 import KeywordSwitcher from '../../../../../../_components/KeywordSwitcher';
+import { KeywordSettingsButton, RunNowButton } from '../../../../../../_components/Actions';
+import { keywordSettingsProps } from '../../../../../../_components/settings-props';
 import KeywordMap, { type MapPin } from '../../../../../../_components/KeywordMap';
 import { CLIENTS_URL, clientUrl, keywordUrl, locationUrl } from '../../../../../../_components/routes';
 
@@ -126,6 +128,10 @@ export default async function KeywordPage({ params, searchParams }: { params: Pa
   const rings = selected ? computeRings(selected.points, monitor.grid_size, monitor.spacing_km) : [];
   const bars = trendBars(data.runs.filter((run) => run.status === 'done'));
   const pending = monitor.pendingRun;
+  // A scan that is due (just added, or Run now) is claimed by the worker within about a minute.
+  const startingSoon = !pending && monitor.schedule != null && monitor.schedule.next_run_at <= Date.now() + 60_000;
+  // Due for 5+ minutes with nothing running: the worker isn't picking it up, so don't pretend it's starting.
+  const overdue = startingSoon && monitor.schedule!.next_run_at < Date.now() - 5 * 60_000;
   const radiusMi = radiusMiForSpacing(monitor.spacing_km, monitor.grid_size);
   const total = selected?.points.length ?? monitor.grid_size ** 2;
 
@@ -152,7 +158,7 @@ export default async function KeywordPage({ params, searchParams }: { params: Pa
 
   return (
     <div className="flex flex-col gap-4">
-      {pending && <AutoRefresh intervalMs={20000} />}
+      {(pending || startingSoon) && <AutoRefresh intervalMs={20000} />}
 
       <div className="flex flex-col gap-1.5">
         <Breadcrumbs items={[
@@ -185,14 +191,22 @@ export default async function KeywordPage({ params, searchParams }: { params: Pa
             </p>
           </div>
           <span className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-[13px] font-bold ${
-            pending ? 'border-blue-200 bg-blue-50 text-blue-800' : monitor.schedule ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700'}`}>
-            <i className={`h-2 w-2 rounded-full ${pending ? 'bg-blue-600' : monitor.schedule ? 'bg-emerald-600' : 'bg-slate-400'}`} aria-hidden="true" />
+            overdue ? 'border-amber-200 bg-amber-50 text-amber-800' : pending || startingSoon ? 'border-blue-200 bg-blue-50 text-blue-800' : monitor.schedule ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700'}`}>
+            <i className={`h-2 w-2 rounded-full ${overdue ? 'bg-amber-500' : pending || startingSoon ? 'bg-blue-600' : monitor.schedule ? 'bg-emerald-600' : 'bg-slate-400'}`} aria-hidden="true" />
             {pending
               ? `${done.length ? 'Scan' : 'First scan'} running · ${pending.readyPoints}/${pending.totalPoints} points`
-              : monitor.schedule
+              : overdue
+                ? `${done.length ? 'Scan' : 'First scan'} hasn't started yet`
+                : startingSoon
+                ? `${done.length ? 'Scan' : 'First scan'} starting within a minute`
+                : monitor.schedule
                 ? `${describeSchedule(monitor.schedule)} · Next ${formatScanDate(monitor.schedule.next_run_at, tz)}`
                 : 'One-time scan · not tracked'}
           </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {monitor.schedule && <RunNowButton projectId={projectId} locationId={locationId} seriesId={monitor.series_id} label="Run now" />}
+            <KeywordSettingsButton {...keywordSettingsProps(projectId, location, monitor)} />
+          </div>
         </div>
       </div>
 
@@ -212,7 +226,13 @@ export default async function KeywordPage({ params, searchParams }: { params: Pa
           ) : (
             <div className="text-sm text-slate-600">
               <p className="font-black text-slate-900">No scans yet</p>
-              <p className="mt-1">{monitor.schedule ? `The first scan runs ${formatScanDateTime(monitor.schedule.next_run_at, tz)} clinic time.` : 'This keyword is not scheduled.'}</p>
+              <p className="mt-1">
+                {overdue
+                  ? `The first scan was due at ${formatScanDateTime(monitor.schedule!.next_run_at, tz)} clinic time and hasn't started. Scans usually start within a minute, so the scan worker may be down: tell Trazon if this doesn't change in a few minutes.`
+                  : startingSoon
+                  ? 'The first scan starts within a minute, then a progress bar shows here while it runs (usually 5–10 minutes). This page refreshes by itself.'
+                  : monitor.schedule ? `The first scan runs ${formatScanDateTime(monitor.schedule.next_run_at, tz)} clinic time.` : 'This keyword is not scheduled.'}
+              </p>
             </div>
           )
         ) : (
