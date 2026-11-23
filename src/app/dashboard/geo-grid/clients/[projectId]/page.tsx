@@ -8,7 +8,10 @@ import AutoRefresh from '@/components/AutoRefresh';
 import Breadcrumbs from '../../_components/Breadcrumbs';
 import StatusPill from '../../_components/StatusPill';
 import DeltaText from '../../_components/DeltaText';
-import { CLIENTS_URL, keywordUrl, locationUrl } from '../../_components/routes';
+import { CLIENTS_URL, keywordUrl, locationUrl, newLocationUrl } from '../../_components/routes';
+import { BTN_PRIMARY } from '../../_components/Modal';
+import { DEMO_PROJECT_ID } from '@/lib/grid-locations-db';
+import { Plus } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +39,8 @@ export default async function ClientPage({ params }: { params: Params }) {
   const projectId = decodeURIComponent((await params).projectId);
   const { client, locations } = load(projectId);
   const keywordCount = locations.reduce((s, l) => s + l.monitors.length, 0);
-  const anyScanning = locations.some((l) => l.monitors.some((m) => m.pendingRun));
+  // Also refresh while a just-added or Run-now scan waits for the worker (about a minute).
+  const anyScanning = locations.some((l) => l.monitors.some((m) => m.pendingRun || (m.schedule != null && m.schedule.next_run_at <= Date.now() + 60_000)));
 
   return (
     <div className="flex flex-col gap-4">
@@ -50,11 +54,20 @@ export default async function ClientPage({ params }: { params: Params }) {
               {client.domain} · {locations.length} {locations.length === 1 ? 'location' : 'locations'} · {keywordCount} {keywordCount === 1 ? 'keyword' : 'keywords'} tracked
             </p>
           </div>
+          {projectId !== DEMO_PROJECT_ID && locations.length > 0 && (
+            <Link href={newLocationUrl(projectId)} className={BTN_PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" />Add location</Link>
+          )}
         </div>
       </div>
 
       {locations.length === 0 && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600">This client has no Geo-grid locations yet.</section>
+        <section className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+          <p className="text-base font-black text-slate-900">No locations yet</p>
+          <p className="max-w-md text-sm text-slate-600">Add each clinic location you track in Google Maps. Its first scan runs right away and becomes the starting point for reports.</p>
+          {projectId !== DEMO_PROJECT_ID && (
+            <Link href={newLocationUrl(projectId)} className={BTN_PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" />Add the first location</Link>
+          )}
+        </section>
       )}
 
       {locations.map((location) => {

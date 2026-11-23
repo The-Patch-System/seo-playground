@@ -454,7 +454,8 @@ function scanActivity(db: Database.Database, monitor: MonitorInfo, now: number):
   // The worker's claim moves next_run_at forward and stamps updated_at, then spends a few seconds posting
   // before the pending run is saved. A just-created schedule (created_at = updated_at) was never claimed.
   if (schedule && schedule.updated_at !== schedule.created_at && schedule.updated_at > now - RECENT_CLAIM_MS) {
-    return 'A scan may be starting right now. Try again in two minutes.';
+    // A schedule save stamps updated_at too, and the table can't tell the two apart.
+    return 'A scan may be starting, or the schedule was just changed. Try again in two minutes.';
   }
   return null;
 }
@@ -522,7 +523,10 @@ export function updateLocationSchedule(projectId: string, locationId: string, ra
         const timingChanged = row.frequency !== input.frequency || (row.weekday ?? null) !== input.day || row.time_of_day !== input.time_of_day;
         const queueChanged = row.queue_mode !== input.queue_mode;
         if (!timingChanged && !queueChanged) continue;
-        const next = timingChanged
+        // A scan that's already due (a new keyword's first scan, or Run now) stays due: the worker
+        // claims it within a minute and then moves it to the new regular slot.
+        const due = row.next_run_at <= now;
+        const next = timingChanged && !due
           ? nextGridScheduleRun({ frequency: input.frequency, weekday: input.day, time_of_day: input.time_of_day, time_zone: row.time_zone }, now)
           : row.next_run_at;
         update.run(input.queue_mode, input.frequency, input.day, input.time_of_day, next, now, monitor.series_id);

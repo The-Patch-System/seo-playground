@@ -340,6 +340,15 @@ describe('first scan, clients and the sales demo project', () => {
     expect((getDbForProject(p).prepare('SELECT next_run_at FROM grid_schedules WHERE series_id = ?').get(added.series_id) as { next_run_at: number }).next_run_at).toBe(NOW + 60_000);
   });
 
+  it('keeps a due first scan due when the schedule is saved before the worker claims it', () => {
+    const p = project();
+    const created = addLocation(p, { business: { name: 'Early Save', cid: '62' }, center: { lat: 40, lng: -75 }, keywords: ['pt'], spacing_km: 2.0117 }, NOW);
+    const result = updateLocationSchedule(p, created.locationId, { frequency: 'monthly', day: 3, time_of_day: '09:00', queue_mode: 'standard' }, NOW + 10_000);
+    expect(result.updated).toBe(1);
+    const row = getDbForProject(p).prepare('SELECT next_run_at, weekday, time_of_day FROM grid_schedules WHERE series_id = ?').get(created.series_ids[0]);
+    expect(row).toEqual({ next_run_at: NOW, weekday: 3, time_of_day: '09:00' });
+  });
+
   it('never creates or changes a schedule in the sales demo project', () => {
     expect(() => addLocation(DEMO_PROJECT_ID, { business: { name: 'Demo', cid: '61' }, center: { lat: 40, lng: -75 }, keywords: ['pt'], spacing_km: 2 }, NOW)).toThrow(/one-time/);
     expect(() => addKeywordToLocation(DEMO_PROJECT_ID, 'v1-anything', 'pt', NOW)).toThrow(/one-time/);
