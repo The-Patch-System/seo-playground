@@ -1,6 +1,6 @@
 // Patch fork: read a business's Google CID, pin and name from a pasted Google Maps link, so nobody
-// needs a browser extension to find a CID. Works on the full URL from the address bar after opening
-// the listing (maps.app.goo.gl short links have to be opened first; they carry none of this).
+// needs a browser extension to find a CID. Works on the full URL from the address bar, a Google search
+// result's link (ludocid=), and a Share short link (maps.app.goo.gl) once /api/maps-link has expanded it.
 
 export interface MapsLinkInfo {
   cid: string | null;
@@ -14,6 +14,16 @@ export interface MapsLinkInfo {
 function coord(lat: number, lng: number): string | null {
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
   return `${lat.toFixed(6)},${lng.toFixed(6)}`;
+}
+
+/** Share links (maps.app.goo.gl/…, goo.gl/maps/…) carry no CID or pin until they're expanded. */
+export function isShortMapsLink(raw: string): boolean {
+  try {
+    const url = new URL(raw.trim());
+    return url.protocol === 'https:' && (url.hostname === 'maps.app.goo.gl' || (url.hostname === 'goo.gl' && url.pathname.startsWith('/maps')));
+  } catch {
+    return false;
+  }
 }
 
 /** Parses a Google Maps link, a bare CID, or "lat,lng". Returns null when nothing useful is found. */
@@ -30,7 +40,8 @@ export function parseMapsInput(raw: string): MapsLinkInfo | null {
   let decoded = text;
   try { decoded = decodeURIComponent(text); } catch { /* keep the raw text */ }
 
-  let cid: string | null = decoded.match(/[?&]cid=(\d{6,25})/)?.[1] ?? null;
+  // cid= on Maps links, ludocid= on links from Google search results.
+  let cid: string | null = decoded.match(/[?&](?:ludo)?cid=(\d{6,25})/)?.[1] ?? null;
   if (!cid) {
     // The feature ID "0x<hex>:0x<hex>": its second half is the CID in hex.
     const hex = decoded.match(/0x[0-9a-f]+:0x([0-9a-f]+)/i)?.[1];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { milesBetween, parseMapsInput } from './maps-link';
+import { isShortMapsLink, milesBetween, parseMapsInput } from './maps-link';
 
 describe('parseMapsInput', () => {
   it('reads the CID, the pin and the name from a listing URL', () => {
@@ -23,6 +23,30 @@ describe('parseMapsInput', () => {
   it('reads ?cid= links and falls back to the map view center', () => {
     expect(parseMapsInput('https://maps.google.com/?cid=7380112684083592032')).toMatchObject({ cid: '7380112684083592032', center: null });
     expect(parseMapsInput('https://www.google.com/maps/@40.7128,-74.006,14z')).toEqual({ cid: null, center: '40.712800,-74.006000', centerIsPin: false, name: null });
+  });
+
+  it('reads ludocid= links from Google search results', () => {
+    expect(parseMapsInput('https://www.google.com/search?q=the+wellness+track&ludocid=10223171319798353624&lsig=AB86z5W'))
+      .toMatchObject({ cid: '10223171319798353624' });
+  });
+
+  it('reads the full link a Share short link expands to (real redirect, Nov 23 2026)', () => {
+    const expanded = 'https://www.google.com/maps/place/Forge+Physical+Therapy/@33.1530144,-96.894528,17z/data=!3m1!4b1!4m6!3m5!1s0x864c3b047a4f5fe3:0xbd85348c0c116aee!8m2!3d33.1530144!4d-96.8919477!16s%2Fg%2F11n9d6758c?entry=tts&g_ep=EgoyMDI2MDQxOS4wIPu8ASoASAFQAw%3D%3D&skid=768d4f6b-4cb0-4938-8a1d-5f3ed572098c';
+    expect(parseMapsInput(expanded)).toEqual({
+      cid: BigInt('0xbd85348c0c116aee').toString(),
+      center: '33.153014,-96.891948',
+      centerIsPin: true,
+      name: 'Forge Physical Therapy',
+    });
+  });
+
+  it('knows a Share short link needs expanding first', () => {
+    expect(isShortMapsLink('https://maps.app.goo.gl/j6Ebso1fuLAx3usK9')).toBe(true);
+    expect(isShortMapsLink(' https://goo.gl/maps/abc123 ')).toBe(true);
+    expect(isShortMapsLink('https://goo.gl/other')).toBe(false);
+    expect(isShortMapsLink('http://maps.app.goo.gl/abc')).toBe(false);
+    expect(isShortMapsLink('https://www.google.com/maps/place/X')).toBe(false);
+    expect(isShortMapsLink('not a link')).toBe(false);
   });
 
   it('accepts a bare CID or lat,lng and rejects junk', () => {

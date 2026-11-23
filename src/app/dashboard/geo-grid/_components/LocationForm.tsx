@@ -4,7 +4,7 @@ import { lazy, Suspense, useActionState, useEffect, useRef, useState, useTransit
 import type { BusinessResult } from '../../local-finder/MapPicker';
 import type { ActionState } from '../clients/actions';
 import { DEFAULT_GRID_SIZE, DEFAULT_RADIUS_MI, RADIUS_OPTIONS_MI, spacingKmForRadius } from '@/lib/grid-radius';
-import { parseMapsInput } from '@/lib/maps-link';
+import { isShortMapsLink, parseMapsInput } from '@/lib/maps-link';
 import { BTN_PRIMARY, BTN_SECONDARY, FormMessage, INPUT, LABEL } from './Modal';
 import ScheduleFields from './ScheduleFields';
 
@@ -77,11 +77,38 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
     setBusiness(picked); setName(picked.title); setCid(picked.cid ?? ''); setCenter(at);
   }
 
+  /** The link being expanded, so a slow answer for an older paste is ignored. */
+  const expandingLink = useRef<string | null>(null);
+
   function pasteLink(text: string) {
-    if (!text.trim()) { setPasteNote(null); return; }
+    if (!text.trim()) { expandingLink.current = null; setPasteNote(null); return; }
+    // A Share link (maps.app.goo.gl) has no CID or pin in it: the server expands it to the full link first.
+    if (isShortMapsLink(text)) { void expandShareLink(text.trim()); return; }
+    expandingLink.current = null;
+    readLink(text);
+  }
+
+  async function expandShareLink(link: string) {
+    expandingLink.current = link;
+    setPasteNote({ ok: true, text: 'Opening the share link…' });
+    let url: string | null = null;
+    let error = "Couldn't open that share link. Open it in Google Maps and copy the link from the address bar instead.";
+    try {
+      const res = await fetch(`/api/maps-link?url=${encodeURIComponent(link)}`);
+      const data = await res.json() as { url?: string; error?: string };
+      url = data.url ?? null;
+      if (data.error) error = data.error;
+    } catch { url = null; }
+    if (expandingLink.current !== link) return;
+    expandingLink.current = null;
+    if (!url) { setPasteNote({ ok: false, text: error }); return; }
+    readLink(url);
+  }
+
+  function readLink(text: string) {
     const info = parseMapsInput(text);
     if (!info) {
-      setPasteNote({ ok: false, text: "Couldn't read that. Open the listing in Google Maps and copy the full link from the address bar (a maps.app.goo.gl short link has to be opened first)." });
+      setPasteNote({ ok: false, text: "Couldn't read that. Open the listing in Google Maps and copy the full link from the address bar, or its Share link." });
       return;
     }
     setBusiness(null);
@@ -204,7 +231,7 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
                   id="maps_link" placeholder="https://www.google.com/maps/place/…" autoComplete="off" className={INPUT}
                   onChange={(e) => pasteLink(e.target.value)}
                 />
-                <span className="mt-1 block text-[11px] text-slate-500">Open the clinic&apos;s listing on Google Maps, then copy the link from the address bar. It holds the CID and the pin.</span>
+                <span className="mt-1 block text-[11px] text-slate-500">Open the clinic&apos;s listing on Google Maps, then copy the link from the address bar or the Share button. It holds the CID and the pin.</span>
                 {pasteNote && <p className={`mt-1.5 text-xs font-semibold ${pasteNote.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>{pasteNote.text}</p>}
               </div>
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px]">
