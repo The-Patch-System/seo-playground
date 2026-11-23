@@ -4,7 +4,7 @@ import { lazy, Suspense, useActionState, useEffect, useRef, useState, useTransit
 import type { BusinessResult } from '../../local-finder/MapPicker';
 import type { ActionState } from '../clients/actions';
 import { DEFAULT_GRID_SIZE, DEFAULT_RADIUS_MI, RADIUS_OPTIONS_MI, spacingKmForRadius } from '@/lib/grid-radius';
-import { milesBetween, parseMapsInput } from '@/lib/maps-link';
+import { parseMapsInput } from '@/lib/maps-link';
 import { BTN_PRIMARY, BTN_SECONDARY, FormMessage, INPUT, LABEL } from './Modal';
 import ScheduleFields from './ScheduleFields';
 
@@ -12,8 +12,8 @@ const MapPicker = lazy(() => import('../../local-finder/MapPicker'));
 
 /** DataForSEO Standard queue, per grid point (81 points ≈ $0.10 on Nov 20, 2026). */
 const COST_PER_POINT = 0.10 / 81;
-/** A center farther than this from the listing's pin gets a warning. */
-const FAR_FROM_LISTING_MI = 0.5;
+/** A Google CID is a long number; shorter input is still being typed. */
+const MIN_CID_DIGITS = 10;
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function scheduleSummary(data: FormData): string {
@@ -29,6 +29,10 @@ function scheduleSummary(data: FormData): string {
  * Business + map center + grid, shared by Add location and the sales demo scan. The business comes
  * from the Google Maps search (name, CID and pin in one pick), or a pasted Google Maps link, or by
  * hand. Saving shows a review of everything first, so a scan can't start on the wrong place by accident.
+ *
+ * The grid center is always the listing's own pin (Brad, Nov 23): there is no way to place it
+ * anywhere else. A CID without a pin (typed by hand, or a link without the @… coordinates) is looked
+ * up in DataForSEO Business Listings to get the pin.
  */
 export default function LocationForm({ mode, action, submitLabel, pendingLabel, reviewTitle }: {
   mode: 'location' | 'demo';
@@ -45,10 +49,8 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
   const [business, setBusiness] = useState<BusinessResult | null>(null);
   const [name, setName] = useState('');
   const [cid, setCid] = useState('');
+  /** The listing's own pin, which is always the grid center. Empty until a listing is known. */
   const [center, setCenter] = useState('');
-  /** The listing's own pin, when known (search pick or a pasted listing link). */
-  const [pin, setPin] = useState<string | null>(null);
-  const [customCenter, setCustomCenter] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [pasteNote, setPasteNote] = useState<{ ok: boolean; text: string } | null>(null);
   /** The CID whose lookup is in flight, so a stale answer from an earlier paste is ignored. */
@@ -64,7 +66,6 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
     : [...new Map(keywords.split(/\r?\n/).map((k) => k.replace(/\s+/g, ' ').trim()).filter(Boolean).map((k) => [k.toLowerCase(), k])).values()];
   const cost = Math.max(keywordList.length, 1) * gridSize * gridSize * COST_PER_POINT;
   const gridSizes = mode === 'demo' ? [5, 7, 9] : [5, 7, 9, 11];
-  const distance = pin && center ? milesBetween(pin, center) : null;
   const ready = Boolean(name.trim() && center && keywordList.length);
 
   useEffect(() => { if (state.error) setReview(null); }, [state]);
@@ -72,7 +73,8 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
 
   function pickListing(picked: BusinessResult) {
     const at = `${picked.lat.toFixed(6)},${picked.lng.toFixed(6)}`;
-    setBusiness(picked); setName(picked.title); setCid(picked.cid ?? ''); setPin(at); setCenter(at); setCustomCenter(false);
+    lookupCid.current = null; setLookingUp(false);
+    setBusiness(picked); setName(picked.title); setCid(picked.cid ?? ''); setCenter(at);
   }
 
   function pasteLink(text: string) {
@@ -83,16 +85,26 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
       return;
     }
     setBusiness(null);
-    if (info.name) setName(info.name);
+    // A link without a name clears the previous listing's name; the CID lookup fills it back in.
+    setName(info.name ?? '');
     if (info.cid) setCid(info.cid);
-    if (info.center) {
-      setCenter(info.center);
-      setPin(info.centerIsPin ? info.center : null);
-      setCustomCenter(false);
-    }
-    const found = [info.name && 'name', info.cid && 'Google CID', info.center && (info.centerIsPin ? "the listing's pin" : 'a map center (not the pin; check it)')].filter(Boolean);
-    setPasteNote({ ok: Boolean(info.cid), text: `Found ${found.join(', ')}.${info.cid ? '' : ' No CID in this link: open the listing itself (not a search) and copy that link.'}` });
-    if (info.cid) void lookUpListing(info.cid, info.centerIsPin ? info.center : null);
+    // Only the listing's own pin can be the center. A link's map view (no pin) is ignored, and the
+    // previous listing's center is cleared so it can't stay on the new business by mistake.
+    const linkPin = info.center && info.centerIsPin ? info.center : null;
+    setCenter(linkPin ?? '');
+    const found = [info.name && 'name', info.cid && 'Google CID', linkPin && "the listing's pin"].filter(Boolean);
+    setPasteNote({ ok: Boolean(info.cid), text: `${found.length ? `Found ${found.join(', ')}.` : 'No listing in that.'}${info.cid ? '' : ' Open the listing itself on Google Maps (not a search or a spot on the map) and copy that link.'}` });
+    if (info.cid) void lookUpListing(info.cid, linkPin);
+    else lookupCid.current = null;
+  }
+
+  /** A CID typed by hand: look up its listing for the address and pin (the center). */
+  function lookUpTypedCid() {
+    if (cid.length < MIN_CID_DIGITS || cid === business?.cid || cid === lookupCid.current) return;
+    setBusiness(null);
+    setName('');
+    setCenter('');
+    void lookUpListing(cid, null);
   }
 
   /** Fetch the listing's address (and pin, if the link had none) by CID. About $0.01 per lookup. */
@@ -108,20 +120,12 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
     if (lookupCid.current !== cidToFind) return;
     setLookingUp(false);
     if (!listing) {
-      if (!linkPin) setPasteNote({ ok: false, text: "Found the Google CID, but couldn't look up the address or pin. Wait a second for Google Maps to add the coordinates (the @… part) to the address bar, then copy the link again." });
+      if (!linkPin) setPasteNote({ ok: false, text: "Couldn't look up this CID's address or pin, so there's no grid center yet. Check the CID, or paste the listing's Google Maps link once Google Maps has added the coordinates (the @… part) to the address bar." });
       return;
     }
     setBusiness(listing);
     setName((current) => current.trim() || listing.title);
-    if (!linkPin) {
-      const at = `${listing.lat.toFixed(6)},${listing.lng.toFixed(6)}`;
-      setPin(at); setCenter(at); setCustomCenter(false);
-    }
-  }
-
-  function centerOnListing() {
-    setCustomCenter(false);
-    if (pin) setCenter(pin);
+    if (!linkPin) setCenter(`${listing.lat.toFixed(6)},${listing.lng.toFixed(6)}`);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -135,14 +139,6 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
     const data = review.data;
     startTransition(() => dispatch(data));
   }
-
-  const centerNote = !center
-    ? null
-    : pin && !customCenter && center === pin
-      ? "on the listing's pin"
-      : distance != null
-        ? `${distance.toFixed(1)} mi from the listing's pin`
-        : 'entered by hand (no listing pin to compare)';
 
   return (
     <form onSubmit={submit} className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -162,25 +158,22 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
           <Suspense fallback={<div className="h-72 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />}>
             <MapPicker
               coordinate={center}
-              onChange={(next) => { setCenter(next); if (pin) setCustomCenter(true); }}
+              // The center only comes from a picked listing (onBusinessSelect); clicks and plain
+              // address results never set it.
+              onChange={() => {}}
               showGrid={Boolean(center)}
               gridSize={gridSize}
               spacingKm={spacingKmForRadius(radiusMi, gridSize)}
               language="English"
               onBusinessSelect={pickListing}
-              clickToPlace={customCenter || !pin}
-              crosshair
+              clickToPlace={false}
             />
           </Suspense>
-          {pin ? (
-            <p className="-mt-1 text-xs text-slate-500">
-              {customCenter
-                ? 'Click the map where the grid center should go. Drag to move the map.'
-                : 'The center is locked to the listing. Drag to look around; clicks don’t move it.'}
-            </p>
-          ) : (
-            !center && <p className="-mt-1 text-xs text-slate-500">No listing picked yet. Drag to move the map; a click places the grid center.</p>
-          )}
+          <p className="-mt-1 text-xs text-slate-500">
+            {center
+              ? 'The grid center is locked to the listing’s pin. Drag to look around.'
+              : 'No listing picked yet. The grid center is set from the listing’s pin.'}
+          </p>
 
           {name.trim() && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
@@ -191,29 +184,11 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
               {!business?.address && lookingUp && <p className="text-emerald-900/80 dark:text-emerald-200/80">Looking up the address…</p>}
               <p className="mt-1 text-xs">
                 Google CID: {cid ? <strong>{cid}</strong> : <strong className="text-amber-700 dark:text-amber-300">missing</strong>}
-                {center && <> · Grid center: <strong>{center}</strong> ({centerNote})</>}
+                {center && <> · Grid center: <strong>{center}</strong> (the listing&apos;s pin)</>}
               </p>
             </div>
           )}
 
-          {pin && (
-            <fieldset className="flex flex-col gap-1.5 text-sm">
-              <legend className={LABEL}>Grid center</legend>
-              <label className="flex items-center gap-2">
-                <input type="radio" name="center_mode" checked={!customCenter} onChange={centerOnListing} />
-                On the listing&apos;s pin <span className="text-xs text-slate-500">(recommended, and what Semrush uses)</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" name="center_mode" checked={customCenter} onChange={() => setCustomCenter(true)} />
-                Somewhere else: I&apos;ll click the map
-              </label>
-            </fieldset>
-          )}
-          {customCenter && distance != null && distance > FAR_FROM_LISTING_MI && (
-            <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm font-semibold text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              The center is {distance.toFixed(1)} mi from the listing. Grids are almost always centered on the clinic, so make sure this is on purpose.
-            </p>
-          )}
           {name.trim() && !cid && (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm font-semibold text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
               No Google CID. Ranks will be matched on the name alone, which can miss or mix up listings. Pick the listing from the search, or paste its Google Maps link below.
@@ -221,7 +196,7 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
           )}
 
           <details open={manualOpen} onToggle={(e) => setManualOpen((e.currentTarget as HTMLDetailsElement).open)} className="rounded-xl border border-slate-200 dark:border-slate-700">
-            <summary className="cursor-pointer px-3.5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300">Can&apos;t find it in the search? Paste its Google Maps link, or enter it by hand</summary>
+            <summary className="cursor-pointer px-3.5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300">Can&apos;t find it in the search? Paste its Google Maps link, or enter its CID</summary>
             <div className="flex flex-col gap-3 border-t border-slate-200 p-3.5 dark:border-slate-700">
               <div>
                 <label htmlFor="maps_link" className={LABEL}>Google Maps link</label>
@@ -232,20 +207,23 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
                 <span className="mt-1 block text-[11px] text-slate-500">Open the clinic&apos;s listing on Google Maps, then copy the link from the address bar. It holds the CID and the pin.</span>
                 {pasteNote && <p className={`mt-1.5 text-xs font-semibold ${pasteNote.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>{pasteNote.text}</p>}
               </div>
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px_200px]">
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px]">
                 <div>
                   <label htmlFor="business_name_input" className={LABEL}>Business name</label>
-                  <input id="business_name_input" value={name} onChange={(e) => { setName(e.target.value); setBusiness(null); }} className={INPUT} />
+                  <input id="business_name_input" value={name} onChange={(e) => setName(e.target.value)} className={INPUT} />
                 </div>
                 <div>
                   <label htmlFor="business_cid_input" className={LABEL}>Google CID</label>
-                  <input id="business_cid_input" inputMode="numeric" value={cid} onChange={(e) => setCid(e.target.value.replace(/\D/g, ''))} className={INPUT} />
-                </div>
-                <div>
-                  <label htmlFor="center_input" className={LABEL}>Grid center (lat,lng)</label>
-                  <input id="center_input" value={center} onChange={(e) => { setCenter(e.target.value.trim()); if (pin) setCustomCenter(true); }} placeholder="39.740123,-104.987654" className={INPUT} />
+                  <input
+                    id="business_cid_input" inputMode="numeric" value={cid}
+                    onChange={(e) => setCid(e.target.value.replace(/\D/g, ''))}
+                    onBlur={lookUpTypedCid}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookUpTypedCid(); } }}
+                    className={INPUT}
+                  />
                 </div>
               </div>
+              <span className="-mt-1 text-[11px] text-slate-500">A typed CID is looked up for the address and the pin, which becomes the grid center (about $0.01).</span>
             </div>
           </details>
         </section>
@@ -314,9 +292,9 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
           <p className="text-lg font-black">{reviewTitle}</p>
           <dl className="mt-3 grid grid-cols-[150px_minmax(0,1fr)] gap-x-4 gap-y-1.5">
             <dt className="font-bold">Business</dt><dd>{name.trim()}</dd>
-            <dt className="font-bold">Address</dt><dd>{business?.address || <span className="text-blue-900/70 dark:text-blue-200/70">Not known (entered by hand). Check the center on the map.</span>}</dd>
+            <dt className="font-bold">Address</dt><dd>{business?.address || <span className="text-blue-900/70 dark:text-blue-200/70">Not known. The center is the pin from the pasted link; check it on the map.</span>}</dd>
             <dt className="font-bold">Google CID</dt><dd>{cid || <span className="font-bold text-amber-700 dark:text-amber-300">None: matched by name only</span>}</dd>
-            <dt className="font-bold">Grid center</dt><dd>{center} ({centerNote})</dd>
+            <dt className="font-bold">Grid center</dt><dd>{center} (the listing&apos;s pin)</dd>
             <dt className="font-bold">Grid</dt><dd>{gridSize}×{gridSize}, {radiusMi} mi radius ({gridSize * gridSize} points)</dd>
             <dt className="font-bold">{keywordList.length === 1 ? 'Keyword' : `Keywords (${keywordList.length})`}</dt><dd>{keywordList.join(', ')}</dd>
             <dt className="font-bold">Schedule</dt><dd>{review.schedule}</dd>

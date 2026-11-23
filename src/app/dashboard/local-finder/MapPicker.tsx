@@ -26,8 +26,6 @@ interface Props {
   onBusinessSelect?: (business: BusinessResult) => void;
   /** Patch fork: false makes map clicks do nothing (the pin follows the picked listing). Default true. */
   clickToPlace?: boolean;
-  /** Patch fork: show a crosshair cursor while clicks place the pin. Default false (old screen unchanged). */
-  crosshair?: boolean;
 }
 
 interface NominatimResult {
@@ -56,7 +54,7 @@ function calcGridCoords(
   return coords;
 }
 
-export default function MapPicker({ coordinate, onChange, showGrid, gridSize, spacingKm, language, onBusinessSelect, clickToPlace = true, crosshair = false }: Props) {
+export default function MapPicker({ coordinate, onChange, showGrid, gridSize, spacingKm, language, onBusinessSelect, clickToPlace = true }: Props) {
   // The click handler is registered once, so it reads the latest setting from a ref.
   const clickToPlaceRef = useRef(clickToPlace);
   useEffect(() => { clickToPlaceRef.current = clickToPlace; }, [clickToPlace]);
@@ -313,7 +311,7 @@ export default function MapPicker({ coordinate, onChange, showGrid, gridSize, sp
       <div
         ref={containerRef}
         className="w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 transition-all duration-300"
-        style={{ height: mapHeight, ...(crosshair && clickToPlace ? { cursor: 'crosshair' } : {}) }}
+        style={{ height: mapHeight }}
       />
       {showGrid && coordinate && gridSize && spacingKm && (
         <p className="text-[11px] text-slate-400 -mt-1">
