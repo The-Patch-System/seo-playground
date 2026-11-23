@@ -80,7 +80,8 @@ async function runPass(credentials: { login: string; pass: string }) {
         credentials.login, credentials.pass, schedule.queue_mode === 'priority' ? 'priority' : 'standard', schedule.series_id,
       );
       if (result.error) failed.push({ seriesId: schedule.series_id, error: result.error });
-      if (result.taskPoints.length === 0) {
+      // Patch fork: count accepted tasks, not task points (refused tasks are kept as retry-pending points).
+      if (result.accepted === 0) {
         // Nothing was queued or billed, so the slot can safely be attempted again.
         if (retryClaimedGridSchedule(schedule.projectId, schedule)) gridRetries += 1;
         continue;
@@ -108,6 +109,9 @@ async function runPass(credentials: { login: string; pass: string }) {
       failed.push({ seriesId: schedule.series_id, error: error instanceof Error ? error.message : 'Could not start grid run.' });
     }
   }
+
+  // Patch fork: the worker only prints a count, so name each failed start (monitor and reason) in the logs.
+  for (const f of failed) console.error(`[geo-grid] scheduled run for monitor ${f.seriesId} did not start cleanly: ${f.error}`);
 
   let rankScheduled = 0;
   let rankScheduleRetries = 0;
@@ -138,6 +142,7 @@ async function runPass(credentials: { login: string; pass: string }) {
   // Patch fork (temporary): in-place re-scans. Starts are paced across all projects per pass.
   const rescans = newRescanCounters();
   let rescanErrors = 0;
+  let gridCollectErrors = 0;
   for (const project of getProjects()) {
     const pending = getPendingGridEntriesForProject(project.id);
     for (const entry of pending) {
@@ -145,14 +150,20 @@ async function runPass(credentials: { login: string; pass: string }) {
         const status = await collectGridProgress(project.id, entry, credentials);
         pendingChecked += 1;
         if (status.status === 'done') completed += 1;
-      } catch {
-        // A temporary DataForSEO failure is retried by the next cron invocation.
+      } catch (error) {
+        // Patch fork: DataForSEO failures are handled inside collectGridProgress, so this is a local
+        // failure (e.g. unreadable stored data). The run stays pending and is retried next pass, but it
+        // is counted and logged, not skipped silently.
+        gridCollectErrors += 1;
+        console.error(`[geo-grid] collecting run ${entry.id} (project ${project.id}) failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     try {
       await advanceRescans(project.id, credentials, rescans);
-    } catch {
+    } catch (error) {
+      // Per-run errors are counted inside advanceRescans; this is a failure of the whole project step.
       rescanErrors += 1;
+      console.error(`[geo-grid] re-scan pass failed for project ${project.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
     try {
       const rankProgress = await collectRankProgress(project.id, credentials);
@@ -192,8 +203,11 @@ async function runPass(credentials: { login: string; pass: string }) {
   }
 
   return {
-    due: due.length, started, failed, gridRetries, pendingChecked, completed, gridRunsPruned,
-    rescans: { started: rescans.started, collected: rescans.collected, swapped: rescans.swapped, held: rescans.held, orphaned: rescans.orphaned, errors: rescanErrors },
+    due: due.length, started, failed, gridRetries, pendingChecked, completed, gridCollectErrors, gridRunsPruned,
+    rescans: {
+      started: rescans.started, collected: rescans.collected, swapped: rescans.swapped, held: rescans.held, orphaned: rescans.orphaned,
+      errors: rescans.errors + rescanErrors,
+    },
     rankSchedulesDue: dueRankSchedules.length, rankScheduled, rankScheduleRetries, rankPendingChecked, rankCompleted, rankFailed,
     promptSchedulesDue: duePromptSchedules.length, promptRuns, promptRunsFailed,
   };

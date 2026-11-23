@@ -71,6 +71,6 @@ describe('/api/v1/geo-grid/rescans', () => {
     const status = await (await GET(new NextRequest(url, { headers: { 'x-api-key': 'test-key' } }))).json();
     expect(status).toMatchObject({ counts: {}, runs: [], wrong_city_detections: [] });
     const unsafe = await (await GET(new NextRequest(`${url}?unsafe=true`, { headers: { authorization: 'Bearer test-key' } }))).json();
-    expect(unsafe).toEqual({ unsafe: [] });
+    expect(unsafe).toEqual({ unsafe: [], not_checked_runs: 0 });
   });
 });

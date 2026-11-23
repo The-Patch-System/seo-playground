@@ -12,6 +12,7 @@
 //   failed for other reasons, and the run's points and settings did not change since the attempt began.
 //   Otherwise it is held with a reason and flagged not safe to report.
 import { createHash, randomUUID } from 'crypto';
+import type Database from 'better-sqlite3';
 import {
   getControlDb, getDbForProject, getProjects, type GridPoint, type GridRecheck, type GridTaskPoint, type Project,
 } from '@/lib/db';
@@ -19,6 +20,11 @@ import { postGridTaskChunk, type GridTaskRequest } from '@/app/dashboard/local-f
 import {
   checkGridTasks, stepGridTasks, type RepostOutcome,
 } from '@/lib/grid-progress';
+import { notifyGridAlert, type GridAlertKind } from '@/lib/grid-alerts';
+import { checkedSafety, computedSafety, isCompleteGrid, MAX_OTHER_FAILED, type RunSafety } from '@/lib/grid-safety';
+import { reconcileGridPoints } from '@/lib/grid-target';
+
+export { computedSafety, isCompleteGrid, type RunSafety };
 
 export const RESCAN_MAX_RUNS_PER_MANIFEST = 25;
 /** Hold a run whose attempt is still collecting this long after it started. */
@@ -26,7 +32,9 @@ export const RESCAN_ATTEMPT_DEADLINE_MS = 2 * 60 * 60_000;
 /** A submission intent with no recorded outcome after this long is treated as unknown. */
 export const RESCAN_INTENT_STALE_MS = 10 * 60_000;
 /** Points that may fail for reasons other than wrong-city before the run is held. */
-export const RESCAN_MAX_OTHER_FAILED = 2;
+export const RESCAN_MAX_OTHER_FAILED = MAX_OTHER_FAILED;
+/** An accepted task billed more than this over the reserved price raises a price_mismatch alert. */
+const PRICE_TOLERANCE = 0.01;
 
 export function rescanTaskPrice(): number {
   const value = Number.parseFloat(process.env.GEO_GRID_RESCAN_TASK_PRICE_USD ?? '');
@@ -105,47 +113,33 @@ function parsePoints(json: string | null): GridPoint[] {
   try { return JSON.parse(json ?? '[]') as GridPoint[]; } catch { return []; }
 }
 
-/** Exactly one point per (row, col) inside the grid, and grid_size² of them. */
-export function isCompleteGrid(points: GridPoint[], gridSize: number): boolean {
-  if (points.length !== gridSize * gridSize) return false;
-  const seen = new Set<string>();
-  for (const p of points) {
-    if (p.row < 0 || p.col < 0 || p.row >= gridSize || p.col >= gridSize) return false;
-    const key = `${p.row}:${p.col}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-  }
-  return true;
-}
-
 // --- Safety flags ---------------------------------------------------------------------------------
 
-export interface RunSafety { report_safe: boolean; reason: string | null }
-
-function setSafety(projectId: string, runId: string, safe: boolean, reason: string | null, evidence?: unknown): void {
-  getDbForProject(projectId).prepare(`INSERT INTO grid_run_safety (run_id, report_safe, reason, evidence, updated_at) VALUES (?, ?, ?, ?, ?)
+/**
+ * Writes a run's flag. Always called inside the same transaction (on the same project db) as the
+ * state change it belongs to, so a crash can't leave restored or unchecked points marked safe.
+ */
+function setSafety(db: Database.Database, runId: string, safe: boolean, reason: string | null, evidence?: unknown): void {
+  db.prepare(`INSERT INTO grid_run_safety (run_id, report_safe, reason, evidence, updated_at) VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(run_id) DO UPDATE SET report_safe = excluded.report_safe, reason = excluded.reason, evidence = excluded.evidence, updated_at = excluded.updated_at`)
     .run(runId, safe ? 1 : 0, reason, evidence === undefined ? null : JSON.stringify(evidence), Date.now());
 }
 
 /**
  * Patch fork: whether a run's numbers are safe to report. A re-scan's flag (grid_run_safety) wins;
- * otherwise it's computed from the points: any wrong-city failed point, more than 2 failed points,
- * or a truncated point where the target's rank is unknown makes a run unsafe.
+ * otherwise it's computed from the points (grid-safety.ts): unsafe for a wrong-city failed point, an
+ * incomplete grid, more than 2 failed points or a truncated point where the target's rank is unknown;
+ * null (`not_checked`) for a run the wrong-city check never saw.
  */
-export function runSafety(projectId: string, runId: string, points: GridPoint[]): RunSafety {
+export function runSafety(projectId: string, runId: string, points: GridPoint[], gridSize: number): RunSafety {
   const row = getDbForProject(projectId).prepare('SELECT report_safe, reason FROM grid_run_safety WHERE run_id = ?')
     .get(runId) as { report_safe: number; reason: string | null } | undefined;
   if (row) return { report_safe: row.report_safe === 1, reason: row.reason };
-  return computedSafety(points);
+  return checkedSafety(points, gridSize);
 }
 
-/** The point-based part of runSafety, also applied to a re-scan's new points when they swap in. */
-export function computedSafety(points: GridPoint[]): RunSafety {
-  if (points.some((p) => p.failed && p.failed_reason === 'wrong_city')) return { report_safe: false, reason: 'wrong_city_persistent' };
-  if (points.filter((p) => p.failed).length > RESCAN_MAX_OTHER_FAILED) return { report_safe: false, reason: 'too_many_failed' };
-  if (points.some((p) => p.rank_unresolved)) return { report_safe: false, reason: 'rank_unresolved' };
-  return { report_safe: true, reason: null };
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export function rescannedAt(projectId: string, runId: string): string | null {
@@ -322,25 +316,34 @@ export function startRescan(manifestId: string): { queued: string[]; skipped: Ar
   const queued: string[] = [];
   const skipped: Array<{ run_id: string; reason: string }> = [];
   const now = Date.now();
+  // Excluded runs on the re-scanned date keep their old points: flag them first, so a failure here
+  // queues nothing (it throws; starting again is safe, queued runs are skipped).
+  for (const run of manifest.excluded) {
+    const db = getDbForProject(run.project_id);
+    setSafety(db, run.run_id, false, 'excluded_from_rescan');
+  }
   for (const run of manifest.runs) {
     const db = getDbForProject(run.project_id);
-    const ok = db.transaction(() => {
-      const existing = db.prepare('SELECT state FROM grid_rescans WHERE run_id = ?').get(run.run_id) as { state: RescanState } | undefined;
-      if (existing) return `already ${existing.state}`;
-      const exists = db.prepare("SELECT 1 FROM grid_searches WHERE id = ? AND status = 'done'").get(run.run_id);
-      if (!exists) return 'run no longer exists';
-      db.prepare(`INSERT INTO grid_rescans (run_id, series_id, manifest_id, label, state, attempt, queued_at, updated_at)
-        VALUES (?, ?, ?, ?, 'queued', 1, ?, ?)`).run(run.run_id, run.monitor_id, manifest.manifest_id, manifest.label, now, now);
-      return null;
-    })();
-    if (ok) { skipped.push({ run_id: run.run_id, reason: ok }); continue; }
-    // The old points can't be re-checked from the database (descriptions aren't stored), so a run
-    // is not safe to report until its re-scan swaps.
-    setSafety(run.project_id, run.run_id, false, 'pending_rescan');
+    let skip: string | null;
+    try {
+      skip = db.transaction(() => {
+        const existing = db.prepare('SELECT state FROM grid_rescans WHERE run_id = ?').get(run.run_id) as { state: RescanState } | undefined;
+        if (existing) return `already ${existing.state}`;
+        const exists = db.prepare("SELECT 1 FROM grid_searches WHERE id = ? AND status = 'done'").get(run.run_id);
+        if (!exists) return 'run no longer exists';
+        db.prepare(`INSERT INTO grid_rescans (run_id, series_id, manifest_id, label, state, attempt, queued_at, updated_at)
+          VALUES (?, ?, ?, ?, 'queued', 1, ?, ?)`).run(run.run_id, run.monitor_id, manifest.manifest_id, manifest.label, now, now);
+        // The old points can't be re-checked from the database (descriptions aren't stored), so a run
+        // is not safe to report until its re-scan swaps. Same transaction as the queued row.
+        setSafety(db, run.run_id, false, 'pending_rescan');
+        return null;
+      })();
+    } catch (error) {
+      skip = `could not queue: ${errorMessage(error)}`;
+    }
+    if (skip) { skipped.push({ run_id: run.run_id, reason: skip }); continue; }
     queued.push(run.run_id);
   }
-  // Excluded runs on the re-scanned date keep their old points: flag them too.
-  for (const run of manifest.excluded) setSafety(run.project_id, run.run_id, false, 'excluded_from_rescan');
   getControlDb().prepare('UPDATE grid_rescan_manifests SET started_at = COALESCE(started_at, ?) WHERE manifest_id = ?').run(now, manifestId);
   return { queued, skipped };
 }
@@ -368,11 +371,23 @@ function setAttemptState(projectId: string, runId: string, attempt: number, stat
     .run(state, holdReason, Date.now(), runId, attempt);
 }
 
-function hold(projectId: string, runId: string, attempt: number, reason: HoldReason, from: RescanState[] = ['posting', 'scanning'], evidence?: unknown): boolean {
-  if (!setState(projectId, runId, from, attempt, 'held', { hold_reason: reason, finished: true })) return false;
-  setAttemptState(projectId, runId, attempt, 'held', reason);
-  setSafety(projectId, runId, false, reason, evidence);
-  return true;
+/** Holds an attempt: state, attempt row and the not-safe reason change together, then an alert. */
+function hold(
+  projectId: string, runId: string, attempt: number, reason: HoldReason, from: RescanState[] = ['posting', 'scanning'], evidence?: unknown,
+  alertKind: GridAlertKind = 'rescan_held',
+): boolean {
+  const db = getDbForProject(projectId);
+  const held = db.transaction(() => {
+    if (!setState(projectId, runId, from, attempt, 'held', { hold_reason: reason, finished: true })) return false;
+    setAttemptState(projectId, runId, attempt, 'held', reason);
+    setSafety(db, runId, false, reason, evidence);
+    return true;
+  })();
+  if (held) {
+    const row = db.prepare('SELECT series_id FROM grid_rescans WHERE run_id = ?').get(runId) as { series_id: string } | undefined;
+    void notifyGridAlert({ kind: alertKind, reason, project_id: projectId, run_id: runId, monitor_id: row?.series_id, detail: evidence });
+  }
+  return held;
 }
 
 export type RescanAction = 'cancel' | 'undo' | 'retry';
@@ -380,48 +395,62 @@ export type RescanAction = 'cancel' | 'undo' | 'retry';
 /** cancel: queued/scanning -> cancelled. undo: swapped -> undone (old points restored). retry: held/cancelled/undone -> queued. */
 export function applyRescanAction(action: RescanAction, runIds: string[]): Array<{ run_id: string; ok: boolean; state?: RescanState; error?: string }> {
   return runIds.map((runId) => {
-    const found = findRescan(runId);
-    if (!found) return { run_id: runId, ok: false, error: 'No re-scan for this run.' };
-    const { project, row } = found;
-    const db = getDbForProject(project.id);
-    if (action === 'cancel') {
-      if (!ACTIVE_STATES.includes(row.state)) return { run_id: runId, ok: false, state: row.state, error: `Cannot cancel a ${row.state} re-scan.` };
-      if (!setState(project.id, runId, ACTIVE_STATES, row.attempt, 'cancelled', { finished: true })) return { run_id: runId, ok: false, error: 'State changed; try again.' };
-      setAttemptState(project.id, runId, row.attempt, 'cancelled');
-      setSafety(project.id, runId, false, 'pending_rescan');
-      return { run_id: runId, ok: true, state: 'cancelled' };
+    try {
+      return applyOne(action, runId);
+    } catch (error) {
+      // Every write for one run is a single transaction, so a failure changed nothing for it.
+      return { run_id: runId, ok: false, error: `Failed, nothing changed: ${errorMessage(error)}` };
     }
-    if (action === 'retry') {
-      if (!['held', 'cancelled', 'undone'].includes(row.state)) {
-        return { run_id: runId, ok: false, state: row.state, error: `Cannot retry a ${row.state} re-scan.` };
-      }
-      const changed = db.prepare(`UPDATE grid_rescans SET state = 'queued', hold_reason = NULL, attempt = attempt + 1, queued_at = ?, started_at = NULL,
-        finished_at = NULL, updated_at = ? WHERE run_id = ? AND attempt = ? AND state = ?`).run(Date.now(), Date.now(), runId, row.attempt, row.state).changes === 1;
-      return changed ? { run_id: runId, ok: true, state: 'queued' } : { run_id: runId, ok: false, error: 'State changed; try again.' };
-    }
-    // undo
-    if (row.state !== 'swapped') return { run_id: runId, ok: false, state: row.state, error: `Cannot undo a ${row.state} re-scan.` };
-    const result = db.transaction(() => {
-      const attempt = db.prepare('SELECT results_before, swapped_hash FROM grid_rescan_attempts WHERE run_id = ? AND attempt = ?')
-        .get(runId, row.attempt) as { results_before: string | null; swapped_hash: string | null } | undefined;
-      const run = db.prepare('SELECT results FROM grid_searches WHERE id = ?').get(runId) as { results: string } | undefined;
-      if (!attempt?.results_before || !run) return 'The run or its original points are gone.';
-      if (sha256(run.results) !== attempt.swapped_hash) return 'The run changed after the swap; refusing to overwrite it.';
-      db.prepare('UPDATE grid_searches SET results = ? WHERE id = ?').run(attempt.results_before, runId);
-      db.prepare("UPDATE grid_rescans SET state = 'undone', updated_at = ? WHERE run_id = ? AND attempt = ? AND state = 'swapped'").run(Date.now(), runId, row.attempt);
-      db.prepare("UPDATE grid_rescan_attempts SET state = 'undone' WHERE run_id = ? AND attempt = ?").run(runId, row.attempt);
-      return null;
-    })();
-    if (result) return { run_id: runId, ok: false, state: row.state, error: result };
-    setSafety(project.id, runId, false, 'original_restored');
-    return { run_id: runId, ok: true, state: 'undone' };
   });
+}
+
+function applyOne(action: RescanAction, runId: string): { run_id: string; ok: boolean; state?: RescanState; error?: string } {
+  const found = findRescan(runId);
+  if (!found) return { run_id: runId, ok: false, error: 'No re-scan for this run.' };
+  const { project, row } = found;
+  const db = getDbForProject(project.id);
+  if (action === 'cancel') {
+    if (!ACTIVE_STATES.includes(row.state)) return { run_id: runId, ok: false, state: row.state, error: `Cannot cancel a ${row.state} re-scan.` };
+    const cancelled = db.transaction(() => {
+      if (!setState(project.id, runId, ACTIVE_STATES, row.attempt, 'cancelled', { finished: true })) return false;
+      setAttemptState(project.id, runId, row.attempt, 'cancelled');
+      setSafety(db, runId, false, 'pending_rescan');
+      return true;
+    })();
+    if (!cancelled) return { run_id: runId, ok: false, error: 'State changed; try again.' };
+    return { run_id: runId, ok: true, state: 'cancelled' };
+  }
+  if (action === 'retry') {
+    if (!['held', 'cancelled', 'undone'].includes(row.state)) {
+      return { run_id: runId, ok: false, state: row.state, error: `Cannot retry a ${row.state} re-scan.` };
+    }
+    const changed = db.prepare(`UPDATE grid_rescans SET state = 'queued', hold_reason = NULL, attempt = attempt + 1, queued_at = ?, started_at = NULL,
+      finished_at = NULL, updated_at = ? WHERE run_id = ? AND attempt = ? AND state = ?`).run(Date.now(), Date.now(), runId, row.attempt, row.state).changes === 1;
+    return changed ? { run_id: runId, ok: true, state: 'queued' } : { run_id: runId, ok: false, error: 'State changed; try again.' };
+  }
+  // undo
+  if (row.state !== 'swapped') return { run_id: runId, ok: false, state: row.state, error: `Cannot undo a ${row.state} re-scan.` };
+  const result = db.transaction(() => {
+    const attempt = db.prepare('SELECT results_before, swapped_hash FROM grid_rescan_attempts WHERE run_id = ? AND attempt = ?')
+      .get(runId, row.attempt) as { results_before: string | null; swapped_hash: string | null } | undefined;
+    const run = db.prepare('SELECT results FROM grid_searches WHERE id = ?').get(runId) as { results: string } | undefined;
+    if (!attempt?.results_before || !run) return 'The run or its original points are gone.';
+    if (sha256(run.results) !== attempt.swapped_hash) return 'The run changed after the swap; refusing to overwrite it.';
+    const undone = db.prepare("UPDATE grid_rescans SET state = 'undone', updated_at = ? WHERE run_id = ? AND attempt = ? AND state = 'swapped'").run(Date.now(), runId, row.attempt).changes === 1;
+    if (!undone) return 'State changed; try again.';
+    db.prepare('UPDATE grid_searches SET results = ? WHERE id = ?').run(attempt.results_before, runId);
+    db.prepare("UPDATE grid_rescan_attempts SET state = 'undone' WHERE run_id = ? AND attempt = ?").run(runId, row.attempt);
+    setSafety(db, runId, false, 'original_restored');
+    return null;
+  })();
+  if (result) return { run_id: runId, ok: false, state: row.state, error: result };
+  return { run_id: runId, ok: true, state: 'undone' };
 }
 
 // --- Paid submissions (ledger + budget) ------------------------------------------------------------
 
 interface SubmitItem { row: number; col: number; lat: number; lng: number; seq: number }
-type SubmitOutcome = { state: 'accepted'; taskId: string; cost: number } | { state: 'rejected' } | { state: 'unknown' };
+type SubmitOutcome = { state: 'accepted'; taskId: string; cost: number; costReported: boolean } | { state: 'rejected' } | { state: 'unknown' };
 
 export function submissionTag(runId: string, attempt: number, row: number, col: number, seq: number): string {
   return `rs:${runId}:a${attempt}:r${row}c${col}:s${seq}`;
@@ -429,18 +458,26 @@ export function submissionTag(runId: string, attempt: number, row: number, col: 
 
 /**
  * Posts tasks with a durable record for each: reserve budget, write intents, POST, resolve.
- * Returns null (nothing posted) when the budget can't cover the whole chunk.
+ * Returns 'budget' (nothing posted) when the budget can't cover the whole chunk, and 'stale' (nothing
+ * posted or recorded) when the attempt is no longer `expectedState` (cancelled or retried meanwhile).
  */
 async function submitTasks(
-  projectId: string, run: RunRow, attempt: number, items: SubmitItem[], auth: string,
-): Promise<SubmitOutcome[] | null> {
+  projectId: string, run: RunRow, attempt: number, items: SubmitItem[], auth: string, expectedState: 'posting' | 'scanning',
+): Promise<SubmitOutcome[] | 'budget' | 'stale'> {
   const price = rescanTaskPrice();
-  if (!reserveBudget(price * items.length)) return null;
+  if (!reserveBudget(price * items.length)) return 'budget';
   const db = getDbForProject(projectId);
   const now = Date.now();
   const tags = items.map((i) => submissionTag(run.id, attempt, i.row, i.col, i.seq));
+  let current = true;
   try {
     db.transaction(() => {
+      // Checked in the same transaction as the intents: a cancel or retry that landed meanwhile wins.
+      const state = db.prepare('SELECT state, attempt FROM grid_rescans WHERE run_id = ?').get(run.id) as { state: RescanState; attempt: number } | undefined;
+      if (state?.state !== expectedState || state.attempt !== attempt) {
+        current = false;
+        return;
+      }
       const insert = db.prepare(`INSERT INTO grid_rescan_submissions (tag, run_id, attempt, row, col, seq, state, reserved, submitted_at)
         VALUES (?, ?, ?, ?, ?, ?, 'intent', ?, ?)`);
       items.forEach((item, index) => insert.run(tags[index], run.id, attempt, item.row, item.col, item.seq, price, now));
@@ -451,16 +488,26 @@ async function submitTasks(
     settleBudget(price * items.length, 0);
     return items.map(() => ({ state: 'unknown' as const }));
   }
+  if (!current) {
+    settleBudget(price * items.length, 0);
+    return 'stale';
+  }
+  // Patch fork: always the standard queue. The budget reserves the standard price, and a priority
+  // task costs more.
   const requests: GridTaskRequest[] = items.map((item, index) => ({
-    keyword: run.keyword, lat: item.lat, lng: item.lng, language: run.language, priority: run.queue_mode === 'priority' ? 2 : 1, tag: tags[index],
+    keyword: run.keyword, lat: item.lat, lng: item.lng, language: run.language, priority: 1, tag: tags[index],
   }));
   const posted = await postGridTaskChunk(requests, auth);
-  // An HTTP error status means DataForSEO refused the call; anything else (timeout, network) may have been accepted.
-  const callRejected = Boolean(posted.error?.startsWith('API error'));
+  // Only a definitive refusal is rejected (and re-posted later). A 5xx, timeout, network error, odd body
+  // or a task missing from the answer may have been accepted and billed: unknown, never re-posted.
   const outcomes: SubmitOutcome[] = items.map((_, index) => {
-    if (posted.error) return callRejected ? { state: 'rejected' } : { state: 'unknown' };
+    if (posted.error) return posted.rejected ? { state: 'rejected' } : { state: 'unknown' };
     const result = posted.results[index];
-    return result?.taskId ? { state: 'accepted', taskId: result.taskId, cost: result.cost } : { state: 'rejected' };
+    if (result?.outcome === 'accepted' && result.taskId) {
+      // A cost DataForSEO didn't report is booked at the reserved price (and alerted below).
+      return { state: 'accepted', taskId: result.taskId, cost: result.cost ?? price, costReported: result.cost !== null };
+    }
+    return result?.outcome === 'rejected' ? { state: 'rejected' } : { state: 'unknown' };
   });
   const resolvedAt = Date.now();
   db.transaction(() => {
@@ -480,21 +527,54 @@ async function submitTasks(
   const settledReserve = outcomes.filter((o) => o.state !== 'unknown').length * price;
   const spent = outcomes.reduce((s, o) => s + (o.state === 'accepted' ? o.cost : 0), 0);
   settleBudget(settledReserve, spent);
+  outcomes.forEach((o, index) => {
+    if (o.state !== 'accepted') return;
+    if (o.costReported && o.cost <= price * (1 + PRICE_TOLERANCE)) return;
+    void notifyGridAlert({
+      kind: 'price_mismatch',
+      reason: o.costReported ? `task cost ${o.cost} is above the reserved ${price}` : 'DataForSEO reported no cost for an accepted task',
+      project_id: projectId, run_id: run.id, monitor_id: run.series_id,
+      detail: { tag: tags[index], task_id: o.taskId, actual_cost: o.costReported ? o.cost : null, reserved_price: price },
+    });
+  });
   return outcomes;
 }
 
-/** Intents with no outcome for 10+ min (a crash mid-POST) become unknown, and their runs are held. */
-function recoverStaleIntents(projectId: string, now: number): number {
+/**
+ * Intents with no outcome for 10+ min (a crash mid-POST) become unknown, and their runs are held.
+ * Per run, marking the intents and the hold are one transaction, so a failed hold leaves the intents
+ * to be found again on the next pass.
+ */
+function recoverStaleIntents(projectId: string, now: number, counters: RescanPassCounters): void {
   const db = getDbForProject(projectId);
   const stale = db.prepare("SELECT tag, run_id, attempt FROM grid_rescan_submissions WHERE state = 'intent' AND submitted_at < ?")
     .all(now - RESCAN_INTENT_STALE_MS) as Array<{ tag: string; run_id: string; attempt: number }>;
-  for (const s of stale) db.prepare("UPDATE grid_rescan_submissions SET state = 'unknown', resolved_at = ? WHERE tag = ? AND state = 'intent'").run(now, s.tag);
-  const runs = new Map(stale.map((s) => [`${s.run_id}:${s.attempt}`, s]));
-  let held = 0;
-  for (const s of runs.values()) {
-    if (hold(projectId, s.run_id, s.attempt, 'post_unknown', ['posting', 'scanning'], { tags: stale.filter((x) => x.run_id === s.run_id).map((x) => x.tag) })) held += 1;
+  const runs = new Map<string, { run_id: string; attempt: number; tags: string[] }>();
+  for (const s of stale) {
+    const key = `${s.run_id}:${s.attempt}`;
+    const entry = runs.get(key) ?? { run_id: s.run_id, attempt: s.attempt, tags: [] };
+    entry.tags.push(s.tag);
+    runs.set(key, entry);
   }
-  return held;
+  for (const r of runs.values()) {
+    try {
+      const held = db.transaction(() => {
+        for (const tag of r.tags) db.prepare("UPDATE grid_rescan_submissions SET state = 'unknown', resolved_at = ? WHERE tag = ? AND state = 'intent'").run(now, tag);
+        return hold(projectId, r.run_id, r.attempt, 'post_unknown', ['posting', 'scanning'], { tags: r.tags });
+      })();
+      if (held) counters.held += 1;
+    } catch (error) {
+      reportRunError(projectId, r.run_id, null, error, counters);
+    }
+  }
+}
+
+/** A worker step for one run failed: its state is as it was. Counted, logged and alerted, never swallowed. */
+function reportRunError(projectId: string, runId: string, monitorId: string | null, error: unknown, counters: RescanPassCounters): void {
+  counters.errors += 1;
+  const message = errorMessage(error);
+  console.error(`[geo-grid] re-scan step failed for run ${runId} (project ${projectId}): ${message}`);
+  void notifyGridAlert({ kind: 'rescan_error', reason: message, project_id: projectId, run_id: runId, monitor_id: monitorId ?? undefined });
 }
 
 // --- Worker ----------------------------------------------------------------------------------------
@@ -507,10 +587,12 @@ export interface RescanPassCounters {
   swapped: number;
   held: number;
   orphaned: number;
+  /** Runs whose worker step threw (state left as it was; logged and alerted). */
+  errors: number;
 }
 
 export function newRescanCounters(): RescanPassCounters {
-  return { startsLeft: maxStartsPerPass(), started: 0, collected: 0, swapped: 0, held: 0, orphaned: 0 };
+  return { startsLeft: maxStartsPerPass(), started: 0, collected: 0, swapped: 0, held: 0, orphaned: 0, errors: 0 };
 }
 
 function loadRun(projectId: string, runId: string): RunRow | undefined {
@@ -548,12 +630,11 @@ async function startOne(projectId: string, rescan: RescanRow, auth: string, coun
     .sort((a, b) => a.row - b.row || a.col - b.col);
   const taskPoints: GridTaskPoint[] = [];
   for (let i = 0; i < coords.length; i += CHUNK) {
-    // A cancel during posting stops further chunks.
-    const current = db.prepare('SELECT state, attempt FROM grid_rescans WHERE run_id = ?').get(run.id) as { state: RescanState; attempt: number } | undefined;
-    if (current?.state !== 'posting' || current.attempt !== rescan.attempt) return;
     const chunk = coords.slice(i, i + CHUNK);
-    const outcomes = await submitTasks(projectId, run, rescan.attempt, chunk.map((c) => ({ ...c, seq: 1 })), auth);
-    if (!outcomes) {
+    const outcomes = await submitTasks(projectId, run, rescan.attempt, chunk.map((c) => ({ ...c, seq: 1 })), auth, 'posting');
+    // Cancelled (or retried) during posting: nothing more is posted or written for this attempt.
+    if (outcomes === 'stale') return;
+    if (outcomes === 'budget') {
       saveTaskPoints(projectId, run.id, rescan.attempt, taskPoints);
       if (hold(projectId, run.id, rescan.attempt, 'budget_exhausted', ['posting'])) counters.held += 1;
       return;
@@ -591,7 +672,8 @@ async function collectOne(projectId: string, rescan: RescanRow, auth: string, co
   const db = getDbForProject(projectId);
   const attempt = loadAttempt(projectId, rescan.run_id, rescan.attempt);
   const run = loadRun(projectId, rescan.run_id);
-  if (!attempt) return;
+  // Can't happen through this module (the attempt row is written before scanning); never skip it silently.
+  if (!attempt) throw new Error(`re-scan ${rescan.run_id} is scanning but attempt ${rescan.attempt} has no row`);
   if (!run) {
     if (setState(projectId, rescan.run_id, ['scanning'], rescan.attempt, 'orphaned', { finished: true })) counters.orphaned += 1;
     return;
@@ -607,8 +689,10 @@ async function collectOne(projectId: string, rescan: RescanRow, auth: string, co
   const checks = await checkGridTasks(toCheck, { auth, target: run.target, now });
   const step = await stepGridTasks(tasks, new Map(toCheck.map((t, i) => [t, checks[i]])), now, async (task): Promise<RepostOutcome> => {
     const seq = (task.seq ?? 1) + 1;
-    const outcomes = await submitTasks(projectId, run, rescan.attempt, [{ row: task.row, col: task.col, lat: task.lat, lng: task.lng, seq }], auth);
-    if (!outcomes) return { kind: 'budget' };
+    const outcomes = await submitTasks(projectId, run, rescan.attempt, [{ row: task.row, col: task.col, lat: task.lat, lng: task.lng, seq }], auth, 'scanning');
+    if (outcomes === 'budget') return { kind: 'budget' };
+    // Cancelled or retried meanwhile: stop posting in this step (stillScanning below then writes nothing).
+    if (outcomes === 'stale') return { kind: 'stopped' };
     const o = outcomes[0];
     if (o.state === 'accepted') return { kind: 'accepted', taskId: o.taskId };
     return o.state === 'unknown' ? { kind: 'unknown' } : { kind: 'rejected' };
@@ -642,6 +726,8 @@ function finalize(projectId: string, run: RunRow, rescan: RescanRow, results: Gr
   else if (!isCompleteGrid(results, run.grid_size)) reason = 'incomplete';
   else if (results.some((p) => p.failed && p.failed_reason === 'wrong_city')) reason = 'wrong_city_persistent';
   else if (results.filter((p) => p.failed).length > RESCAN_MAX_OTHER_FAILED) reason = 'too_many_failed';
+  // Not a hold reason, but the swap only writes a definite verdict (every re-scanned point is checked).
+  const safety = computedSafety(results, run.grid_size);
   if (reason) {
     if (hold(projectId, run.id, rescan.attempt, reason, ['scanning'], evidence)) counters.held += 1;
     return;
@@ -663,11 +749,11 @@ function finalize(projectId: string, run: RunRow, rescan: RescanRow, results: Gr
     const now = Date.now();
     db.prepare("UPDATE grid_rescans SET state = 'swapped', hold_reason = NULL, finished_at = ?, swapped_at = ?, updated_at = ? WHERE run_id = ? AND attempt = ? AND state = 'scanning'")
       .run(now, now, now, run.id, rescan.attempt);
+    // Same transaction as the new points: they are never live under the old (or no) flag.
+    setSafety(db, run.id, safety.report_safe, safety.reason);
     return 'swapped';
   })();
   if (outcome === 'swapped') {
-    const safety = computedSafety(sorted);
-    setSafety(projectId, run.id, safety.report_safe, safety.reason);
     counters.swapped += 1;
   } else if (outcome === 'orphaned') {
     if (setState(projectId, run.id, ['scanning'], rescan.attempt, 'orphaned', { finished: true })) counters.orphaned += 1;
@@ -682,23 +768,43 @@ const inFlight = new Map<string, Promise<void>>();
 export async function advanceRescans(projectId: string, credentials: { login: string; pass: string }, counters: RescanPassCounters): Promise<void> {
   const auth = btoa(`${credentials.login}:${credentials.pass}`);
   const now = Date.now();
-  counters.held += recoverStaleIntents(projectId, now);
+  recoverStaleIntents(projectId, now, counters);
   const db = getDbForProject(projectId);
-  const rows = db.prepare("SELECT * FROM grid_rescans WHERE state IN ('queued', 'scanning') ORDER BY queued_at ASC, run_id ASC").all() as RescanRow[];
+  const rows = db.prepare("SELECT * FROM grid_rescans WHERE state IN ('queued', 'posting', 'scanning') ORDER BY queued_at ASC, run_id ASC").all() as RescanRow[];
   for (const row of rows) {
-    if (row.state === 'queued' && counters.startsLeft <= 0) continue;
     const key = `rescan:${projectId}:${row.run_id}`;
     if (inFlight.has(key)) continue;
-    if (row.state === 'queued') counters.startsLeft -= 1;
-    const op = (row.state === 'queued' ? startOne(projectId, row, auth, counters) : collectOne(projectId, row, auth, counters))
-      .finally(() => inFlight.delete(key));
-    inFlight.set(key, op);
     try {
+      if (row.state === 'posting') {
+        holdStalledPosting(projectId, row, now, counters);
+        continue;
+      }
+      if (row.state === 'queued' && counters.startsLeft <= 0) continue;
+      if (row.state === 'queued') counters.startsLeft -= 1;
+      const op = (row.state === 'queued' ? startOne(projectId, row, auth, counters) : collectOne(projectId, row, auth, counters))
+        .finally(() => inFlight.delete(key));
+      inFlight.set(key, op);
       await op;
-    } catch {
-      // A local failure leaves the state as it was; stale intents are recovered on a later pass.
+    } catch (error) {
+      // The state is as it was (every write is conditional and transactional); stale intents and
+      // stalled posting are recovered on a later pass. Never swallowed: counted, logged and alerted.
+      reportRunError(projectId, row.run_id, row.series_id, error, counters);
     }
   }
+}
+
+/**
+ * A run in `posting` with nothing in flight in this process crashed between its claim and its last
+ * outcome. After RESCAN_INTENT_STALE_MS it is held post_unknown with its ledger as evidence; it is
+ * never re-posted automatically (some of its POSTs may have been billed).
+ */
+function holdStalledPosting(projectId: string, row: RescanRow, now: number, counters: RescanPassCounters): void {
+  const since = row.started_at ?? row.updated_at;
+  if (now - since <= RESCAN_INTENT_STALE_MS) return;
+  const submissions = getDbForProject(projectId).prepare('SELECT tag, state FROM grid_rescan_submissions WHERE run_id = ? AND attempt = ? ORDER BY submitted_at, tag')
+    .all(row.run_id, row.attempt) as Array<{ tag: string; state: string }>;
+  const evidence = { stalled_in: 'posting', since: new Date(since).toISOString(), submissions };
+  if (hold(projectId, row.run_id, row.attempt, 'post_unknown', ['posting'], evidence, 'posting_stalled')) counters.held += 1;
 }
 
 // --- Status ----------------------------------------------------------------------------------------
@@ -709,26 +815,69 @@ function mrtAverage(points: GridPoint[]): number | null {
   return Math.round((scanned.reduce((s, p) => s + Math.min(p.rank ?? 21, 21), 0) / scanned.length) * 10000) / 10000;
 }
 
+/**
+ * A done run's points without the competitor lists (only safety fields are needed), parsed in SQLite.
+ * A point whose rank is unresolved keeps its items, because reconcileGridPoints may resolve it.
+ * Results that aren't a JSON array come back NULL (and count as an incomplete grid).
+ */
+const SLIM_POINTS_SQL = `CASE WHEN json_valid(g.results) AND json_type(g.results) = 'array' THEN (
+  SELECT json_group_array(CASE WHEN json_extract(p.value, '$.rank_unresolved') THEN json(p.value) ELSE json_remove(p.value, '$.items') END)
+  FROM json_each(g.results) p) END`;
+
+/** Evidence for a computed verdict: the points that failed or whose rank is unknown. */
+function pointEvidence(points: GridPoint[]) {
+  return points.filter((p) => p.failed || p.rank_unresolved).map((p) => ({
+    row: p.row, col: p.col, reason: p.failed ? p.failed_reason ?? 'failed' : 'rank_unresolved', task_id: p.task_id, check_url: p.check_url, rechecks: p.rechecks,
+  }));
+}
+
+/**
+ * The "not safe to report" list: every run flagged unsafe (re-scans), plus every done run with no
+ * flag whose points make it unsafe (scheduled, manual, live; any project). Runs never checked by the
+ * wrong-city code (null, `not_checked`) are counted in not_checked_runs, not listed.
+ */
+function unsafeRuns() {
+  const unsafe = [];
+  let notChecked = 0;
+  for (const project of getProjects()) {
+    const db = getDbForProject(project.id);
+    const rows = db.prepare('SELECT s.run_id, s.reason, s.evidence, s.updated_at, g.series_id, g.keyword, g.target, g.ts FROM grid_run_safety s LEFT JOIN grid_searches g ON g.id = s.run_id WHERE s.report_safe = 0')
+      .all() as Array<{ run_id: string; reason: string | null; evidence: string | null; updated_at: number; series_id: string | null; keyword: string | null; target: string | null; ts: number | null }>;
+    for (const r of rows) {
+      unsafe.push({
+        project: { id: project.id, name: project.name }, run_id: r.run_id, monitor_id: r.series_id, keyword: r.keyword, target: r.target,
+        run_at: r.ts ? new Date(r.ts).toISOString() : null, reason: r.reason, evidence: r.evidence ? JSON.parse(r.evidence) : null,
+        flagged_at: new Date(r.updated_at).toISOString(), source: 'flag' as const,
+      });
+    }
+    const done = db.prepare(`SELECT g.id, g.series_id, g.keyword, g.target, g.ts, g.grid_size, ${SLIM_POINTS_SQL} AS points
+      FROM grid_searches g LEFT JOIN grid_run_safety s ON s.run_id = g.id WHERE g.status = 'done' AND s.run_id IS NULL ORDER BY g.ts`)
+      .all() as Array<{ id: string; series_id: string; keyword: string; target: string; ts: number; grid_size: number; points: string | null }>;
+    for (const r of done) {
+      const points = reconcileGridPoints(parsePoints(r.points), r.target);
+      const safety = checkedSafety(points, r.grid_size);
+      if (safety.report_safe === null) { notChecked += 1; continue; }
+      if (safety.report_safe) continue;
+      unsafe.push({
+        project: { id: project.id, name: project.name }, run_id: r.id, monitor_id: r.series_id, keyword: r.keyword, target: r.target,
+        run_at: new Date(r.ts).toISOString(), reason: safety.reason, evidence: pointEvidence(points), flagged_at: null, source: 'computed' as const,
+      });
+    }
+  }
+  return { unsafe, not_checked_runs: notChecked };
+}
+
 export function rescanStatus(filter: { label?: string; state?: string; unsafe?: boolean; manifest_id?: string } = {}) {
+  if (filter.unsafe) {
+    const { unsafe, not_checked_runs } = unsafeRuns();
+    return { unsafe, not_checked_runs };
+  }
   const counts: Record<string, number> = {};
   const runs = [];
   const detections = [];
-  const unsafe = [];
   let cost = 0;
   for (const project of getProjects()) {
     const db = getDbForProject(project.id);
-    if (filter.unsafe) {
-      const rows = db.prepare('SELECT s.run_id, s.reason, s.evidence, s.updated_at, g.series_id, g.keyword, g.target, g.ts FROM grid_run_safety s LEFT JOIN grid_searches g ON g.id = s.run_id WHERE s.report_safe = 0')
-        .all() as Array<{ run_id: string; reason: string | null; evidence: string | null; updated_at: number; series_id: string | null; keyword: string | null; target: string | null; ts: number | null }>;
-      for (const r of rows) {
-        unsafe.push({
-          project: { id: project.id, name: project.name }, run_id: r.run_id, monitor_id: r.series_id, keyword: r.keyword, target: r.target,
-          run_at: r.ts ? new Date(r.ts).toISOString() : null, reason: r.reason, evidence: r.evidence ? JSON.parse(r.evidence) : null,
-          flagged_at: new Date(r.updated_at).toISOString(),
-        });
-      }
-      continue;
-    }
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (filter.label) { conditions.push('r.label = ?'); params.push(filter.label); }
@@ -785,6 +934,5 @@ export function rescanStatus(filter: { label?: string; state?: string; unsafe?: 
       });
     }
   }
-  if (filter.unsafe) return { unsafe };
   return { counts, cost: Math.round(cost * 10000) / 10000, budget: getBudget(), exclusions: listExclusions(), runs, wrong_city_detections: detections };
 }

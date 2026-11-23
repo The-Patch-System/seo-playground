@@ -26,7 +26,7 @@ Fork of [paulmassen/seo-playground](https://github.com/paulmassen/seo-playground
 
 ## Railway
 
-- `app` service: builds this repo's Dockerfile, volume at `/data`, vars `DB_PATH=/data/seo-playground.db`, `CRON_SECRET`, `SITE_PASSWORD`, `RAILWAY_RUN_UID=0` (volume is root-owned; the image runs as uid 1001). Optional: `GRID_RETENTION_ENABLED=true` (see Retention above).
+- `app` service: builds this repo's Dockerfile, volume at `/data`, vars `DB_PATH=/data/seo-playground.db`, `CRON_SECRET`, `SITE_PASSWORD`, `RAILWAY_RUN_UID=0` (volume is root-owned; the image runs as uid 1001). Optional: `GRID_RETENTION_ENABLED=true` (see Retention above), `GEO_GRID_ALERT_WEBHOOK_URL` (secret; Slack incoming webhook for #seo-workflow-errors, see Alerts below).
 - `worker` service: same repo, start command `node scripts/geo-grid-worker.mjs`, vars `CRON_SECRET` (same value), `GEO_GRID_WORKER_URL=http://app.railway.internal:3000`. No volume, no public domain.
 - Volume backups are scheduled on the `app` volume.
 - Storage: the volume (`seo-playground-data`) is 50 GB. It sat near 0 until the Semrush history import (Oct 2026), then jumped to roughly 6 GB. Check Railway → project → volume card → Metrics. SQLite does not shrink its file after deletes, so turning retention on later will stop growth rather than free space. Volumes can be enlarged in Railway if needed.
@@ -57,7 +57,13 @@ Run payload:
 
 Data quality (Nov 2026, additive):
 - Points add `task_id`, `check_url`, `failed`, `failed_reason` (`wrong_city` | `task_error` | `timeout`) and `rank_unresolved`.
-- Run headers add `quality: { points, failed_points, wrong_city_failed, unresolved_points, rank_unresolved_points, wrong_city_rechecks }`, `rescanned_at` (set when a re-scan replaced the run's points; the run's date is unchanged) and `report_safe` / `report_safe_reason`. A run is **not safe to report** if it has any wrong-city failed point, more than 2 failed points, or a `rank_unresolved` point, or while a re-scan of it is pending or held (`pending_rescan`, `excluded_from_rescan`, `original_restored`, or a hold reason below). Monitors (list, `/runs`) carry their latest finished run's flag. Unsafe runs are not hidden: the CS OS sync still carries their numbers, so use `GET /api/v1/geo-grid/rescans?unsafe=true` to skip and investigate them.
+- Run headers add `quality: { points, failed_points, wrong_city_failed, unresolved_points, rank_unresolved_points, wrong_city_rechecks }`, `rescanned_at` (set when a re-scan replaced the run's points; the run's date is unchanged) and `report_safe` / `report_safe_reason`. The rule is **fail loudly**: anything unknown or unfinished is `null`, never `true`.
+  - `report_safe: true`: every point was checked by the wrong-city code and the run passed.
+  - `report_safe: false` + `report_safe_reason`: **not safe to report**. Reasons: `wrong_city_persistent` (any wrong-city failed point), `incomplete_grid` (not exactly one point per row/col of the grid), `too_many_failed` (more than 2 failed points), `rank_unresolved` (a truncated point where the target's rank is unknown), or a re-scan reason: `pending_rescan`, `excluded_from_rescan`, `original_restored`, or a hold reason below.
+  - `report_safe: null`: unknown. `report_safe_reason: "not_checked"` for a finished run the wrong-city check never saw (every run before Nov 2026, Semrush `import-*` runs, Nov 15 runs not re-scanned yet: a non-failed point without `raw_count`). A known problem wins over `not_checked` (e.g. an old partial grid is `false`, `incomplete_grid`). A run that isn't finished (pending/failed) is `null` with no reason.
+  - A re-scan's stored flag always wins over the computed one.
+  - Every endpoint shows the same flag: `runs/{run_id}`, the monitors list (on the monitor and its `latest_run`), `/latest` and `/runs`. A monitor carries its **latest finished run's** flag.
+- Unsafe runs are not hidden: the CS OS sync still carries their numbers. `GET /api/v1/geo-grid/rescans?unsafe=true` is the "not safe to report" list: `{ unsafe: [...], not_checked_runs }`. `unsafe[]` has every run flagged by a re-scan (`source: "flag"`) **and** every finished run with no flag whose points make it unsafe (`source: "computed"`; scheduled, manual or live; any project), each with `reason` and `evidence` (its failed and rank-unresolved points: row, col, reason, task_id, check_url, rechecks). `not_checked_runs` counts the finished runs that are `null` / `not_checked` (they aren't listed).
 
 Run history adds `metrics: { average_positions, share_of_voices, mrt_average_positions }` keyed by ISO date, like Semrush MRT. `mrt_average_positions` is what the CS OS map pack sync (n8n "CS OS — Sync SEO Playground Map Pack (Daily)") stores, so its numbers line up with the Semrush-era history. The monitor list's `project` also carries `domain`.
 
@@ -78,6 +84,23 @@ API (same `x-api-key`):
 - `POST { action: "cancel" | "undo" | "retry", run_ids }` (max 25): cancel a queued/scanning re-scan; undo a swap (restores the old points, refused if the run changed since); retry a held/cancelled/undone run as a new attempt (old attempts are kept).
 - `POST { action: "exclude" | "unexclude", monitor_ids, reason? }`: the persistent exclude list (e.g. The Mobility Project, `grid-2d62872a`, whose grid is centered in the Nevada desert).
 - `POST { action: "budget", limit_usd }`.
-- `GET ?label=&state=&manifest_id=`: counts by state, the budget, and per run: state, hold reason, points collected/pending, wrong-city detections and points left, failed points, old → new `mrt_average_position`, searches and cost; plus every wrong-city detection (task_id, check_url, far listings). `GET ?unsafe=true`: the "not safe to report" list with reason and evidence.
+- `GET ?label=&state=&manifest_id=`: counts by state, the budget, and per run: state, hold reason, points collected/pending, wrong-city detections and points left, failed points, old → new `mrt_average_position`, searches and cost; plus every wrong-city detection (task_id, check_url, far listings). `GET ?unsafe=true`: the "not safe to report" list with reason and evidence, plus `not_checked_runs` (see Data quality above).
+
+Submission outcomes (Codex round 3): a POST counts as **rejected** (safe to re-post) only on HTTP 4xx, HTTP 200 with a top-level DataForSEO status of 40000+ and no tasks, or a task in the answer with a status of 40000+. HTTP 5xx, a network error or timeout, a body that isn't JSON, no `tasks` array, or a task missing from the answer are **unknown** (held `post_unknown`, never re-posted). Re-scans always post to the standard queue (priority 1), since the budget reserves the standard price. A run left in `posting` for 10+ min with nothing in flight (a crash between claiming it and finishing its POSTs) is held `post_unknown` with its ledger (tags and states) as evidence. Every state change and its safety flag are written in one transaction (start, cancel, hold, undo, swap). A cancel or retry that lands while a re-scan is posting stops it: the attempt is re-checked in the same transaction as each submission's intent.
+
+Scheduled runs: a task DataForSEO refused at the first post is kept as a retry-pending point and re-posted after 60 s (up to 3 refusals, then failed `task_error`); if no task at all was accepted, no run is created and the schedule is retried. A task with an unclear outcome is not re-posted, so the run finishes incomplete and is flagged `incomplete_grid`. `items: null` from DataForSEO is a task error (re-posted), not "not in the top 20"; only `items: []` is a real zero-result search.
+
+## Alerts
+
+`src/lib/grid-alerts.ts`. Every alert is logged as one line, `[geo-grid-alert] {json}`, in the `app` service logs. If `GEO_GRID_ALERT_WEBHOOK_URL` is set, it is also posted to Slack as `{ text }` (kind, reason, monitor/run/project ids), at most once per kind + run + reason per app process (a held run doesn't alert every pass; an undelivered post is retried on the next occurrence). The webhook URL is a Slack incoming webhook for **#seo-workflow-errors**. It is a **secret**: set it only as an env var on the Railway `app` service, never commit or log it. Without it, alerts go to the logs only.
+
+Kinds:
+- `rescan_held`: a re-scan was held (reason = the hold reason, e.g. `post_unknown`, `wrong_city_persistent`, `budget_exhausted`).
+- `posting_stalled`: a re-scan stayed in `posting` for 10+ min with nothing in flight; held `post_unknown`.
+- `rescan_error`: one re-scan's worker step threw; its state is unchanged and it's tried again next pass. Also counted in the worker response (`rescans.errors`).
+- `scheduled_run_unsafe`: a scheduled or manual queued run finished, but its points aren't safe to report (reason as for `report_safe_reason`).
+- `price_mismatch`: DataForSEO billed an accepted re-scan task more than 1% over `GEO_GRID_RESCAN_TASK_PRICE_USD`, or reported no cost for it.
+
+The worker response also adds `gridCollectErrors` (scheduled/manual runs whose collection threw locally; each is logged with its run id), and each schedule that didn't start cleanly is logged with its monitor id and reason.
 
 Rollout (Nov 2026): preview `date=2026-11-15` with Mobility excluded → stage 1 `pilot-1` (King George only) → verify the saved task IDs independently (free `task_get`) → stage 2 `pilot-2` (8 border monitors + 1 ad-heavy) → stages of 25 → `all: true` for the rest. About 23k points ≈ $42 plus re-posts.

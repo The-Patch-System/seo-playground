@@ -36,9 +36,13 @@ const freshDay = () => { setNow(clock + DAY); return clock; };
 
 type Reply = 'bad' | 'good' | 'error' | 'pending';
 let reply: (tag: string) => Reply = () => 'good';
-let postMode: 'ok' | 'throw' | 'http500' = 'ok';
+let postMode: 'ok' | 'throw' | 'http500' | 'http400' | 'missing' = 'ok';
 let postCalls = 0;
 const postedTags: string[] = [];
+const postedPriorities: number[] = [];
+let postCost = 0.0018;
+/** Runs inside the stubbed task_post, after the request is "sent" (e.g. a cancel racing the POST). */
+let onPost: ((tags: string[]) => void) | null = null;
 
 function stubDataForSeo() {
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
@@ -46,10 +50,14 @@ function stubDataForSeo() {
       postCalls += 1;
       if (postMode === 'throw') throw new Error('socket hang up');
       if (postMode === 'http500') return new Response('oops', { status: 500 });
-      const body = JSON.parse(String(init?.body)) as Array<{ tag: string; depth: number }>;
+      if (postMode === 'http400') return new Response(JSON.stringify({ status_code: 40000, status_message: 'Bad Request' }), { status: 400 });
+      const body = JSON.parse(String(init?.body)) as Array<{ tag: string; depth: number; priority: number }>;
       for (const task of body) expect(task.depth).toBe(30);
       postedTags.push(...body.map((t) => t.tag));
-      return new Response(JSON.stringify({ tasks: body.map((t) => ({ id: `id-${t.tag}`, status_code: 20100, cost: 0.0018 })) }));
+      postedPriorities.push(...body.map((t) => t.priority));
+      onPost?.(body.map((t) => t.tag));
+      if (postMode === 'missing') return new Response(JSON.stringify({ status_code: 20000, tasks: [] }));
+      return new Response(JSON.stringify({ tasks: body.map((t) => ({ id: `id-${t.tag}`, status_code: 20100, cost: postCost })) }));
     }
     const id = url.split('/').pop()!;
     const kind = reply(id.slice(3));
@@ -73,10 +81,10 @@ function oldPoints(size: number): GridPoint[] {
   return points;
 }
 
-function seedRun(projectId: string, id: string, opts: { ts?: number; size?: number; series?: string; results?: GridPoint[] } = {}): GridSearchEntry {
+function seedRun(projectId: string, id: string, opts: { ts?: number; size?: number; series?: string; results?: GridPoint[]; queueMode?: GridSearchEntry['queue_mode'] } = {}): GridSearchEntry {
   const entry: GridSearchEntry = {
     id, series_id: opts.series ?? `grid-${id}`, ts: opts.ts ?? Date.parse('2026-10-15T17:00:00Z'), keyword: bad.keyword, target,
-    center: `${bad.lat},${bad.lng}`, grid_size: opts.size ?? 1, spacing_km: 2, language: 'English', status: 'done', queue_mode: 'standard',
+    center: `${bad.lat},${bad.lng}`, grid_size: opts.size ?? 1, spacing_km: 2, language: 'English', status: 'done', queue_mode: opts.queueMode ?? 'standard',
   };
   saveImportedGridRunForProject(projectId, entry, opts.results ?? oldPoints(entry.grid_size));
   return entry;
@@ -84,6 +92,8 @@ function seedRun(projectId: string, id: string, opts: { ts?: number; size?: numb
 
 const runJson = (projectId: string, runId: string) =>
   (getDbForProject(projectId).prepare('SELECT results, ts FROM grid_searches WHERE id = ?').get(runId) as { results: string; ts: number } | undefined);
+const gridSizeOf = (projectId: string, runId: string) =>
+  (getDbForProject(projectId).prepare('SELECT grid_size FROM grid_searches WHERE id = ?').get(runId) as { grid_size: number } | undefined)?.grid_size ?? 0;
 const rescanRow = (projectId: string, runId: string) =>
   getDbForProject(projectId).prepare('SELECT * FROM grid_rescans WHERE run_id = ?').get(runId) as
     { state: string; hold_reason: string | null; attempt: number; swapped_at: number | null } | undefined;
@@ -95,7 +105,7 @@ const submissions = (projectId: string, runId: string) =>
     Array<{ tag: string; state: string; seq: number }>;
 const safetyOf = (projectId: string, runId: string) => {
   const raw = runJson(projectId, runId);
-  return runSafety(projectId, runId, raw ? JSON.parse(raw.results) as GridPoint[] : []);
+  return runSafety(projectId, runId, raw ? JSON.parse(raw.results) as GridPoint[] : [], gridSizeOf(projectId, runId));
 };
 const rescanCount = () => getProjects().reduce((n, p) => n + (getDbForProject(p.id).prepare('SELECT COUNT(*) AS n FROM grid_rescans').get() as { n: number }).n, 0);
 
@@ -114,6 +124,16 @@ function queue(runIds: string[], label = 'test') {
   return { preview, started };
 }
 
+/** Collects the [geo-grid-alert] lines logged while it is active. */
+function captureAlerts() {
+  const alerts: Array<Record<string, unknown> & { kind?: string; run_id?: string; reason?: string }> = [];
+  const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+    const line = args.map(String).join(' ');
+    if (line.startsWith('[geo-grid-alert] ')) alerts.push(JSON.parse(line.slice('[geo-grid-alert] '.length)));
+  });
+  return { alerts, restore: () => spy.mockRestore() };
+}
+
 beforeAll(() => {
   projectB = createProject({ name: 'Clinic B', domain: 'clinic-b.example', defaultLocation: '', defaultLanguage: '', defaultCoordinates: '', rankTrackerDepth: '100' });
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -128,6 +148,8 @@ afterEach(() => {
   }
   reply = () => 'good';
   postMode = 'ok';
+  postCost = 0.0018;
+  onPost = null;
 });
 
 afterAll(() => {
@@ -177,7 +199,8 @@ describe('selection and preview', () => {
     expect(preview).toMatchObject({ startable: true, runs: 1, label: 'dry', selected: [{ run_id: 'run-preview' }] });
     expect(runJson('default', 'run-preview')).toEqual(before);
     expect(rescanCount()).toBe(rescansBefore);
-    expect(safetyOf('default', 'run-preview')).toEqual({ report_safe: true, reason: null });
+    // The seeded (pre-fix) points were never wrong-city checked: unknown, not safe.
+    expect(safetyOf('default', 'run-preview')).toEqual({ report_safe: null, reason: 'not_checked' });
     const manifest = getControlDb().prepare('SELECT * FROM grid_rescan_manifests WHERE manifest_id = ?').get(preview.manifest_id) as { runs: string; started_at: number | null };
     expect(JSON.parse(manifest.runs)).toHaveLength(1);
     expect(manifest.started_at).toBeNull();
@@ -502,11 +525,39 @@ describe('re-scan worker', () => {
     expect(postCalls).toBe(calls);
   });
 
-  it('re-submits a run whose first POST was refused (HTTP error) after the 60 s backoff', async () => {
+  // Patch fork (Codex round 3): a 5xx may have been accepted and billed, so it is unknown, never rejected.
+  it('holds post_unknown (never re-posts) when task_post answers HTTP 500', async () => {
+    const t = freshDay();
+    seedRun('default', 'run-500');
+    queue(['run-500']);
+    postMode = 'http500';
+    const reservedBefore = getBudget().reserved;
+    await pass();
+    expect(rescanRow('default', 'run-500')).toMatchObject({ state: 'held', hold_reason: 'post_unknown' });
+    expect(submissions('default', 'run-500')).toEqual([{ tag: 'rs:run-500:a1:r0c0:s1', state: 'unknown', seq: 1 }]);
+    expect(getBudget().reserved).toBeCloseTo(reservedBefore + 0.0018, 6);
+    const calls = postCalls;
+    postMode = 'ok';
+    setNow(t + 30 * MIN);
+    await pass();
+    expect(postCalls).toBe(calls);
+  });
+
+  it('holds post_unknown when a submitted task is missing from the task_post response', async () => {
+    freshDay();
+    seedRun('default', 'run-missing-task');
+    queue(['run-missing-task']);
+    postMode = 'missing';
+    await pass();
+    expect(rescanRow('default', 'run-missing-task')).toMatchObject({ state: 'held', hold_reason: 'post_unknown' });
+    expect(submissions('default', 'run-missing-task')).toEqual([{ tag: 'rs:run-missing-task:a1:r0c0:s1', state: 'unknown', seq: 1 }]);
+  });
+
+  it('re-submits a run whose first POST was refused (HTTP 4xx) after the 60 s backoff', async () => {
     const t = freshDay();
     seedRun('default', 'run-refused');
     queue(['run-refused']);
-    postMode = 'http500';
+    postMode = 'http400';
     await pass();
     expect(rescanRow('default', 'run-refused')!.state).toBe('scanning');
     expect(submissions('default', 'run-refused')).toEqual([{ tag: 'rs:run-refused:a1:r0c0:s1', state: 'rejected', seq: 1 }]);
@@ -519,5 +570,198 @@ describe('re-scan worker', () => {
     expect(rescanRow('default', 'run-refused')!.state).toBe('swapped');
     const [point] = JSON.parse(runJson('default', 'run-refused')!.results) as GridPoint[];
     expect(point.task_id).toBe('id-rs:run-refused:a1:r0c0:s3');
+  });
+
+  // Patch fork (Codex round 3): re-scans reserve the standard price, so they always use the standard queue.
+  it('posts priority 1 even for a run that was scanned in the priority queue', async () => {
+    freshDay();
+    seedRun('default', 'run-priority', { queueMode: 'priority' });
+    queue(['run-priority']);
+    const before = postedPriorities.length;
+    await pass();
+    expect(postedPriorities.slice(before)).toEqual([1]);
+  });
+
+  it('alerts price_mismatch when an accepted task costs more than 1% over the reserved price', async () => {
+    freshDay();
+    const logged = captureAlerts();
+    seedRun('default', 'run-pricey');
+    queue(['run-pricey']);
+    postCost = 0.0036;
+    await pass();
+    logged.restore();
+    const alert = logged.alerts.find((a) => a.kind === 'price_mismatch' && a.run_id === 'run-pricey');
+    expect(alert).toMatchObject({ project_id: 'default', detail: { actual_cost: 0.0036, reserved_price: 0.0018 } });
+  });
+
+  // Patch fork (Codex round 3): a cancel that lands while a re-post is in flight stops the rest of the step.
+  it('stops re-posting when the run is cancelled during the first re-post of a step', async () => {
+    const t = freshDay();
+    seedRun('default', 'run-cancel-race', { size: 2 });
+    reply = (tag) => (tag.endsWith(':s1') ? 'bad' : 'good');
+    queue(['run-cancel-race']);
+    await pass();
+    setNow(t + MIN); await pass();
+    let cancelled = false;
+    onPost = (tags) => {
+      if (!cancelled && tags.some((tag) => tag.startsWith('rs:run-cancel-race:') && tag.endsWith(':s2'))) {
+        cancelled = true;
+        expect(applyRescanAction('cancel', ['run-cancel-race'])[0]).toMatchObject({ ok: true });
+      }
+    };
+    setNow(t + 5 * MIN); await pass();
+    expect(postedTags.filter((tag) => tag.startsWith('rs:run-cancel-race:') && tag.endsWith(':s2'))).toHaveLength(1);
+    expect(rescanRow('default', 'run-cancel-race')!.state).toBe('cancelled');
+    // Nothing recorded for the points that were never posted.
+    expect(submissions('default', 'run-cancel-race').filter((x) => x.seq === 2)).toHaveLength(1);
+  });
+
+  // Patch fork (Codex round 3): a crash between the claim and the first intent must not hang in posting.
+  it('holds post_unknown (never re-posts) a run stuck in posting for 10+ min with nothing in flight', async () => {
+    const t = freshDay();
+    const logged = captureAlerts();
+    seedRun('default', 'run-stuck-posting');
+    queue(['run-stuck-posting']);
+    // A crash right after the conditional claim (state = posting) and one accepted submission.
+    const db = getDbForProject('default');
+    db.prepare("UPDATE grid_rescans SET state = 'posting', started_at = ? WHERE run_id = 'run-stuck-posting'").run(t);
+    db.prepare(`INSERT INTO grid_rescan_submissions (tag, run_id, attempt, row, col, seq, state, task_id, reserved, cost, submitted_at, resolved_at)
+      VALUES ('rs:run-stuck-posting:a1:r0c0:s1', 'run-stuck-posting', 1, 0, 0, 1, 'accepted', 'tid', 0.0018, 0.0018, ?, ?)`).run(t, t);
+    const calls = postCalls;
+    setNow(t + 9 * MIN); await pass();
+    expect(rescanRow('default', 'run-stuck-posting')!.state).toBe('posting');
+    setNow(t + 11 * MIN);
+    expect(await pass()).toMatchObject({ held: 1 });
+    logged.restore();
+    expect(rescanRow('default', 'run-stuck-posting')).toMatchObject({ state: 'held', hold_reason: 'post_unknown' });
+    expect(postCalls).toBe(calls);
+    const flagged = (rescanStatus({ unsafe: true }).unsafe ?? []).find((u) => u.run_id === 'run-stuck-posting')!;
+    expect(flagged).toMatchObject({ reason: 'post_unknown', evidence: { submissions: [{ tag: 'rs:run-stuck-posting:a1:r0c0:s1', state: 'accepted' }] } });
+    expect(logged.alerts.some((a) => a.run_id === 'run-stuck-posting' && a.reason === 'post_unknown')).toBe(true);
+  });
+});
+
+describe('fail-loud sweep', () => {
+  it('counts and alerts a scanning run with no attempt row instead of skipping it silently every pass', async () => {
+    freshDay();
+    seedRun('default', 'run-no-attempt');
+    reply = () => 'pending';
+    queue(['run-no-attempt']);
+    await pass();
+    getDbForProject('default').prepare("DELETE FROM grid_rescan_attempts WHERE run_id = 'run-no-attempt'").run();
+    const logged = captureAlerts();
+    const counters = await pass();
+    logged.restore();
+    expect(counters.errors).toBe(1);
+    expect(logged.alerts.find((a) => a.kind === 'rescan_error' && a.run_id === 'run-no-attempt')).toBeDefined();
+  });
+});
+
+// --- Atomic safety flags (Codex round 3) -------------------------------------------------------------
+
+/** Makes every write to grid_run_safety fail, to prove the state change rolls back with it. */
+function failSafetyWrites(projectId: string) {
+  const db = getDbForProject(projectId);
+  db.exec(`CREATE TRIGGER fail_safety_insert BEFORE INSERT ON grid_run_safety BEGIN SELECT RAISE(ABORT, 'safety write failed'); END;
+    CREATE TRIGGER fail_safety_update BEFORE UPDATE ON grid_run_safety BEGIN SELECT RAISE(ABORT, 'safety write failed'); END;`);
+  return () => db.exec('DROP TRIGGER IF EXISTS fail_safety_insert; DROP TRIGGER IF EXISTS fail_safety_update;');
+}
+
+describe('safety flags change in the same transaction as the state', () => {
+  it('start: no queued row without its pending_rescan flag', () => {
+    freshDay();
+    seedRun('default', 'run-atomic-start');
+    const preview = previewRescan({ run_ids: ['run-atomic-start'] });
+    const restore = failSafetyWrites('default');
+    let result: ReturnType<typeof startRescan> | undefined;
+    try { result = startRescan(preview.manifest_id); } catch { /* the old code throws after committing */ } finally { restore(); }
+    expect(rescanRow('default', 'run-atomic-start')).toBeUndefined();
+    expect(result).toMatchObject({ queued: [], skipped: [{ run_id: 'run-atomic-start', reason: expect.stringMatching(/safety write failed/) }] });
+  });
+
+  it('cancel: the state stays when the flag cannot be written', () => {
+    freshDay();
+    seedRun('default', 'run-atomic-cancel');
+    queue(['run-atomic-cancel']);
+    const restore = failSafetyWrites('default');
+    let result: ReturnType<typeof applyRescanAction> | undefined;
+    try { result = applyRescanAction('cancel', ['run-atomic-cancel']); } catch { /* old code */ } finally { restore(); }
+    expect(rescanRow('default', 'run-atomic-cancel')!.state).toBe('queued');
+    expect(result?.[0]).toMatchObject({ run_id: 'run-atomic-cancel', ok: false, error: expect.stringMatching(/safety write failed/) });
+  });
+
+  it('hold: the run is not held without its reason; the worker counts and alerts the error', async () => {
+    freshDay();
+    const budget = getBudget();
+    setBudgetLimit(budget.spent + budget.reserved + 0.001);
+    seedRun('default', 'run-atomic-hold');
+    queue(['run-atomic-hold']);
+    const logged = captureAlerts();
+    const restore = failSafetyWrites('default');
+    let counters: ReturnType<typeof newRescanCounters> | undefined;
+    try { counters = await pass(); } finally { restore(); logged.restore(); setBudgetLimit(60); }
+    expect(rescanRow('default', 'run-atomic-hold')).toMatchObject({ state: 'posting', hold_reason: null });
+    expect(attemptRows('default', 'run-atomic-hold')[0].state).toBe('posting');
+    expect(counters).toMatchObject({ held: 0, errors: 1 });
+    expect(logged.alerts.find((a) => a.kind === 'rescan_error' && a.run_id === 'run-atomic-hold')).toMatchObject({ reason: expect.stringMatching(/safety write failed/) });
+  });
+
+  it('swap: the new points are not written without the new flag', async () => {
+    const t = freshDay();
+    seedRun('default', 'run-atomic-swap');
+    const original = runJson('default', 'run-atomic-swap');
+    queue(['run-atomic-swap']);
+    await pass();
+    setNow(t + MIN);
+    const restore = failSafetyWrites('default');
+    try { await pass(); } finally { restore(); }
+    expect(rescanRow('default', 'run-atomic-swap')!.state).toBe('scanning');
+    expect(runJson('default', 'run-atomic-swap')).toEqual(original);
+    expect(safetyOf('default', 'run-atomic-swap')).toEqual({ report_safe: false, reason: 'pending_rescan' });
+  });
+
+  it('undo: the old points are not restored while the run is still flagged safe', async () => {
+    const t = freshDay();
+    seedRun('default', 'run-atomic-undo');
+    queue(['run-atomic-undo']);
+    await pass();
+    setNow(t + MIN); await pass();
+    expect(rescanRow('default', 'run-atomic-undo')!.state).toBe('swapped');
+    const swapped = runJson('default', 'run-atomic-undo');
+    const restore = failSafetyWrites('default');
+    let result: ReturnType<typeof applyRescanAction> | undefined;
+    try { result = applyRescanAction('undo', ['run-atomic-undo']); } catch { /* old code */ } finally { restore(); }
+    expect(runJson('default', 'run-atomic-undo')).toEqual(swapped);
+    expect(rescanRow('default', 'run-atomic-undo')!.state).toBe('swapped');
+    expect(safetyOf('default', 'run-atomic-undo')).toEqual({ report_safe: true, reason: null });
+    expect(result?.[0]).toMatchObject({ ok: false });
+  });
+});
+
+// --- The "not safe to report" list (Codex round 3) ----------------------------------------------------
+
+describe('unsafe list', () => {
+  it('includes done runs whose computed safety is false, and counts runs never checked', () => {
+    freshDay();
+    const checked = (row: number, col: number): GridPoint => ({ row, col, lat: 1, lng: 1, rank: 3, items: [], raw_count: 20 });
+    // A scheduled run (no re-scan) with a wrong-city point, in another project.
+    seedRun(projectB.id, 'run-computed-unsafe', { size: 2, results: [
+      checked(0, 0), checked(0, 1), checked(1, 0),
+      { row: 1, col: 1, lat: 1, lng: 1, rank: null, items: [], failed: true, failed_reason: 'wrong_city', task_id: 't-wc', check_url: 'https://g/wc' },
+    ] });
+    seedRun(projectB.id, 'run-computed-safe', { size: 1, results: [checked(0, 0)] });
+    seedRun(projectB.id, 'run-partial', { size: 2, results: [checked(0, 0)] });
+    const notCheckedBefore = rescanStatus({ unsafe: true }).not_checked_runs!;
+    seedRun(projectB.id, 'run-never-checked');
+    const status = rescanStatus({ unsafe: true });
+    expect(status.not_checked_runs).toBe(notCheckedBefore + 1);
+    const unsafe = status.unsafe!;
+    expect(unsafe.find((u) => u.run_id === 'run-computed-unsafe')).toMatchObject({
+      project: { id: projectB.id }, monitor_id: 'grid-run-computed-unsafe', reason: 'wrong_city_persistent',
+      evidence: [{ row: 1, col: 1, reason: 'wrong_city', task_id: 't-wc', check_url: 'https://g/wc' }],
+    });
+    expect(unsafe.find((u) => u.run_id === 'run-partial')).toMatchObject({ reason: 'incomplete_grid' });
+    expect(unsafe.find((u) => u.run_id === 'run-computed-safe')).toBeUndefined();
+    expect(unsafe.find((u) => u.run_id === 'run-never-checked')).toBeUndefined();
   });
 });

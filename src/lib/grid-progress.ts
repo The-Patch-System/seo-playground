@@ -4,6 +4,8 @@ import {
 } from '@/lib/db';
 import { dataForSeoBaseUrl, gridTaskTag, MAX_POINT_ATTEMPTS, repostGridPoint } from '@/app/dashboard/local-finder/grid-api';
 import { buildGridPoint, failedGridPoint, type BuiltPoint, type RawLocalItem } from '@/lib/grid-point-builder';
+import { notifyGridAlert } from '@/lib/grid-alerts';
+import { computedSafety } from '@/lib/grid-safety';
 
 export { MAX_POINT_ATTEMPTS };
 
@@ -75,12 +77,13 @@ export async function checkGridTask(
     const dfsTask = data.tasks?.[0];
     if (!dfsTask || stillProcessing.has(dfsTask.status_code ?? 0)) return waitOrTimeout();
     const result = dfsTask.result?.[0];
-    // Patch fork: the task failed, or "succeeded" without a result object. Upstream stored these as an
-    // empty point, which showed as "not found" even though Google was never checked there.
-    if (dfsTask.status_code !== 20000 || !result || result.items === undefined) {
+    // Patch fork: the task failed, or "succeeded" without a result object or an items array (incl.
+    // items: null). Upstream stored these as an empty point, which showed as "not found" even though
+    // Google was never checked there. Only items: [] is a real zero-result search.
+    if (dfsTask.status_code !== 20000 || !result || !Array.isArray(result.items)) {
       return { kind: 'bad', recheck: { task_id: task.task_id, check_url: result?.check_url, reason: 'task_error' } };
     }
-    const built = buildGridPoint(task, result.items ?? [], ctx.target, { task_id: task.task_id, check_url: result.check_url });
+    const built = buildGridPoint(task, result.items, ctx.target, { task_id: task.task_id, check_url: result.check_url });
     if (built.location.wrongCity) {
       return { kind: 'bad', recheck: { task_id: task.task_id, check_url: result.check_url, reason: 'wrong_city', far: built.location.far } };
     }
@@ -110,7 +113,9 @@ export type RepostOutcome =
   /** The POST may or may not have been accepted (and billed): the point stops, nothing is re-posted. */
   | { kind: 'unknown' }
   /** The re-scan spend budget has no room: nothing was posted. */
-  | { kind: 'budget' };
+  | { kind: 'budget' }
+  /** The caller's attempt is no longer current (cancelled or retried): nothing was posted, stop posting. */
+  | { kind: 'stopped' };
 
 /**
  * Patch fork: one collection step for a run's pending points, shared by scheduled runs and re-scans
@@ -126,6 +131,7 @@ export async function stepGridTasks(
   const ready: GridPoint[] = [];
   const pending: GridTaskPoint[] = [];
   let budgetExhausted = false;
+  let stopped = false;
   let unknown = 0;
   for (const original of tasks) {
     let task = original;
@@ -154,7 +160,7 @@ export async function stepGridTasks(
         retry_due_at: Math.max(now, (task.submitted_at ?? now) + retryDelayMs(check.recheck.reason, posts)),
       };
     }
-    if ((task.retry_due_at ?? 0) > now || budgetExhausted) {
+    if ((task.retry_due_at ?? 0) > now || budgetExhausted || stopped) {
       pending.push(task);
       continue;
     }
@@ -170,6 +176,11 @@ export async function stepGridTasks(
     }
     if (outcome.kind === 'budget') {
       budgetExhausted = true;
+      pending.push(task);
+      continue;
+    }
+    if (outcome.kind === 'stopped') {
+      stopped = true;
       pending.push(task);
       continue;
     }
@@ -233,5 +244,15 @@ async function collectGridProgressOnce(
 
   const accumulated = [...progress.results, ...readyPoints];
   updateGridProgressForProject(projectId, entry.id, accumulated, pendingTasks);
+  if (pendingTasks.length === 0) {
+    // Patch fork: a finished run whose numbers aren't safe to report is raised, not just flagged.
+    const safety = computedSafety(accumulated, entry.grid_size);
+    if (!safety.report_safe) {
+      void notifyGridAlert({
+        kind: 'scheduled_run_unsafe', reason: safety.reason ?? 'unsafe', project_id: projectId, run_id: entry.id, monitor_id: entry.series_id,
+        detail: { failed: accumulated.filter((p) => p.failed).map((p) => ({ row: p.row, col: p.col, reason: p.failed_reason, task_id: p.task_id })) },
+      });
+    }
+  }
   return { status: pendingTasks.length === 0 ? 'done' : 'pending', ready: accumulated.length, total };
 }

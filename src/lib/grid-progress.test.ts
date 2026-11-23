@@ -9,7 +9,7 @@ process.env.DB_PATH = path.join(tmpDir, 'test.db');
 
 import { getGridProgressForProject, saveGridSearchPendingForProject, type GridSearchEntry, type GridTaskPoint } from './db';
 import { collectGridProgress, MAX_POINT_ATTEMPTS } from './grid-progress';
-import { fetchOneGridPoint, postGridTaskChunk } from '@/app/dashboard/local-finder/grid-api';
+import { fetchOneGridPoint, postGridTaskChunk, postGridTasksQueue } from '@/app/dashboard/local-finder/grid-api';
 import { loadDfsFixture, withTaskId } from './__fixtures__/dfs/load';
 
 afterAll(() => { fs.rmSync(tmpDir, { recursive: true, force: true }); vi.unstubAllGlobals(); });
@@ -270,13 +270,139 @@ describe('postGridTaskChunk', () => {
     expect(body[0]).toEqual({ keyword: 'pt', location_coordinate: '1.000000,2.000000', language_name: 'English', depth: 30, priority: 1, tag: 'run|r0c0' });
     expect(body[1].tag).toBeUndefined();
     expect(posted.results).toEqual([
-      { taskId: 'a', statusCode: 20100, cost: 0.0018 }, { taskId: null, statusCode: 40501, cost: 0 }, { taskId: null, statusCode: 20100, cost: 0 },
+      { taskId: 'a', statusCode: 20100, cost: 0.0018, outcome: 'accepted' },
+      { taskId: null, statusCode: 40501, cost: 0, outcome: 'rejected' },
+      // 20100 with no id: DataForSEO may have queued (and billed) it, so it isn't a rejection.
+      { taskId: null, statusCode: 20100, cost: 0, outcome: 'unknown' },
     ]);
   });
 
-  it('reports a network failure as an error with no results', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('socket hang up'); }));
-    expect(await postGridTaskChunk([{ keyword: 'pt', lat: 1, lng: 2, language: 'English', priority: 1 }], 'auth')).toEqual({ results: [], error: 'socket hang up' });
+  // Patch fork (Codex round 3): only a definitive refusal may be re-posted; anything unclear is unknown.
+  it('marks a task missing from the response as unknown, never rejected', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ tasks: [{ id: 'a', status_code: 20100, cost: 0.0018 }] }))));
+    const req = { keyword: 'pt', lat: 1, lng: 2, language: 'English', priority: 1 as const };
+    const posted = await postGridTaskChunk([req, req], 'auth');
+    expect(posted.results.map((r) => r.outcome)).toEqual(['accepted', 'unknown']);
+    expect(posted.error).toBeUndefined();
+  });
+
+  it.each([
+    ['an HTTP 4xx', () => new Response('{"status_code":40100}', { status: 401 }), true],
+    ['HTTP 200 with a top-level 4xxxx and no tasks', () => new Response(JSON.stringify({ status_code: 40200, status_message: 'Payment required', tasks: null })), true],
+    ['an HTTP 5xx', () => new Response('oops', { status: 500 }), false],
+    ['a network error', () => { throw new Error('socket hang up'); }, false],
+    ['a body that is not JSON', () => new Response('<html>bad gateway</html>'), false],
+    ['a response with no tasks array', () => new Response(JSON.stringify({ status_code: 20000 })), false],
+  ])('reports %s as a call error', async (_label, reply, rejected) => {
+    vi.stubGlobal('fetch', vi.fn(async () => reply()));
+    const posted = await postGridTaskChunk([{ keyword: 'pt', lat: 1, lng: 2, language: 'English', priority: 1 }], 'auth');
+    expect(posted.results).toEqual([]);
+    expect(posted.error).toEqual(expect.any(String));
+    expect(posted.rejected).toBe(rejected);
+  });
+});
+
+// Patch fork (Codex round 3): a task DataForSEO refused at the first post is kept and re-posted.
+describe('postGridTasksQueue', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('keeps a rejected task as a retry-pending point that the collector re-posts after 60 s', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const t0 = Date.parse('2026-12-15T17:00:00Z');
+    vi.setSystemTime(t0);
+    const posts: Array<Array<Record<string, unknown>>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes('task_post')) {
+        const body = JSON.parse(String(init?.body)) as Array<Record<string, unknown>>;
+        posts.push(body);
+        if (posts.length === 1) {
+          return new Response(JSON.stringify({ tasks: body.map((_, i) => (i === 1 ? { status_code: 40501 } : { id: `t${i}`, status_code: 20100, cost: 0.0018 })) }));
+        }
+        return new Response(JSON.stringify({ tasks: [{ id: 'reposted', status_code: 20100, cost: 0.0018 }] }));
+      }
+      return new Response(JSON.stringify({ tasks: [{ status_code: 40602 }] }));
+    }));
+    const queued = await postGridTasksQueue('pt', '1,1', 2, 1, 'English', 'l', 'p', 'standard', 'grid-q');
+    expect(queued.accepted).toBe(3);
+    expect(queued.taskPoints).toHaveLength(4);
+    expect(queued.taskPoints[1]).toMatchObject({
+      task_id: '', row: 0, col: 1, attempts: 0, post_failures: 1, awaiting_retry: true, retry_due_at: t0 + 60_000,
+    });
+
+    const qEntry: GridSearchEntry = { ...entry, id: 'run-q', series_id: 'grid-q', grid_size: 2 };
+    saveGridSearchPendingForProject('default', qEntry, queued.taskPoints);
+    vi.setSystemTime(t0 + 30_000);
+    await collectGridProgress('default', { ...qEntry, task_ids: [] }, creds);
+    expect(posts).toHaveLength(1);
+    vi.setSystemTime(t0 + 61_000);
+    await collectGridProgress('default', { ...qEntry, task_ids: [] }, creds);
+    expect(posts).toHaveLength(2);
+    expect(posts[1][0]).toMatchObject({ tag: 'grid-q|r0c1' });
+    const reposted = getGridProgressForProject('default', 'run-q')!.pendingTasks.find((t) => t.row === 0 && t.col === 1);
+    expect(reposted).toMatchObject({ task_id: 'reposted', attempts: 1 });
+    expect(reposted!.awaiting_retry).toBeUndefined();
+  });
+
+  it('reports zero accepted when every task was rejected, so no run is created', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as unknown[];
+      return new Response(JSON.stringify({ tasks: body.map(() => ({ status_code: 40501 })) }));
+    }));
+    const queued = await postGridTasksQueue('pt', '1,1', 1, 1, 'English', 'l', 'p');
+    expect(queued.accepted).toBe(0);
+  });
+});
+
+// Patch fork (Codex round 3): items: null is not a zero-result search.
+describe('items: null', () => {
+  it('is a task_error on the queued path (re-posted), not an empty point', async () => {
+    saveGridSearchPendingForProject('default', entry, [{ task_id: 'nul', row: 0, col: 0, lat: 1, lng: 1, attempts: 1 }]);
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.includes('task_post')) return new Response(JSON.stringify({ tasks: [{ id: 'after-null', status_code: 20100, cost: 0.0018 }] }));
+      return new Response(JSON.stringify({ tasks: [{ id: 'nul', status_code: 20000, result: [{ check_url: 'u', items: null }] }] }));
+    }));
+    await collectGridProgress('default', { ...entry, task_ids: [] }, creds);
+    const progress = getGridProgressForProject('default', 'run-1')!;
+    expect(progress.results).toEqual([]);
+    expect(progress.pendingTasks[0]).toMatchObject({ task_id: 'after-null', rechecks: [{ task_id: 'nul', reason: 'task_error' }] });
+  });
+
+  it('is an error on the live path, stored as a failed point', async () => {
+    const body = (id: string) => ({ tasks: [{ id, status_code: 20000, cost: 0.0018, result: [{ check_url: 'u', items: null }] }] });
+    const bodies = [body('n1'), body('n2')];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(bodies.shift()))));
+    const { point } = await fetchOneGridPoint('pt', { row: 0, col: 0, lat: 1, lng: 1 }, 'English', 'auth', '');
+    expect(point).toMatchObject({ failed: true, failed_reason: 'task_error', rank: null });
+  });
+
+  it('keeps items: [] as a real zero-result search', async () => {
+    saveGridSearchPendingForProject('default', entry, [{ task_id: 'empty', row: 0, col: 0, lat: 1, lng: 1, attempts: 1 }]);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ tasks: [{ id: 'empty', status_code: 20000, result: [{ check_url: 'u', items: [] }] }] }))));
+    await collectGridProgress('default', { ...entry, task_ids: [] }, creds);
+    const [point] = getGridProgressForProject('default', 'run-1')!.results;
+    expect(point).toMatchObject({ rank: null, items: [], raw_count: 0 });
+    expect(point.failed).toBeUndefined();
+  });
+});
+
+// Patch fork (Codex round 3): a scheduled run that finishes unsafe raises an alert.
+describe('scheduled run completion alert', () => {
+  it('alerts when a finished scheduled run is not safe to report', async () => {
+    const bad = loadDfsFixture('kg-bad');
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { logged.push(args.map(String).join(' ')); });
+    const wcEntry: GridSearchEntry = { ...entry, id: 'run-wc-alert', series_id: 'grid-wc-alert', center: `${bad.lat},${bad.lng}` };
+    saveGridSearchPendingForProject('default', wcEntry, [{ task_id: 'wc3', row: 0, col: 0, lat: bad.lat, lng: bad.lng, attempts: MAX_POINT_ATTEMPTS }]);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(withTaskId(bad, 'wc3')))));
+    expect((await collectGridProgress('default', { ...wcEntry, task_ids: [] }, creds)).status).toBe('done');
+    spy.mockRestore();
+    const alert = logged.find((l) => l.startsWith('[geo-grid-alert]') && l.includes('run-wc-alert'));
+    expect(alert).toBeDefined();
+    expect(JSON.parse(alert!.slice('[geo-grid-alert] '.length))).toMatchObject({
+      kind: 'scheduled_run_unsafe', reason: 'wrong_city_persistent', project_id: 'default', run_id: 'run-wc-alert', monitor_id: 'grid-wc-alert',
+    });
   });
 });
 

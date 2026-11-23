@@ -80,13 +80,14 @@ describe('reporting API data quality', () => {
     saveGridSearch({ ...base, id, keyword, series_id: series, ts }, points);
     return series;
   };
-  const fine = (i: number): GridPoint => ({ row: Math.floor(i / 3), col: i % 3, rank: 5, items: [rival, { ...us, rank_group: 5 }] });
+  // raw_count marks a point checked by the wrong-city code (every point it builds has one).
+  const fine = (i: number): GridPoint => ({ row: Math.floor(i / 3), col: i % 3, rank: 5, items: [rival, { ...us, rank_group: 5 }], raw_count: 20 });
   const grid = (overrides: Record<number, GridPoint>) => Array.from({ length: 9 }, (_, i) => overrides[i] ?? fine(i));
   const wrongCity: GridPoint = {
     row: 0, col: 1, rank: null, items: [], failed: true, failed_reason: 'wrong_city', task_id: 't-wc', check_url: 'https://google/wc',
     rechecks: [{ task_id: 't-wc0', reason: 'wrong_city' }, { task_id: 't-wc', reason: 'wrong_city' }],
   };
-  const unresolved: GridPoint = { row: 0, col: 2, rank: null, items: [rival], truncated: true, rank_unresolved: true, task_id: 't-ru' };
+  const unresolved: GridPoint = { row: 0, col: 2, rank: null, items: [rival], truncated: true, rank_unresolved: true, task_id: 't-ru', raw_count: 30 };
 
   it('exposes task_id, check_url, failed_reason and rank_unresolved on points, and quality on the header', () => {
     const series = quality('pt quality', 'q-new', grid({
@@ -152,5 +153,40 @@ describe('reporting API data quality', () => {
     expect(getRun('q-rescanned', undefined, { points: false })).toMatchObject({
       rescanned_at: null, report_safe: false, report_safe_reason: 'wrong_city_persistent',
     });
+  });
+
+  // Patch fork (Codex round 3): a partial grid is not "done and safe".
+  it('flags a finished run with missing or duplicate points as incomplete_grid', () => {
+    quality('pt partial', 'q-partial', grid({}).slice(0, 8));
+    quality('pt duplicate', 'q-duplicate', [...grid({}).slice(0, 8), fine(0)]);
+    quality('pt outside', 'q-outside', [...grid({}).slice(0, 8), { ...fine(8), row: 3 }]);
+    for (const id of ['q-partial', 'q-duplicate', 'q-outside']) {
+      expect(getRun(id, undefined, { points: false })).toMatchObject({ report_safe: false, report_safe_reason: 'incomplete_grid' });
+    }
+  });
+
+  // Patch fork (Codex round 3): a run the wrong-city check never saw is unknown, not safe.
+  it('reports null / not_checked for runs whose points were never checked, on every endpoint', () => {
+    const legacy = (i: number): GridPoint => { const point = fine(i); delete point.raw_count; return point; };
+    const series = quality('pt legacy', 'q-legacy-old', Array.from({ length: 9 }, (_, i) => legacy(i)), base.ts + 6 * 86_400_000);
+    const notChecked = { report_safe: null, report_safe_reason: 'not_checked' };
+    expect(getRun('q-legacy-old', undefined, { points: false })).toMatchObject(notChecked);
+    expect(getRun('q-legacy-old')).toMatchObject(notChecked);
+    expect(getMonitorRuns(series)).toMatchObject(notChecked);
+    expect(getMonitorRuns(series)?.runs[0]).toMatchObject(notChecked);
+    expect(listMonitors({ q: 'pt legacy' })[0]).toMatchObject(notChecked);
+    expect(listMonitors({ q: 'pt legacy' })[0].latest_run).toMatchObject(notChecked);
+
+    // One unchecked point is enough; a failed point needs no raw_count.
+    quality('pt one legacy', 'q-one-legacy', grid({ 4: legacy(4) }));
+    expect(getRun('q-one-legacy', undefined, { points: false })).toMatchObject(notChecked);
+    quality('pt failed no raw', 'q-failed-no-raw', grid({ 1: { ...wrongCity, failed_reason: 'task_error' } }));
+    expect(getRun('q-failed-no-raw', undefined, { points: false })).toMatchObject({ report_safe: true, report_safe_reason: null });
+
+    // The monitor follows its latest finished run: a newer checked run makes it safe again.
+    quality('pt legacy', 'q-legacy-new', grid({}), base.ts + 7 * 86_400_000);
+    expect(getMonitorRuns(series)).toMatchObject({ report_safe: true, report_safe_reason: null });
+    expect(listMonitors({ q: 'pt legacy' })[0]).toMatchObject({ report_safe: true, latest_run: { run_id: 'q-legacy-new' } });
+    expect(getMonitorRuns(series)?.runs.map((r) => [r.run_id, r.report_safe])).toEqual([['q-legacy-new', true], ['q-legacy-old', null]]);
   });
 });
