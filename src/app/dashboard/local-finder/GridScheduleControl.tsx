@@ -9,7 +9,10 @@ const days = [
   ['Sunday', 0], ['Monday', 1], ['Tuesday', 2], ['Wednesday', 3], ['Thursday', 4], ['Friday', 5], ['Saturday', 6],
 ] as const;
 
-export default function GridScheduleControl({ runId, schedule, clinicTimeZone = null }: { runId: string; schedule: GridSchedule | null; clinicTimeZone?: string | null }) {
+export default function GridScheduleControl({ runId, projectId, schedule, clinicTimeZone = null }: { runId: string; projectId: string; schedule: GridSchedule | null; clinicTimeZone?: string | null }) {
+  // Patch fork: keep the project this control was first rendered with. A project switch elsewhere
+  // refreshes the page props; the server then refuses the save instead of writing to the wrong project.
+  const [formProjectId] = useState(projectId);
   const [frequency, setFrequency] = useState<'off' | 'daily' | 'weekly' | 'monthly'>(schedule?.frequency ?? 'off');
   // Patch fork: schedules run in the clinic's time zone (from the map center). The browser's
   // zone is only a fallback when the center can't be resolved.
@@ -22,6 +25,7 @@ export default function GridScheduleControl({ runId, schedule, clinicTimeZone = 
   return (
     <form action={updateGridSchedule} className="border-t border-slate-200 pt-4 dark:border-slate-800">
       <input type="hidden" name="run_id" value={runId} />
+      <input type="hidden" name="project_id" value={formProjectId} />
       <input type="hidden" name="time_zone" value={timeZone} />
       <div className="flex items-start justify-between gap-4">
         <div className="flex gap-2.5">

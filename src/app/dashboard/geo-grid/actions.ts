@@ -1,6 +1,7 @@
 'use server';
 
-import { deleteGridSchedule, deleteGridSeries, getGridEntry, saveGridSchedule, type GridQueueMode, type GridScheduleFrequency } from '@/lib/db';
+import { deleteGridSchedule, deleteGridSeries, getActiveProject, getGridEntry, saveGridSchedule, type GridQueueMode, type GridScheduleFrequency } from '@/lib/db';
+import { gridRunProjectError, isOneTimeOnlyProject } from '@/lib/grid-guardrails';
 import { timeZoneForCenter } from '@/lib/grid-timezone';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -18,12 +19,20 @@ function safeTimeZone(value: FormDataEntryValue | null): string {
 export async function updateGridSchedule(formData: FormData) {
   const runId = String(formData.get('run_id') ?? '');
   const frequency = formData.get('frequency') as GridScheduleFrequency | 'off';
+  // Patch fork: the active project is server-wide. If it changed since this control was rendered,
+  // the run ID would be looked up (and the schedule saved) in the wrong project, so refuse.
+  const project = getActiveProject();
+  const postedProjectId = String(formData.get('project_id') ?? '');
+  if (gridRunProjectError(postedProjectId, project, 'save')) {
+    redirect(`/dashboard/geo-grid?schedule_error=${encodeURIComponent(postedProjectId || 'none')}`);
+  }
   const entry = getGridEntry(runId);
   if (!entry) return;
 
   if (frequency === 'off') {
     deleteGridSchedule(entry.series_id);
-  } else if (frequency === 'daily' || frequency === 'weekly' || frequency === 'monthly') {
+  } else if ((frequency === 'daily' || frequency === 'weekly' || frequency === 'monthly') && !isOneTimeOnlyProject(project.id)) {
+    // One-time-only projects (sales demos) never get a schedule; saveGridSchedule refuses them too.
     const queueMode = formData.get('queue_mode') as GridQueueMode;
     saveGridSchedule({
       series_id: entry.series_id,
@@ -40,7 +49,7 @@ export async function updateGridSchedule(formData: FormData) {
       time_of_day: String(formData.get('time_of_day') ?? '12:00'),
       // Patch fork: always the clinic's time zone when the map center resolves to one.
       time_zone: timeZoneForCenter(entry.center) ?? safeTimeZone(formData.get('time_zone')),
-    });
+    }, project.id);
   }
 
   revalidatePath('/dashboard/geo-grid');

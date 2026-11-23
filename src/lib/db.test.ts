@@ -18,7 +18,7 @@ import {
   getSerpHistory, saveSerpSearch,
   getSpendByTool, getSpendByDay, getFirstSpendTs,
   gridSeriesId, getGridSeriesHistory, getGridSchedule, saveGridSchedule, saveGridSearch, deleteGridSchedule, deleteGridSeries, type GridSearchEntry,
-  claimDueGridSchedules, retryClaimedGridSchedule,
+  claimDueGridSchedules, retryClaimedGridSchedule, getDbForProject,
   getRankTrackerSchedule, saveRankTrackerSchedule, deleteRankTrackerSchedule,
   getHistRankHistory, saveHistRankSearch,
   addTrackedKeyword, saveRankCheck, getRankTopResultsHistory,
@@ -188,6 +188,28 @@ describe('projects', () => {
 });
 
 describe('Geo-grid monitoring', () => {
+  // Schedules can't live in the Default Project (sales demos), so these run in a client project.
+  beforeAll(() => {
+    const client = createProject({
+      name: 'Grid Client', domain: 'grid-client.example', defaultLocation: 'France',
+      defaultLanguage: 'French', defaultCoordinates: '', rankTrackerDepth: '100',
+    });
+    setActiveProject(client.id);
+  });
+  afterAll(() => setActiveProject('default'));
+
+  it('refuses a schedule in the Default Project and never claims one there', () => {
+    const demoSeries = gridSeriesId('demo', '48.8566,2.3522', 3, 1, 'Example Plumbing', 'French');
+    expect(() => saveGridSchedule({ ...base, series_id: demoSeries, frequency: 'monthly', weekday: 15, time_of_day: '12:00', time_zone: 'UTC' }, 'default'))
+      .toThrow(/one-time/);
+    // A schedule written straight into the Default Project's store (e.g. from before this guard) is skipped by the cron.
+    getDbForProject('default').prepare(`INSERT INTO grid_schedules
+      (series_id, keyword, target, center, grid_size, spacing_km, language, queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at, created_at, updated_at)
+      VALUES (?, 'demo', 'x', '1,1', 3, 1, 'English', 'standard', 'daily', NULL, '12:00', 'UTC', 0, 0, 0)`).run(demoSeries);
+    expect(claimDueGridSchedules(Date.now()).some((item) => item.series_id === demoSeries)).toBe(false);
+    getDbForProject('default').prepare('DELETE FROM grid_schedules WHERE series_id = ?').run(demoSeries);
+  });
+
   const seriesId = gridSeriesId('plombier paris', '48.8566,2.3522', 3, 1, 'Example Plumbing', 'French');
   const base: Omit<GridSearchEntry, 'id' | 'ts'> = {
     series_id: seriesId, keyword: 'plombier paris', target: 'Example Plumbing', center: '48.8566,2.3522',
