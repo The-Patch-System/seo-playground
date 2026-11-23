@@ -17,7 +17,7 @@ import Breadcrumbs from '../../../../../../_components/Breadcrumbs';
 import DeltaText from '../../../../../../_components/DeltaText';
 import RankLegend from '../../../../../../_components/RankLegend';
 import NavSelect from '../../../../../../_components/NavSelect';
-import HrefSelect from '../../../../../../_components/HrefSelect';
+import KeywordSwitcher from '../../../../../../_components/KeywordSwitcher';
 import KeywordMap, { type MapPin } from '../../../../../../_components/KeywordMap';
 import { CLIENTS_URL, clientUrl, keywordUrl, locationUrl } from '../../../../../../_components/routes';
 
@@ -165,12 +165,12 @@ export default async function KeywordPage({ params, searchParams }: { params: Pa
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
               {location.monitors.length > 1 ? (
-                <HrefSelect
-                  id="keyword"
-                  label="Keyword"
-                  value={baseHref}
-                  options={location.monitors.map((m) => ({ href: keywordUrl(projectId, locationId, m.series_id), label: m.keyword }))}
-                  className="max-w-full border-0 bg-transparent p-0 text-[26px] font-black tracking-tight text-slate-900 dark:text-white"
+                <KeywordSwitcher
+                  current={monitor.keyword}
+                  heading={`Keywords at Location ${location.number}`}
+                  options={location.monitors.map((m) => ({
+                    href: keywordUrl(projectId, locationId, m.series_id), label: m.keyword, current: m.series_id === monitor.series_id,
+                  }))}
                 />
               ) : (
                 <h1 className="text-[26px] font-black tracking-tight">{monitor.keyword}</h1>
