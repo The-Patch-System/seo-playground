@@ -27,14 +27,28 @@ export const POST_FAILURE_BACKOFF_MS = 60_000;
 export const MAX_POST_FAILURES = 3;
 
 /**
- * Patch fork: wrong-city results came in bursts lasting minutes on Nov 15, so a wrong-city point's
- * 2nd search is 5 min after its 1st and the 3rd is 30 min after the 2nd. An ads-only point's one
- * retry also waits 5 min (cause unknown; waiting costs nothing). Task errors re-post at once.
+ * Patch fork: wrong-city results come in bursts, so a wrong-city point's 2nd search is 5 min after its
+ * 1st and the 3rd is 30 min after the 2nd. Where a 4th search is allowed (see scheduledWrongCityAttempts)
+ * it's 2 h after the 3rd. An ads-only point's one retry also waits 5 min (cause unknown; waiting costs
+ * nothing). Task errors re-post at once.
  */
 export function retryDelayMs(reason: GridRecheck['reason'], postsSoFar: number): number {
   if (reason === 'ads_only') return 5 * 60_000;
   if (reason !== 'wrong_city') return 0;
-  return postsSoFar <= 1 ? 5 * 60_000 : 30 * 60_000;
+  if (postsSoFar <= 1) return 5 * 60_000;
+  if (postsSoFar === 2) return 30 * 60_000;
+  return 2 * 60 * 60_000;
+}
+
+/**
+ * Patch fork: searches a wrong-city point gets in a scheduled or manual queued run before it's stored as
+ * failed. GEO_GRID_WRONG_CITY_ATTEMPTS=4 adds a last search 2 h after the 3rd: on Nov 24 two Nov 15
+ * re-scans stayed wrong-city through the 5 and 30 min retries and came back clean about 2 h later, so a
+ * burst over one area can outlast half an hour. Unset (or any other value) keeps MAX_POINT_ATTEMPTS (3).
+ * Re-scans always use MAX_POINT_ATTEMPTS: a held re-scan is retried by a person, which is the later try.
+ */
+export function scheduledWrongCityAttempts(): number {
+  return Number.parseInt(process.env.GEO_GRID_WRONG_CITY_ATTEMPTS ?? '', 10) === 4 ? 4 : MAX_POINT_ATTEMPTS;
 }
 
 export async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -141,6 +155,7 @@ export type RepostOutcome =
 export async function stepGridTasks(
   tasks: GridTaskPoint[], checks: Map<GridTaskPoint, GridTaskCheck>, now: number,
   repost: (task: GridTaskPoint) => Promise<RepostOutcome>,
+  options: { maxWrongCityAttempts?: number } = {},
 ): Promise<{ ready: GridPoint[]; pending: GridTaskPoint[]; budgetExhausted: boolean; unknown: number; adsOnlyFailed: GridPoint[] }> {
   const ready: GridPoint[] = [];
   const adsOnlyFailed: GridPoint[] = [];
@@ -172,7 +187,8 @@ export async function stepGridTasks(
         adsOnlyFailed.push(failed);
         continue;
       }
-      if (posts >= MAX_POINT_ATTEMPTS) {
+      const maxPosts = check.recheck.reason === 'wrong_city' ? (options.maxWrongCityAttempts ?? MAX_POINT_ATTEMPTS) : MAX_POINT_ATTEMPTS;
+      if (posts >= maxPosts) {
         ready.push(failedPointFromTask({ ...task, rechecks }, check.recheck.reason));
         continue;
       }
@@ -270,6 +286,7 @@ async function collectGridProgressOnce(
       }
       return { kind: 'rejected' };
     },
+    { maxWrongCityAttempts: scheduledWrongCityAttempts() },
   );
 
   const accumulated = [...progress.results, ...readyPoints];
