@@ -9,6 +9,7 @@ import {
   scanDateOptions, sharedGridConfig, sharedSchedule, type CompetitorRow,
 } from '@/lib/grid-locations';
 import { radiusMiForSpacing } from '@/lib/grid-radius';
+import { addressLabel, getListingAddress } from '@/lib/grid-addresses';
 import { timeZoneForCenter } from '@/lib/grid-timezone';
 import AutoRefresh from '@/components/AutoRefresh';
 import Breadcrumbs from '../../../../_components/Breadcrumbs';
@@ -127,7 +128,8 @@ export default async function LocationPage({ params, searchParams }: { params: P
               <h1 className="text-[28px] font-black tracking-tight">{location.name}</h1>
               <StatusPill status={status.status} label={status.label} />
             </div>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-200">{addressLabel(getListingAddress(location.cid), Boolean(location.cid))}</p>
+            <p className="mt-0.5 text-sm text-slate-600">
               <a href={mapsUrl(location.cid, location.name, location.center)} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 hover:text-blue-800">
                 {location.cid ? 'View on Google Maps' : 'Search on Google Maps'}
               </a>
