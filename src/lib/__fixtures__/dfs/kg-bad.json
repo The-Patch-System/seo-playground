@@ -1,0 +1,319 @@
+{
+ "tasks": [
+  {
+   "id": "11151707-2638-0066-0000-bb8fb7ee9265",
+   "status_code": 20000,
+   "data": {
+    "keyword": "physical therapy clinic",
+    "location_coordinate": "38.351143,-77.281509"
+   },
+   "result": [
+    {
+     "check_url": "https://www.google.com/search?q=physical+therapy+clinic&uule=j+WzEsMTIsMTc5NDc2MjQ1NjIxMjAwMCxudWxsLFszODM1MTE0MzAsLTc3MjgxNTA5MF0sbnVsbCw5MzAwMCxudWxsLDZd&hl=en&gl=US&udm=1",
+     "items": [
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "title": "Physical Therapy of Tulsa",
+       "description": "Tulsa, OK · (918) 494-3000 \nClosed · Opens 7 AM Mon ",
+       "domain": "ptoftulsa.com",
+       "url": "http://ptoftulsa.com/",
+       "is_paid": false,
+       "cid": "17930053185444986968",
+       "rating": {
+        "value": 5,
+        "votes_count": 300
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 2,
+       "rank_absolute": 2,
+       "title": "PRO Therapy",
+       "description": "Pueblo, CO · (719) 542-4444 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.protherapypt.com",
+       "url": "http://www.protherapypt.com/",
+       "is_paid": false,
+       "cid": "15690836650447237767",
+       "rating": {
+        "value": 4.4,
+        "votes_count": 28
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 3,
+       "rank_absolute": 3,
+       "title": "E6 Physical Therapy",
+       "description": "Albuquerque, NM · (505) 830-3678 \nClosed · Opens 8 AM Mon ",
+       "domain": "e6pt.com",
+       "url": "http://e6pt.com/",
+       "is_paid": false,
+       "cid": "17823591757808192038",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 179
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 4,
+       "rank_absolute": 4,
+       "title": "Dignity Health Physical Therapy - Henderson",
+       "description": "Henderson, NV · (702) 454-1162 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.dignityhealthpt.com",
+       "url": "http://www.dignityhealthpt.com/contact/find-a-location/nv/henderson/henderson",
+       "is_paid": false,
+       "cid": "4573496743587922086",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 292
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 5,
+       "rank_absolute": 5,
+       "title": "Physical Therapy Specialists of Tulsa",
+       "description": "Tulsa, OK · (918) 615-6280 \nClosed · Opens 7 AM Mon ",
+       "domain": "tulsapts.com",
+       "url": "https://tulsapts.com/",
+       "is_paid": false,
+       "cid": "15500255140233499841",
+       "rating": {
+        "value": 5,
+        "votes_count": 219
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 6,
+       "rank_absolute": 6,
+       "title": "Parkview Outpatient Rehab",
+       "description": "Pueblo, CO · (719) 584-4889 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.parkviewmc.com",
+       "url": "http://www.parkviewmc.com/locations/detail/?id=9",
+       "is_paid": false,
+       "cid": "6929663633123527288",
+       "rating": {
+        "value": 3.2,
+        "votes_count": 16
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 7,
+       "rank_absolute": 7,
+       "title": "Good Shepherd Physical Therapy",
+       "description": "Hermiston, OR · (541) 667-3657 \nOpen · Closes 5 PM ",
+       "domain": "www.gshealth.org",
+       "url": "https://www.gshealth.org/physical-therapy",
+       "is_paid": false,
+       "cid": "17980339616114081006",
+       "rating": {
+        "value": 4.3,
+        "votes_count": 6
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 8,
+       "rank_absolute": 8,
+       "title": "Intermountain Health Physical Therapy & Rehabilitation - Salt Lake Clinic Physical Therapy",
+       "description": "Salt Lake City, UT · (385) 282-2575 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.intermountainhealth.org",
+       "url": "https://www.intermountainhealth.org/locations/salt-lake-clinic/physical-therapy?utm_source=yext&utm_medium=organic",
+       "is_paid": false,
+       "cid": "13746865731531134247",
+       "rating": {
+        "value": 3.5,
+        "votes_count": 13
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 9,
+       "rank_absolute": 9,
+       "title": "Baker Valley Physical Therapy",
+       "description": "Baker City, OR · (541) 523-8888 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.bakervalleypt.com",
+       "url": "https://www.bakervalleypt.com/",
+       "is_paid": false,
+       "cid": "5731785139729776817",
+       "rating": {
+        "value": 4.7,
+        "votes_count": 19
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 10,
+       "rank_absolute": 10,
+       "title": "Current Physical Therapy",
+       "description": "Weiser, ID · (208) 718-0827 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.currentphysicaltherapy.com",
+       "url": "https://www.currentphysicaltherapy.com/",
+       "is_paid": false,
+       "cid": "4539820264616100949",
+       "rating": {
+        "value": 5,
+        "votes_count": 137
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 11,
+       "rank_absolute": 11,
+       "title": "Premier Physical Therapy",
+       "description": "Hermiston, OR · (541) 701-0708 \nClosed · Opens 8 AM Mon ",
+       "domain": "www.hermistonpremierpt.com",
+       "url": "https://www.hermistonpremierpt.com/",
+       "is_paid": false,
+       "cid": "7729849243642719915",
+       "rating": {
+        "value": 5,
+        "votes_count": 127
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 12,
+       "rank_absolute": 12,
+       "title": "St. Charles Physical Therapy",
+       "description": "Bend, OR · (541) 706-5940 \nOpen · Closes 6 PM ",
+       "domain": "www.stcharleshealthcare.org",
+       "url": "https://www.stcharleshealthcare.org/locations/st-charles-physical-therapy?utm_source=local-listing&utm_medium=organic&utm_campaign=website-link",
+       "is_paid": false,
+       "cid": "9164977095265531732",
+       "rating": {
+        "value": 5,
+        "votes_count": 2
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 13,
+       "rank_absolute": 13,
+       "title": "Rogers Physical Therapy and Sports Performance - Walla Walla",
+       "description": "Walla Walla, WA · (509) 730-5950 \nClosed · Opens 10 AM ",
+       "domain": "www.rogerspt.com",
+       "url": "http://www.rogerspt.com/",
+       "is_paid": false,
+       "cid": "5930562892373546805",
+       "rating": {
+        "value": 5,
+        "votes_count": 201
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 14,
+       "rank_absolute": 14,
+       "title": "Mountain Valley Therapy",
+       "description": "La Grande, OR · (541) 962-0830 \n\"The therapist I saw was very sweet and understanding.\" ",
+       "domain": "www.mountainvalleytherapy.biz",
+       "url": "http://www.mountainvalleytherapy.biz/",
+       "is_paid": false,
+       "cid": "11486001618159433630",
+       "rating": {
+        "value": 4.7,
+        "votes_count": 42
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 15,
+       "rank_absolute": 15,
+       "title": "GRH Therapy & Sports Medicine",
+       "description": "La Grande, OR · (541) 963-1437 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.grh.org",
+       "url": "https://www.grh.org/our-services/therapy-sports-medicine/",
+       "is_paid": false,
+       "cid": "7473663998188566482",
+       "rating": {
+        "value": 4.5,
+        "votes_count": 64
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 16,
+       "rank_absolute": 16,
+       "title": "Eastern Oregon Physical Therapy",
+       "description": "Pendleton, OR · (541) 276-4011 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.eopt.clinic",
+       "url": "https://www.eopt.clinic/",
+       "is_paid": false,
+       "cid": "17686249804593094996",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 57
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 17,
+       "rank_absolute": 17,
+       "title": "Evolution Physical Therapy - Playa Vista",
+       "description": "Los Angeles, CA · (310) 915-6100 \nClosed · Opens 6 AM Mon ",
+       "domain": "www.evolutionphysicaltherapy.com",
+       "url": "https://www.evolutionphysicaltherapy.com/locations/west-coast/playa-vista-ca-physiotherapy-fitness-clinic/?utm_source=gbp&utm_medium=organic&utm_campaign=GBP&utm_id=16499154",
+       "is_paid": false,
+       "cid": "4524291128617935462",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 441
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 18,
+       "rank_absolute": 18,
+       "title": "Advanced Physical Therapy",
+       "description": "Weiser, ID · (208) 549-1008 \nClosed · Opens 8:30 AM Mon ",
+       "domain": "tcpt-apt.com",
+       "url": "http://tcpt-apt.com/",
+       "is_paid": false,
+       "cid": "5226755049222191806",
+       "rating": {
+        "value": 5,
+        "votes_count": 5
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 19,
+       "rank_absolute": 19,
+       "title": "Therapeutic Associates Bend Physical Therapy",
+       "description": "Bend, OR · (541) 388-7738 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.therapeuticassociates.com",
+       "url": "http://www.therapeuticassociates.com/locations/oregon/central-oregon/bend/?utm_source=google&utm_medium=organic&utm_campaign=gmb",
+       "is_paid": false,
+       "cid": "12277892647286172694",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 227
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 20,
+       "rank_absolute": 20,
+       "title": "Therapeutic Associates La Pine Physical Therapy",
+       "description": "La Pine, OR · (541) 536-6122 \nClosed · Opens 7 AM Mon ",
+       "domain": "www.therapeuticassociates.com",
+       "url": "https://www.therapeuticassociates.com/locations/oregon/central-oregon/la-pine/?utm_source=google&utm_medium=organic&utm_campaign=gmb",
+       "is_paid": false,
+       "cid": "17760082917594965196",
+       "rating": {
+        "value": 5,
+        "votes_count": 48
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -235,7 +235,8 @@ export default function GridPdfExportButton(props: Props) {
         for (let row = 0; row < props.gridSize; row += 1) {
           for (let col = 0; col < props.gridSize; col += 1) {
             const point = pointByCell.get(`${row}:${col}`);
-            const color: [number, number, number] = point?.failed ? [203, 213, 225] : rankColor(point?.rank ?? null);
+            const noData = point?.failed || (point?.rank_unresolved && point.rank == null);
+            const color: [number, number, number] = noData ? [203, 213, 225] : rankColor(point?.rank ?? null);
             const x = gridX + col * cell;
             const y = gridTop + row * cell;
             fill(color);
@@ -250,7 +251,7 @@ export default function GridPdfExportButton(props: Props) {
               pdf.setFont('helvetica', 'bold');
               pdf.setFontSize(Math.min(8, cell * 0.45));
               pdf.setTextColor(255, 255, 255);
-              text(point?.rank != null ? `#${point.rank}` : point?.failed ? '-' : '20+', x + cell / 2, y + cell / 2 + 1.5, { align: 'center' });
+              text(point?.rank != null ? `#${point.rank}` : noData ? '-' : '20+', x + cell / 2, y + cell / 2 + 1.5, { align: 'center' });
             }
           }
         }

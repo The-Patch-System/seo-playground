@@ -145,8 +145,9 @@ export default async function GeoGridPage({ searchParams }: { searchParams: Prom
             creds.login, creds.pass, queueMode,
           );
           if (result.error) gridError = result.error;
-          // A failure after some chunks were posted still leaves billed tasks to collect.
-          if (result.taskPoints.length > 0) {
+          // A failure after some chunks were posted still leaves billed tasks to collect. Patch fork:
+          // count accepted tasks, since refused ones are kept as retry-pending points.
+          if (result.accepted > 0) {
             saveGridSearchPendingForProject(project.id, { ...baseEntry, status: 'pending', cost: result.cost }, result.taskPoints);
           }
         }

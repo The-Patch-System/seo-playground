@@ -19,9 +19,19 @@ export const RANK_COLORS = {
 
 export type RankBucket = keyof typeof RANK_COLORS;
 
-/** failed = DataForSEO had no data for the point ("—"); rank null = outside the top 20 ("20+"). */
-export function rankBucket(point: Pick<GridPoint, 'rank' | 'failed'> | null | undefined): RankBucket {
-  if (!point || point.failed) return 'nodata';
+type RankFields = Pick<GridPoint, 'rank' | 'failed' | 'rank_unresolved'>;
+
+/** No usable data at a point: it failed, or ads cut the list short before the target showed (rank unknown). */
+export function isNoData(point: RankFields | null | undefined): boolean {
+  return !point || point.failed === true || (point.rank_unresolved === true && point.rank == null);
+}
+
+/**
+ * failed = DataForSEO had no data for the point ("—"); rank_unresolved = the rank is unknown, also "—";
+ * rank null = outside the top 20 ("20+").
+ */
+export function rankBucket(point: RankFields | null | undefined): RankBucket {
+  if (!point || isNoData(point)) return 'nodata';
   if (point.rank == null) return 'out';
   if (point.rank <= 3) return 'top3';
   if (point.rank <= 10) return 'top10';
@@ -29,14 +39,14 @@ export function rankBucket(point: Pick<GridPoint, 'rank' | 'failed'> | null | un
   return 'out';
 }
 
-export function rankLabel(point: Pick<GridPoint, 'rank' | 'failed'> | null | undefined): string {
+export function rankLabel(point: RankFields | null | undefined): string {
   const bucket = rankBucket(point);
   if (bucket === 'nodata') return '—';
   if (bucket === 'out') return '20+';
   return String(point!.rank);
 }
 
-export function rankColor(point: Pick<GridPoint, 'rank' | 'failed'> | null | undefined): string {
+export function rankColor(point: RankFields | null | undefined): string {
   return RANK_COLORS[rankBucket(point)];
 }
 
@@ -96,17 +106,19 @@ export interface Kpis {
   top3: number;
   top10: number;
   inTop20: number;
-  /** Points that were scanned (failed points excluded). */
+  /** Points with a known rank (failed and rank-unresolved points excluded). */
   scanned: number;
-  failed: number;
+  /** Failed points plus rank-unresolved points (shown as —). */
+  noData: number;
   total: number;
 }
 
 export function computeKpis(points: GridPoint[]): Kpis {
-  const scanned = points.filter((p) => !p.failed);
+  const scanned = points.filter((p) => !isNoData(p));
   const ranked = scanned.filter((p) => p.rank != null && p.rank <= 20);
+  // No-data points add nothing (same denominator as the reports' visibility).
   const visibility = points.length
-    ? Math.round((points.reduce((s, p) => s + (p.failed ? 0 : 21 - Math.min(p.rank ?? 21, 21)), 0) / (points.length * 20)) * 100)
+    ? Math.round((points.reduce((s, p) => s + (isNoData(p) ? 0 : 21 - Math.min(p.rank ?? 21, 21)), 0) / (points.length * 20)) * 100)
     : 0;
   const mrt = mrtAveragePosition(points);
   return {
@@ -116,7 +128,7 @@ export function computeKpis(points: GridPoint[]): Kpis {
     top10: ranked.filter((p) => p.rank! <= 10).length,
     inTop20: ranked.length,
     scanned: scanned.length,
-    failed: points.length - scanned.length,
+    noData: points.length - scanned.length,
     total: points.length,
   };
 }
@@ -309,9 +321,9 @@ export interface RingRow {
   avgRank: number | null;
 }
 
-/** Visibility by distance, in miles. Failed points are left out so missing data doesn't read as "not found". */
+/** Visibility by distance, in miles. No-data points are left out so missing data doesn't read as "not found". */
 export function computeRings(points: GridPoint[], gridSize: number, spacingKm: number): RingRow[] {
-  const scanned = points.filter((p) => !p.failed);
+  const scanned = points.filter((p) => !isNoData(p));
   return computeRingStats(scanned, gridSize, spacingKm).map((ring) => ({
     ring: ring.ring,
     miles: ring.ring === 0 ? 0 : radiusMiForSpacing(spacingKm, ring.ring * 2 + 1),
@@ -488,7 +500,13 @@ export function competitorPoints(points: GridPoint[], key: string): GridPoint[] 
   return points.map((point) => {
     if (point.failed) return { ...point, items: [] };
     const hit = (point.items ?? []).find((item) => competitorKeyOf(item) === key);
-    return { ...point, rank: hit && hit.rank_group <= 20 ? hit.rank_group : null, items: [] };
+    // A truncated point stays rank-unresolved only where this competitor wasn't seen either.
+    const rest: GridPoint = { ...point };
+    delete rest.rank_unresolved;
+    return {
+      ...rest, rank: hit && hit.rank_group <= 20 ? hit.rank_group : null, items: [],
+      ...(point.truncated && !hit ? { rank_unresolved: true } : {}),
+    };
   });
 }
 
@@ -498,7 +516,7 @@ export interface PointMove {
   tone: DeltaTone;
 }
 
-/** Per-point movement against the compared scan, keyed "row:col". Failed points on either side show nothing. */
+/** Per-point movement against the compared scan, keyed "row:col". No-data points on either side show nothing. */
 export function pointMoves(current: GridPoint[], compare: GridPoint[] | null): Map<string, PointMove> {
   const moves = new Map<string, PointMove>();
   if (!compare) return moves;
@@ -506,7 +524,7 @@ export function pointMoves(current: GridPoint[], compare: GridPoint[] | null): M
   for (const point of current) {
     const key = `${point.row}:${point.col}`;
     const old = before.get(key);
-    if (!old || old.failed || point.failed) continue;
+    if (!old || isNoData(old) || isNoData(point)) continue;
     const a = old.rank != null && old.rank <= 20 ? old.rank : null;
     const b = point.rank != null && point.rank <= 20 ? point.rank : null;
     if (a == null && b == null) continue;

@@ -203,11 +203,14 @@ export default function GridMap({ points, gridSize, target, highlightKey, highli
     geoPoints.forEach((point) => {
       const isCenter = point.row === half && point.col === half;
       const rank = pointRank(point, highlightKey);
-      const noData = point.failed === true;
+      // Patch fork: a rank-unresolved point (ads cut the list short) is no data too, not "20+".
+      const noData = point.failed === true || (point.rank_unresolved === true && rank == null);
       const color = noData ? NO_DATA_COLOR : rankColor(rank);
       const label = rank != null ? String(rank) : noData ? '—' : '20+';
-      const before = pointRank(previousByPoint.get(`${point.row}:${point.col}`) ?? { ...point, rank: null }, highlightKey);
-      const movement = before === null && rank === null ? ''
+      const previous = previousByPoint.get(`${point.row}:${point.col}`);
+      const before = pointRank(previous ?? { ...point, rank: null }, highlightKey);
+      const previousNoData = previous != null && (previous.failed === true || (previous.rank_unresolved === true && before == null));
+      const movement = noData || previousNoData || (before === null && rank === null) ? ''
         : before === null ? 'new'
           : rank === null ? 'lost'
             : before - rank === 0 ? ''

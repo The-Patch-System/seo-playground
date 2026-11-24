@@ -1,0 +1,364 @@
+{
+ "tasks": [
+  {
+   "id": "11152002-2638-0066-0000-00ad2a949102",
+   "status_code": 20000,
+   "data": {
+    "keyword": "personal training",
+    "location_coordinate": "34.034176,-118.334336"
+   },
+   "result": [
+    {
+     "check_url": "https://www.google.com/search?q=personal+training&uule=j+WzEsMTIsMTc5NDc3Mjk2MTI5MTAwMCxudWxsLFszNDAzNDE3NjAsLTExODMzNDMzNjBdLG51bGwsOTMwMDAsbnVsbCw2XQ==&hl=en&gl=US&udm=1",
+     "items": [
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "title": "Crown Fitness",
+       "description": "Sponsored \n17751 Sky Park Circle ",
+       "domain": null,
+       "url": null,
+       "is_paid": true,
+       "cid": "17583410281137345549",
+       "rating": {
+        "value": 5,
+        "votes_count": 104
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 2,
+       "rank_absolute": 2,
+       "title": "Equinox Miracle Mile",
+       "description": "Sponsored \n5750 Wilshire Boulevard ",
+       "domain": null,
+       "url": null,
+       "is_paid": true,
+       "cid": "9179357844287680641",
+       "rating": {
+        "value": 3.8,
+        "votes_count": 119
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 3,
+       "rank_absolute": 3,
+       "title": "SixPax Gym",
+       "description": "Sponsored \n4301 Sepulveda Boulevard ",
+       "domain": null,
+       "url": null,
+       "is_paid": true,
+       "cid": "4431129715469452262",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 413
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 4,
+       "rank_absolute": 4,
+       "title": "Royal Personal Training",
+       "description": "10+ years in business · Los Angeles, CA \nOpen 24 hours ",
+       "domain": "www.royalpersonaltraining.com",
+       "url": "http://www.royalpersonaltraining.com/?utm_source=GMBlisting&utm_medium=organic&utm_campaign=gmb",
+       "is_paid": false,
+       "cid": "12783184144687397177",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 296
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 5,
+       "rank_absolute": 5,
+       "title": "Open Sky Fitness",
+       "description": "10+ years in business · Los Angeles, CA \nClosed · Opens 8 AM Mon ",
+       "domain": "openskyfitness.com",
+       "url": "http://openskyfitness.com/",
+       "is_paid": false,
+       "cid": "7980997968322813467",
+       "rating": {
+        "value": 5,
+        "votes_count": 20
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 6,
+       "rank_absolute": 6,
+       "title": "Alex Nunez Fitness",
+       "description": "Los Angeles, CA \nOpen · Closes 8 PM ",
+       "domain": "alexnunezfitness.com",
+       "url": "https://alexnunezfitness.com/",
+       "is_paid": false,
+       "cid": "4913002557278552250",
+       "rating": {
+        "value": 5,
+        "votes_count": 22
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 7,
+       "rank_absolute": 7,
+       "title": "Blue Star Fitness",
+       "description": "5+ years in business · Los Angeles, CA \nClosed · Opens 6 AM Mon ",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "12096569653397708152",
+       "rating": {
+        "value": 5,
+        "votes_count": 8
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 8,
+       "rank_absolute": 8,
+       "title": "4F Fitness & Wellness",
+       "description": "5+ years in business · Los Angeles, CA \nClosed · Opens 5 AM Mon ",
+       "domain": "www.4ffit.com",
+       "url": "http://www.4ffit.com/",
+       "is_paid": false,
+       "cid": "12281994708843352903",
+       "rating": {
+        "value": 5,
+        "votes_count": 14
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 9,
+       "rank_absolute": 9,
+       "title": "PLF Fitness | Personal Training",
+       "description": "5+ years in business · Los Angeles, CA \nOpen 24 hours ",
+       "domain": "www.plffitness.com",
+       "url": "https://www.plffitness.com/consultation?utm_source=google&utm_medium=organic&utm_campaign=evergreen&utm_content=search",
+       "is_paid": false,
+       "cid": "12029009547994668351",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 36
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 10,
+       "rank_absolute": 10,
+       "title": "Greg McKeon Fitness",
+       "description": "10+ years in business · Los Angeles, CA \nOpen · Closes 8 PM ",
+       "domain": "www.gregmckeonfitness.com",
+       "url": "http://www.gregmckeonfitness.com/",
+       "is_paid": false,
+       "cid": "6292290779309403380",
+       "rating": {
+        "value": 5,
+        "votes_count": 7
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 11,
+       "rank_absolute": 11,
+       "title": "STLA Gym",
+       "description": "7+ years in business · Los Angeles, CA \nClosed · Opens 7 AM Mon ",
+       "domain": "stlagym.com",
+       "url": "http://stlagym.com/",
+       "is_paid": false,
+       "cid": "7568102127911347651",
+       "rating": {
+        "value": 5,
+        "votes_count": 23
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 12,
+       "rank_absolute": 12,
+       "title": "Basement Fit",
+       "description": "7+ years in business · Los Angeles, CA \nOpen · Closes 8 PM ",
+       "domain": "www.basement.fit",
+       "url": "http://www.basement.fit/",
+       "is_paid": false,
+       "cid": "13326729794139694883",
+       "rating": {
+        "value": 4.9,
+        "votes_count": 29
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 13,
+       "rank_absolute": 13,
+       "title": "Academy Of Strength And Sport",
+       "description": "10+ years in business · Los Angeles, CA \nClosed · Opens 6 AM Mon ",
+       "domain": "www.academyofstrengthandsport.com",
+       "url": "http://www.academyofstrengthandsport.com/",
+       "is_paid": false,
+       "cid": "6758831377209814751",
+       "rating": {
+        "value": 5,
+        "votes_count": 14
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 14,
+       "rank_absolute": 14,
+       "title": "HealthJang LA | Personal Training & Fitness",
+       "description": "Los Angeles, CA \nClosed · Opens 8 AM Mon ",
+       "domain": "www.instagram.com",
+       "url": "https://www.instagram.com/healthjang.la",
+       "is_paid": false,
+       "cid": "181037101444440193",
+       "rating": {
+        "value": 5,
+        "votes_count": 8
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 15,
+       "rank_absolute": 15,
+       "title": "Rich - Fitness & Personal Training",
+       "description": "5+ years in business · Los Angeles, CA \nClosed · Opens 7 AM Mon ",
+       "domain": "richard-rotella.wixsite.com",
+       "url": "https://richard-rotella.wixsite.com/richfitness",
+       "is_paid": false,
+       "cid": "18270569473681370876",
+       "rating": {
+        "value": 5,
+        "votes_count": 52
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 16,
+       "rank_absolute": 16,
+       "title": "Virtuo Personal Training",
+       "description": "5+ years in business · Los Angeles, CA \nClosed · Opens 5 AM Mon ",
+       "domain": "virtuofitness.com",
+       "url": "https://virtuofitness.com/?utm_source=google&utm_medium=organic&utm_campaign=gbp",
+       "is_paid": false,
+       "cid": "1895844099635136744",
+       "rating": {
+        "value": 5,
+        "votes_count": 185
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 17,
+       "rank_absolute": 17,
+       "title": "Personal Training With Sierra",
+       "description": "Los Angeles, CA \nClosed · Opens 6 AM Mon ",
+       "domain": "sierrahandley.com",
+       "url": "http://sierrahandley.com/",
+       "is_paid": false,
+       "cid": "12196964840499669521",
+       "rating": {
+        "value": 5,
+        "votes_count": 23
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 18,
+       "rank_absolute": 18,
+       "title": "Rob Riches Studio",
+       "description": "5+ years in business · Los Angeles, CA \nOpen · Closes 9 PM ",
+       "domain": "www.robrichesstudio.com",
+       "url": "https://www.robrichesstudio.com/",
+       "is_paid": false,
+       "cid": "14182755081967697595",
+       "rating": {
+        "value": 5,
+        "votes_count": 19
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 19,
+       "rank_absolute": 19,
+       "title": "GOOD HEALTH STUDIO",
+       "description": "Los Angeles, CA \nClosed · Opens 6 AM Mon ",
+       "domain": null,
+       "url": null,
+       "is_paid": false,
+       "cid": "11035562093425914088",
+       "rating": {
+        "value": 5,
+        "votes_count": 98
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 20,
+       "rank_absolute": 20,
+       "title": "Sports Training Los Angeles",
+       "description": "20+ years in business · Los Angeles, CA \nOpen 24 hours ",
+       "domain": "sportstraininglosangeles.com",
+       "url": "https://sportstraininglosangeles.com/",
+       "is_paid": false,
+       "cid": "12924599377381536909",
+       "rating": {
+        "value": 4.5,
+        "votes_count": 27
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 21,
+       "rank_absolute": 21,
+       "title": "Class Fitness",
+       "description": "5+ years in business · Los Angeles, CA \nClosed · Opens 7 AM Mon ",
+       "domain": "www.classfitness.info",
+       "url": "https://www.classfitness.info/",
+       "is_paid": false,
+       "cid": "7830389648649231820",
+       "rating": {
+        "value": 5,
+        "votes_count": 51
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 22,
+       "rank_absolute": 22,
+       "title": "Fast Lean Fit",
+       "description": "10+ years in business · Los Angeles, CA \nOpen · Closes 9 PM ",
+       "domain": "www.fastleanfit.com",
+       "url": "http://www.fastleanfit.com/",
+       "is_paid": false,
+       "cid": "11901254228737507674",
+       "rating": {
+        "value": 4.8,
+        "votes_count": 41
+       }
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 23,
+       "rank_absolute": 23,
+       "title": "Speakeasy Fitness - Los Angeles",
+       "description": "3+ years in business · Los Angeles, CA \nOpen · Closes 9 PM ",
+       "domain": "speakeasy-fitness.com",
+       "url": "http://speakeasy-fitness.com/",
+       "is_paid": false,
+       "cid": "10432860078527617293",
+       "rating": {
+        "value": 4.4,
+        "votes_count": 1700
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

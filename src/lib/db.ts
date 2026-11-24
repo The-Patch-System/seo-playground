@@ -4,6 +4,7 @@ import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { reconcileGridPoints } from './grid-target';
 import { isOneTimeOnlyProject } from './grid-guardrails';
+import { initControlRescanSchema, initProjectRescanSchema } from './grid-rescan-schema';
 import type { RankTopResult } from './rank-serp';
 
 const dataDbs = new Map<string, Database.Database>();
@@ -130,6 +131,7 @@ function getControlDb(): Database.Database {
     }
   }
 
+  initControlRescanSchema(db);
   controlDb = db;
   return db;
 }
@@ -820,6 +822,10 @@ function initSchema(db: Database.Database) {
   addColumnIfMissing(db, 'grid_searches', `ADD COLUMN series_id TEXT NOT NULL DEFAULT ''`);
   // Patch fork: a pinned run (the client's starting-point scan) is never pruned by retention.
   addColumnIfMissing(db, 'grid_searches', 'ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0');
+  // Patch fork: a slot being retried after a failed start keeps its original time (so the 6 h retry
+  // window is measured from the slot, not from the last retry) and how many unclear posts it had.
+  addColumnIfMissing(db, 'grid_schedules', 'ADD COLUMN retry_slot_at INTEGER');
+  addColumnIfMissing(db, 'grid_schedules', 'ADD COLUMN unclear_posts INTEGER NOT NULL DEFAULT 0');
   addColumnIfMissing(db, 'reviews_tasks', 'ADD COLUMN meta TEXT');
   addColumnIfMissing(db, 'rank_checks', 'ADD COLUMN ai_overview INTEGER');
   addColumnIfMissing(db, 'rank_checks', 'ADD COLUMN top_results TEXT');
@@ -830,6 +836,7 @@ function initSchema(db: Database.Database) {
 
   backfillGridSeriesIds(db);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_grid_searches_series ON grid_searches(series_id, ts DESC)`);
+  initProjectRescanSchema(db);
 }
 
 /** Runs saved before monitors existed have no series_id; persist it so a series can be queried directly. */
@@ -1842,6 +1849,8 @@ export interface DueGridSchedule extends GridSchedule {
   projectId: string;
   /** The slot this claim was for; `next_run_at` already points at the following one. */
   scheduled_at: number;
+  /** Patch fork: unclear (possibly billed) posts already made for this slot. */
+  unclear_posts: number;
 }
 
 export interface GridTaskPoint {
@@ -1852,6 +1861,26 @@ export interface GridTaskPoint {
   lng: number;
   /** Patch fork: how many times this point has been posted (failed tasks are re-posted). */
   attempts?: number;
+  /** Patch fork: when the current task was posted (ms), for the per-task pending timeout. */
+  submitted_at?: number;
+  /** Patch fork: earlier tasks for this point that came back wrong-city or errored. */
+  rechecks?: GridRecheck[];
+  /** Patch fork: the last task was discarded; re-post once retry_due_at (ms) has passed. */
+  awaiting_retry?: boolean;
+  retry_due_at?: number;
+  /** Patch fork: re-posts DataForSEO did not accept, for the backoff before giving up. */
+  post_failures?: number;
+  /** Patch fork (re-scans): submissions made for this point so far, for unique task tags. */
+  seq?: number;
+}
+
+/** Patch fork: evidence for one discarded task of a point (wrong-city result or task error). */
+export interface GridRecheck {
+  task_id: string;
+  check_url?: string;
+  /** ads_only: every local-pack listing was an ad (one retry, then the point fails as task_error). */
+  reason: 'wrong_city' | 'task_error' | 'timeout' | 'ads_only';
+  far?: Array<{ rank: number; title?: string; place: string; km: number; method: 'place' | 'state' }>;
 }
 
 export interface GridLocalItem {
@@ -1863,6 +1892,11 @@ export interface GridLocalItem {
   rating_value?: number;
   rating_votes?: number;
   is_target: boolean;
+  /** Patch fork: DataForSEO's own rank_group (counts ads). rank_group above is the organic rank. */
+  provider_rank?: number;
+  rank_absolute?: number;
+  /** Patch fork: "City, ST" from the listing's description, when Google showed one. */
+  place?: string;
 }
 
 export interface GridPoint {
@@ -1874,6 +1908,23 @@ export interface GridPoint {
   items?: GridLocalItem[];
   /** Patch fork: DataForSEO returned no usable result for this point even after retries. */
   failed?: boolean;
+  /** Patch fork: why a failed point has no data. */
+  failed_reason?: 'wrong_city' | 'task_error' | 'timeout';
+  /** Patch fork: the DataForSEO task this point's data came from, and Google's URL for it. */
+  task_id?: string;
+  check_url?: string;
+  /** Patch fork: discarded tasks for this point (wrong-city results, errors), oldest first. */
+  rechecks?: GridRecheck[];
+  /** Patch fork: listings returned (incl. ads), ads among them, and organic listings kept before the top-20 cut. */
+  raw_count?: number;
+  paid_count?: number;
+  organic_count?: number;
+  /** Patch fork: fewer than 20 organic listings because ads used up the requested depth. */
+  truncated?: boolean;
+  /** Patch fork: target not found at a truncated point, so its rank is unknown (not "20+"). */
+  rank_unresolved?: boolean;
+  /** Patch fork: 'unresolved' when none of the top 5 listings could be placed on the map. */
+  location_status?: 'clean' | 'unresolved';
 }
 
 /**
@@ -2163,7 +2214,8 @@ export function saveGridSchedule(input: Omit<GridSchedule, 'next_run_at'>, proje
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(series_id) DO UPDATE SET
       queue_mode = excluded.queue_mode, frequency = excluded.frequency, weekday = excluded.weekday,
-      time_of_day = excluded.time_of_day, time_zone = excluded.time_zone, next_run_at = excluded.next_run_at, updated_at = excluded.updated_at`)
+      time_of_day = excluded.time_of_day, time_zone = excluded.time_zone, next_run_at = excluded.next_run_at, updated_at = excluded.updated_at,
+      retry_slot_at = NULL, unclear_posts = 0`)
     .run(input.series_id, input.keyword, input.target, input.center, input.grid_size, input.spacing_km, input.language,
       input.queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at, now, now);
   return { ...input, frequency, weekday, time_of_day, time_zone, next_run_at };
@@ -2201,32 +2253,45 @@ export function claimDueGridSchedules(now = Date.now(), maxClaims = Number.POSIT
     if (isOneTimeOnlyProject(project.id)) continue;
     const db = getDbForProject(project.id);
     const rows = db.prepare(`SELECT series_id, keyword, target, center, grid_size, spacing_km, language,
-      queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at FROM grid_schedules WHERE next_run_at <= ? ORDER BY next_run_at ASC`).all(now) as Parameters<typeof parseScheduleRow>[0][];
-    const claim = db.prepare('UPDATE grid_schedules SET next_run_at = ?, updated_at = ? WHERE series_id = ? AND next_run_at = ?');
+      queue_mode, frequency, weekday, time_of_day, time_zone, next_run_at, retry_slot_at, unclear_posts FROM grid_schedules
+      WHERE next_run_at <= ? ORDER BY next_run_at ASC`).all(now) as Array<Parameters<typeof parseScheduleRow>[0] & { retry_slot_at: number | null; unclear_posts: number }>;
+    // Patch fork: the claim clears the retry chain; retryClaimedGridSchedule writes it back if the slot is retried.
+    const claim = db.prepare('UPDATE grid_schedules SET next_run_at = ?, updated_at = ?, retry_slot_at = NULL, unclear_posts = 0 WHERE series_id = ? AND next_run_at = ?');
     for (const row of rows) {
       if (due.length >= maxClaims) break;
       const schedule = parseScheduleRow(row);
       const next = nextGridScheduleRun(schedule, now);
       if (claim.run(next, now, schedule.series_id, schedule.next_run_at).changes === 1) {
-        due.push({ ...schedule, next_run_at: next, scheduled_at: schedule.next_run_at, projectId: project.id });
+        due.push({
+          ...schedule, next_run_at: next, scheduled_at: row.retry_slot_at ?? schedule.next_run_at,
+          unclear_posts: row.unclear_posts ?? 0, projectId: project.id,
+        });
       }
     }
   }
   return due;
 }
 
+/** Patch fork: unclear (possibly billed) posts a slot may make before it stops: the first plus one retry. */
+export const MAX_UNCLEAR_SLOT_POSTS = 2;
+
 /**
  * Reopens a claimed Geo-grid run after a posting failure that queued nothing. Retries stop
  * once the slot is `maxDelayMs` old, so a permanent error doesn't retry until the next slot.
+ * Patch fork: the window is measured from the original slot (kept in retry_slot_at across retries).
+ * `unclear` marks a failure that may have queued and billed the tasks; a slot gets one such retry
+ * (MAX_UNCLEAR_SLOT_POSTS posts in all), never more.
  */
 export function retryClaimedGridSchedule(
-  projectId: string, schedule: Pick<DueGridSchedule, 'series_id' | 'next_run_at' | 'scheduled_at'>,
-  now = Date.now(), maxDelayMs = 6 * 3_600_000,
+  projectId: string, schedule: Pick<DueGridSchedule, 'series_id' | 'next_run_at' | 'scheduled_at'> & { unclear_posts?: number },
+  now = Date.now(), maxDelayMs = 6 * 3_600_000, unclear = false,
 ): boolean {
+  const unclearPosts = (schedule.unclear_posts ?? 0) + (unclear ? 1 : 0);
+  if (unclearPosts >= MAX_UNCLEAR_SLOT_POSTS) return false;
   const retryAt = now + 5 * 60_000;
   if (retryAt - schedule.scheduled_at > maxDelayMs || retryAt >= schedule.next_run_at) return false;
-  return getDbForProject(projectId).prepare(`UPDATE grid_schedules SET next_run_at = ?, updated_at = ?
-    WHERE series_id = ? AND next_run_at = ?`).run(retryAt, now, schedule.series_id, schedule.next_run_at).changes === 1;
+  return getDbForProject(projectId).prepare(`UPDATE grid_schedules SET next_run_at = ?, updated_at = ?, retry_slot_at = ?, unclear_posts = ?
+    WHERE series_id = ? AND next_run_at = ?`).run(retryAt, now, schedule.scheduled_at, unclearPosts, schedule.series_id, schedule.next_run_at).changes === 1;
 }
 
 /** Patch fork: marks (or unmarks) a run as the monitor's starting point, which retention never deletes. */
@@ -3180,4 +3245,4 @@ export function getFirstSpendTs(): number | null {
 }
 
 // Patch fork: exposed for the read-only reporting API (src/lib/grid-report.ts).
-export { getDbForProject, entryFromGridRow };
+export { getDbForProject, getControlDb, entryFromGridRow };

@@ -91,6 +91,7 @@ export function matchesGridTarget(target: string, listing: ListingLike): boolean
 
 interface PointLike {
   rank: number | null;
+  rank_unresolved?: boolean;
   items?: Array<{ rank_group: number; title: string; domain?: string; url?: string; cid?: string; is_target: boolean }>;
 }
 
@@ -103,6 +104,12 @@ export function reconcileGridPoints<T extends PointLike>(points: T[], target: st
     if (!point.items?.length) return point;
     const items = point.items.map((item) => ({ ...item, is_target: matchesGridTarget(target, item) }));
     const ranks = items.filter((item) => item.is_target).map((item) => item.rank_group);
-    return { ...point, items, rank: ranks.length ? Math.min(...ranks) : null };
+    if (ranks.length) {
+      // Patch fork: a target found by today's matching is no longer "rank unknown".
+      const { rank_unresolved: _unused, ...rest } = point;
+      void _unused;
+      return { ...rest, items, rank: Math.min(...ranks) } as T;
+    }
+    return { ...point, items, rank: null };
   });
 }

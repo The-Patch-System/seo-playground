@@ -19,7 +19,7 @@ import {
 } from './grid-locations-db';
 import {
   compareKpis, computeCompetitorRows, computeKpis, computeRings, deltaLower, describeSchedule, formatScanDate,
-  locationStatus, rankLabel, resolveCompare, sharedGridConfig, competitorPoints, pointMoves, trendBars,
+  locationStatus, rankBucket, rankLabel, resolveCompare, sharedGridConfig, competitorPoints, pointMoves, trendBars,
 } from './grid-locations';
 
 afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
@@ -445,9 +445,24 @@ describe('view models', () => {
     expect(rankLabel({ rank: 4 })).toBe('4');
     const pts = points((i) => (i === 0 ? null : 2), 3, (i) => (i === 8 ? { failed: true, rank: null } : {}));
     const k = computeKpis(pts);
-    expect(k).toMatchObject({ top3: 7, inTop20: 7, scanned: 8, failed: 1, total: 9 });
+    expect(k).toMatchObject({ top3: 7, inTop20: 7, scanned: 8, noData: 1, total: 9 });
     // MRT average: 7 points at 2, one outside the top 20 at 21, the failed point left out.
     expect(k.avgRank).toBe(Math.round(((7 * 2 + 21) / 8) * 10) / 10);
+  });
+
+  // Patch fork (Codex r4 #11): ads cut the list short and the target wasn't seen, so its rank is unknown.
+  it('shows a rank-unresolved point as no data, not 20+, and leaves it out of the KPIs', () => {
+    expect(rankLabel({ rank: null, rank_unresolved: true })).toBe('—');
+    expect(rankBucket({ rank: null, rank_unresolved: true })).toBe('nodata');
+    // A point flagged unresolved but with a rank (e.g. a competitor found) still shows that rank.
+    expect(rankLabel({ rank: 4, rank_unresolved: true })).toBe('4');
+    const pts = points((i) => (i === 0 ? null : 2), 3, (i) => (i === 7 ? { rank: null, rank_unresolved: true, truncated: true } : i === 8 ? { failed: true, rank: null } : {}));
+    const k = computeKpis(pts);
+    expect(k).toMatchObject({ top3: 6, inTop20: 6, scanned: 7, noData: 2, total: 9 });
+    // MRT leaves both out: 6 points at 2, one outside the top 20 at 21.
+    expect(k.avgRank).toBe(Math.round(((6 * 2 + 21) / 7) * 10) / 10);
+    // Visibility: no-data points add nothing, out of all 9 points (the reports' denominator).
+    expect(k.visibility).toBe(Math.round(((6 * 19) / (9 * 20)) * 100));
   });
 
   it('labels KPI deltas so a lower average rank reads as better', () => {
@@ -579,6 +594,23 @@ describe('keyword page helpers', () => {
     expect(moves.get('1:0')).toEqual({ label: 'new', tone: 'better' });
     expect(moves.has('1:1')).toBe(false);
     expect(pointMoves(now, null).size).toBe(0);
+  });
+
+  it('shows no movement where either scan has an unresolved rank', () => {
+    const unresolved = { rank: null, rank_unresolved: true, truncated: true, items: [] };
+    const moves = pointMoves([{ ...now[0], ...unresolved }, now[1], now[2], now[3]], [before[0], { ...before[1], ...unresolved }, before[2], before[3]]);
+    expect(moves.has('0:0')).toBe(false);
+    expect(moves.has('0:1')).toBe(false);
+    expect(moves.get('1:0')).toEqual({ label: 'new', tone: 'better' });
+  });
+
+  it('keeps a competitor found at a truncated point ranked, and unresolved where it was not seen', () => {
+    const truncated = [
+      { row: 0, col: 0, rank: null, truncated: true, rank_unresolved: true, items: [item(3, '9')] },
+      { row: 0, col: 1, rank: null, truncated: true, rank_unresolved: true, items: [item(3, '8')] },
+    ];
+    const pts = competitorPoints(truncated, 'cid:9');
+    expect(pts.map((p) => rankLabel(p))).toEqual(['3', '—']);
   });
 
   it('buckets each scan for the trend chart, oldest first', () => {

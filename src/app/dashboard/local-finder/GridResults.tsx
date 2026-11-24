@@ -63,7 +63,7 @@ export default function GridResults({ results, gridSize, spacingKm, keyword, tar
     { color: '#f59e0b', label: '#11-15' },
     { color: '#f97316', label: '#16-20' },
     { color: '#ef4444', label: '20+' },
-    ...(results.some((p) => p.failed) ? [{ color: '#94a3b8', label: 'No data' }] : []),
+    ...(results.some((p) => p.failed || (p.rank_unresolved && p.rank == null)) ? [{ color: '#94a3b8', label: 'No data' }] : []),
   ];
 
   return (
@@ -273,13 +273,14 @@ export default function GridResults({ results, gridSize, spacingKm, keyword, tar
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Distribution (grid without coordinates)</p>
           <div className="inline-grid gap-1" style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}>
             {results.map((p, i) => {
-              const color = p.failed ? '#94a3b8' : rankColor(p.rank);
+              const noData = p.failed || (p.rank_unresolved && p.rank == null);
+              const color = noData ? '#94a3b8' : rankColor(p.rank);
               const half = Math.floor(gridSize / 2);
               const isCenter = p.row === half && p.col === half;
               return (
                 <div
                   key={i}
-                  title={p.rank != null ? `#${p.rank}` : p.failed ? 'No data' : 'Not in the top 20'}
+                  title={p.rank != null ? `#${p.rank}` : noData ? 'No data' : 'Not in the top 20'}
                   style={{
                     width: 36, height: 36,
                     background: color,
@@ -289,7 +290,7 @@ export default function GridResults({ results, gridSize, spacingKm, keyword, tar
                     fontSize: 11, fontWeight: 900, color: 'white',
                   }}
                 >
-                  {p.rank ?? (p.failed ? '—' : '20+')}
+                  {p.rank ?? (noData ? '—' : '20+')}
                 </div>
               );
             })}
