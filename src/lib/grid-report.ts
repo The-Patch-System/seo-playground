@@ -269,7 +269,9 @@ export function getRun(runId: string, projectId?: string, options: { points?: bo
       } : {}),
     })),
     // Semrush MRT heatmap shape: position omitted when not in the top 20; diff < 0 = improved.
-    positions: points.map((point) => {
+    // Patch fork: failed and rank-unresolved points are left out entirely. With no position they'd read
+    // as "not in the top 20", and the reporting agent draws a missing position as a "20+" marker.
+    positions: points.filter((point) => !point.failed && !point.rank_unresolved).map((point) => {
       const before = previousRank.get(`${point.row}:${point.col}`);
       return {
         point: { id: `r${point.row}c${point.col}`, coordinates: pointCoords(entry, point) },
