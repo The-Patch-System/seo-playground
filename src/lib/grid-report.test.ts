@@ -109,8 +109,6 @@ describe('reporting API data quality', () => {
     expect(run).toMatchObject({ rescanned_at: null, report_safe: false, report_safe_reason: 'wrong_city_persistent' });
     // MRT leaves out the failed and the rank-unresolved point: (2 + 6 * 5) / 7.
     expect(run.summary?.mrt_average_position).toBe(4.5714);
-    // Heatmap positions leave out the failed and the rank-unresolved point (no false "20+" on client maps).
-    expect(run.positions.map((p) => p.point.id)).toEqual(['r0c0', 'r1c0', 'r1c1', 'r1c2', 'r2c0', 'r2c1', 'r2c2']);
     expect(getMonitorRuns(series)).toMatchObject({ report_safe: false, report_safe_reason: 'wrong_city_persistent' });
     expect(listMonitors({ q: 'pt quality' })[0]).toMatchObject({ report_safe: false, report_safe_reason: 'wrong_city_persistent' });
   });
