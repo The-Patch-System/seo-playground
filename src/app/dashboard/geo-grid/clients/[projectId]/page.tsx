@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getClient, listLocationsWithLatest, LocationError } from '@/lib/grid-locations-db';
 import { formatScanDate, locationStatus, mapsUrl, RANK_COLORS, sharedGridConfig, sharedSchedule, summarizeKeyword, describeSchedule } from '@/lib/grid-locations';
+import { addressLabel, getListingAddresses } from '@/lib/grid-addresses';
 import { timeZoneForCenter } from '@/lib/grid-timezone';
 import AutoRefresh from '@/components/AutoRefresh';
 import Breadcrumbs from '../../_components/Breadcrumbs';
@@ -39,6 +40,7 @@ export default async function ClientPage({ params }: { params: Params }) {
   const projectId = decodeURIComponent((await params).projectId);
   const { client, locations } = load(projectId);
   const keywordCount = locations.reduce((s, l) => s + l.monitors.length, 0);
+  const addresses = getListingAddresses(locations.map((l) => l.cid));
   // Also refresh while a just-added or Run-now scan waits for the worker (about a minute).
   const anyScanning = locations.some((l) => l.monitors.some((m) => m.pendingRun || (m.schedule != null && m.schedule.next_run_at <= Date.now() + 60_000)));
 
@@ -84,7 +86,8 @@ export default async function ClientPage({ params }: { params: Params }) {
                   <h2 id={`loc-${location.id}`} className="text-lg font-black">{location.name}</h2>
                   <StatusPill status={status.status} label={status.label} />
                 </div>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-1 text-sm font-semibold text-slate-800">{addressLabel(location.cid ? addresses.get(location.cid) : null, Boolean(location.cid))}</p>
+                <p className="mt-0.5 text-sm text-slate-600">
                   <a href={mapsUrl(location.cid, location.name, location.center)} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 hover:text-blue-800">
                     {location.cid ? 'View on Google Maps' : 'Search on Google Maps'}
                   </a>

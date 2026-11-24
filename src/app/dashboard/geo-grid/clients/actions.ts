@@ -12,6 +12,7 @@ import {
 } from '@/lib/grid-locations-db';
 import { getCredentials, gridSeriesId, saveGridSearchPendingForProject, type GridQueueMode, type GridScheduleFrequency, type GridSearchEntry } from '@/lib/db';
 import { formatBusinessTarget } from '@/lib/grid-target';
+import { saveFormAddress } from '@/lib/grid-addresses';
 import { DEFAULT_GRID_SIZE, spacingKmForRadius } from '@/lib/grid-radius';
 import { postGridTasksQueue } from '../../local-finder/grid-api';
 import { CLIENTS_URL, clientUrl, keywordUrl, locationUrl } from '../_components/routes';
@@ -69,6 +70,8 @@ export async function addLocationAction(projectId: string, _prev: ActionState, f
       spacing_km: spacingKmForRadius(radiusMi, gridSize),
       schedule: scheduleFromForm(formData),
     }));
+    // Display only: the location is already added, so a failure here must not fail the form.
+    try { saveFormAddress(text(formData, 'business_cid') || null, text(formData, 'business_address')); } catch { /* the worker looks it up instead */ }
   } catch (error) {
     return failure(error);
   }

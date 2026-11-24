@@ -9,6 +9,7 @@ import {
   formatScanDateTime, mapsUrl, pointMoves, rankColor, rankLabel, resolveCompare, trendBars, RANK_COLORS,
   type CompareMode, type CompetitorRow, type Delta, type KpiComparison, type PointMove,
 } from '@/lib/grid-locations';
+import { addressLabel, getListingAddress } from '@/lib/grid-addresses';
 import { radiusMiForSpacing } from '@/lib/grid-radius';
 import { timeZoneForCenter } from '@/lib/grid-timezone';
 import { generateGridCoords } from '@/app/dashboard/local-finder/grid-api';
@@ -184,7 +185,10 @@ export default async function KeywordPage({ params, searchParams }: { params: Pa
               {selected?.pinned && <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-bold text-violet-700">Starting-point map</span>}
             </div>
             <p className="mt-1 text-sm text-slate-600">
-              {location.name} · {monitor.grid_size}×{monitor.grid_size} grid · {radiusMi} mi radius ·{' '}
+              {location.name} · {addressLabel(getListingAddress(location.cid), Boolean(location.cid))}
+            </p>
+            <p className="mt-0.5 text-sm text-slate-600">
+              {monitor.grid_size}×{monitor.grid_size} grid · {radiusMi} mi radius ·{' '}
               <a href={mapsUrl(location.cid, location.name, location.center)} target="_blank" rel="noreferrer" className="font-bold text-blue-600 hover:text-blue-800">
                 {location.cid ? 'View on Google Maps ↗' : 'Search on Google Maps ↗'}
               </a>

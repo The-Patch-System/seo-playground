@@ -172,6 +172,8 @@ export default function LocationForm({ mode, action, submitLabel, pendingLabel, 
       <input type="hidden" name="business_name" value={name.trim()} />
       <input type="hidden" name="business_cid" value={cid} />
       <input type="hidden" name="center" value={center} />
+      {/* The picked listing's address, saved with the location (shown on its pages). Only when it is the same listing. */}
+      <input type="hidden" name="business_address" value={business?.cid && business.cid === cid ? business.address ?? '' : ''} />
 
       <fieldset disabled={Boolean(review) || pending} className="contents">
         <section className="flex min-w-0 flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">

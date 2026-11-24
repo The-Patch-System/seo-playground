@@ -10,6 +10,7 @@ import { postGridTasksQueue } from '@/app/dashboard/local-finder/grid-api';
 import { collectGridProgress } from '@/lib/grid-progress';
 import { advanceRescans, newRescanCounters } from '@/lib/grid-rescan';
 import { notifyGridAlert } from '@/lib/grid-alerts';
+import { fillMissingListingAddresses } from '@/lib/grid-addresses';
 import { collectRankProgress } from '@/lib/rank-progress';
 import { queueStandardRankChecksForProject } from '@/lib/rank-queue';
 
@@ -210,6 +211,9 @@ async function runPass(credentials: { login: string; pass: string }) {
     }
   }
 
+  // Patch fork: fill in missing location addresses a few at a time (display only, about $0.01 each).
+  const addresses = await fillMissingListingAddresses(credentials);
+
   let gridRunsPruned = 0;
   if (process.env.GRID_RETENTION_ENABLED === 'true' && Date.now() - lastPruneAt > 86_400_000) {
     lastPruneAt = Date.now();
@@ -230,5 +234,6 @@ async function runPass(credentials: { login: string; pass: string }) {
     },
     rankSchedulesDue: dueRankSchedules.length, rankScheduled, rankScheduleRetries, rankPendingChecked, rankCompleted, rankFailed,
     promptSchedulesDue: duePromptSchedules.length, promptRuns, promptRunsFailed,
+    addresses,
   };
 }
