@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiKey } from '@/lib/api-auth';
 import { listMonitors } from '@/lib/grid-report';
+import { getListingAddresses } from '@/lib/grid-addresses';
 import { createMonitor, MonitorInputError, type CreateMonitorInput } from '@/lib/grid-import';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,14 @@ export async function GET(request: NextRequest) {
   if (denied) return denied;
   const params = request.nextUrl.searchParams;
   const monitors = listMonitors({ q: params.get('q') ?? undefined, cid: params.get('cid') ?? undefined, project: params.get('project') ?? undefined });
-  return NextResponse.json({ monitors });
+  // Patch fork: the listing's street address (null until the worker has looked it up), as on the Location page.
+  const addresses = getListingAddresses(monitors.map((m) => m.business.cid));
+  return NextResponse.json({
+    monitors: monitors.map((m) => {
+      const found = m.business.cid ? addresses.get(m.business.cid) : undefined;
+      return { ...m, business: { ...m.business, address: found?.address || null, address_status: found?.status ?? null } };
+    }),
+  });
 }
 
 /**
